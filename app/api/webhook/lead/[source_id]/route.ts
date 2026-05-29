@@ -1,0 +1,151 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { LeadWebhookInputSchema } from "@/lib/schemas/lead";
+
+export const runtime = "edge";
+
+/**
+ * POST /api/webhook/lead/[source_id]
+ *
+ * Hlavný intake endpoint pre nové leady. Volaný:
+ *   - Z epoxidovo.sk web formulára (cez fetch z client / server)
+ *   - Z Facebook / Instagram Lead Ads webhooku (po OAuth setup)
+ *   - Z Google Ads Lead Form Extensions
+ *   - Z dev seed helpera
+ *
+ * Auth: každý source má vlastný webhook_secret. Volajúci musí poslať
+ *       header `X-Webhook-Secret: <secret>`. Ak source nemá secret
+ *       (napr. manuálny zdroj), preskočí sa overovanie.
+ *
+ * Body (JSON):
+ *   {
+ *     "name": "Janko Mrkvička",
+ *     "phone": "+421900123456",   // alebo email
+ *     "email": "janko@example.sk",
+ *     "source_campaign": "FB Garažové podlahy",
+ *     "priority": "high",
+ *     "data": { "plocha": "35", "lokalita": "BA", ... }
+ *   }
+ *
+ * Response 201: { ok: true, lead_id: "uuid" }
+ * Response 4xx: { ok: false, error: "..." }
+ */
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ source_id: string }> },
+) {
+  const { source_id } = await context.params;
+
+  if (!source_id) {
+    return NextResponse.json(
+      { ok: false, error: "Missing source_id in URL" },
+      { status: 400 },
+    );
+  }
+
+  // 1. Validate source exists + active
+  const admin = createAdminClient();
+  const { data: source, error: sourceError } = await admin
+    .from("lead_sources")
+    .select("id, type, active, webhook_secret")
+    .eq("id", source_id)
+    .maybeSingle();
+
+  if (sourceError) {
+    console.error("[webhook] source lookup failed:", sourceError.message);
+    return NextResponse.json(
+      { ok: false, error: "Source lookup failed" },
+      { status: 500 },
+    );
+  }
+  if (!source) {
+    return NextResponse.json(
+      { ok: false, error: "Unknown source_id" },
+      { status: 404 },
+    );
+  }
+  if (!source.active) {
+    return NextResponse.json(
+      { ok: false, error: "Source is inactive" },
+      { status: 403 },
+    );
+  }
+
+  // 2. Validate webhook secret (ak source ho má)
+  if (source.webhook_secret) {
+    const providedSecret = request.headers.get("x-webhook-secret");
+    if (providedSecret !== source.webhook_secret) {
+      console.warn("[webhook] secret mismatch for", source_id);
+      return NextResponse.json(
+        { ok: false, error: "Invalid X-Webhook-Secret header" },
+        { status: 401 },
+      );
+    }
+  }
+
+  // 3. Parse + validate body
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Invalid JSON body" },
+      { status: 400 },
+    );
+  }
+
+  const parsed = LeadWebhookInputSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      },
+      { status: 400 },
+    );
+  }
+  const input = parsed.data;
+
+  // 4. Insert lead (admin client → bypassuje RLS)
+  // sla_deadline a created activity sa nastavia v DB triggeroch
+  const { data: lead, error: insertError } = await admin
+    .from("leads")
+    .insert({
+      source_id: source.id,
+      source_type: source.type,
+      source_campaign: input.source_campaign ?? null,
+      name: input.name.trim(),
+      phone: input.phone || null,
+      email: input.email?.toLowerCase() || null,
+      data: input.data ?? {},
+      priority: input.priority ?? "medium",
+      value_estimate: input.value_estimate ?? null,
+      status: "new",
+    })
+    .select("id, name, sla_deadline")
+    .single();
+
+  if (insertError || !lead) {
+    console.error("[webhook] insert failed:", insertError);
+    return NextResponse.json(
+      { ok: false, error: "DB insert failed", details: insertError?.message },
+      { status: 500 },
+    );
+  }
+
+  console.log(
+    `[webhook] new lead ${lead.id} (${lead.name}) — SLA deadline:`,
+    lead.sla_deadline,
+  );
+
+  return NextResponse.json(
+    {
+      ok: true,
+      lead_id: lead.id,
+      sla_deadline: lead.sla_deadline,
+    },
+    { status: 201 },
+  );
+}

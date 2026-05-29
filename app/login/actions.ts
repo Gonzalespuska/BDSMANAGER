@@ -1,0 +1,136 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { dashboardPathForRole } from "@/lib/auth";
+
+/**
+ * Server Action — odošle 6-cifr OTP kód na email.
+ *
+ * Flow:
+ *   1. Validuje email
+ *   2. signInWithOtp({ email, shouldCreateUser: false }) → Supabase pošle kód
+ *      iba ak auth.users záznam existuje (žiadni neautorizovaní)
+ *   3. Redirect na /login/verify?email=...
+ */
+export async function sendOtpAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!email) {
+    redirect("/login?error=missing_email");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      // false = iba pre-existujúci uživatelia (admin musí dopredu pozvať)
+      shouldCreateUser: false,
+    },
+  });
+
+  if (error) {
+    console.warn("[sendOtp] failed for", email, error.message);
+    const lower = error.message.toLowerCase();
+
+    if (
+      lower.includes("signups not allowed") ||
+      lower.includes("not allowed")
+    ) {
+      redirect(
+        `/login?error=unauthorized&email=${encodeURIComponent(email)}`,
+      );
+    }
+
+    // Rate limit: "For security purposes, you can only request this after X seconds."
+    if (lower.includes("security purposes") || lower.includes("rate limit")) {
+      const match = error.message.match(/after (\d+) seconds?/i);
+      const secs = match ? match[1] : "60";
+      redirect(
+        `/login?error=rate_limit&seconds=${secs}&email=${encodeURIComponent(email)}`,
+      );
+    }
+
+    redirect(`/login?error=send_failed&email=${encodeURIComponent(email)}`);
+  }
+
+  redirect(`/login/verify?email=${encodeURIComponent(email)}`);
+}
+
+/**
+ * Server Action — overí 6-cifr kód a prihlási usera.
+ *
+ * Flow:
+ *   1. Validuje email + token
+ *   2. verifyOtp({ email, token, type: 'email' })
+ *   3. Skontroluje že existuje public.users s active=true
+ *   4. Update last_login_at
+ *   5. Redirect na /admin alebo /agent podľa role
+ */
+export async function verifyOtpAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const token = String(formData.get("token") ?? "").trim();
+
+  if (!email || !token) {
+    redirect(
+      `/login/verify?email=${encodeURIComponent(email)}&error=missing`,
+    );
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: "email",
+  });
+
+  if (error || !data.user) {
+    console.warn("[verifyOtp] failed for", email, error?.message);
+    redirect(
+      `/login/verify?email=${encodeURIComponent(email)}&error=invalid`,
+    );
+  }
+
+  // Skontroluj public.users
+  const { data: appUser, error: lookupError } = await supabase
+    .from("users")
+    .select("role, active")
+    .eq("auth_id", data.user.id)
+    .maybeSingle();
+
+  if (lookupError || !appUser) {
+    console.warn(
+      "[verifyOtp] no public.users row for",
+      email,
+      lookupError?.message,
+    );
+    await supabase.auth.signOut();
+    redirect("/login?error=unauthorized");
+  }
+
+  if (!appUser.active) {
+    await supabase.auth.signOut();
+    redirect("/login?error=deactivated");
+  }
+
+  // Update last_login_at (best-effort)
+  await supabase
+    .from("users")
+    .update({ last_login_at: new Date().toISOString() })
+    .eq("auth_id", data.user.id);
+
+  redirect(dashboardPathForRole(appUser.role as "admin" | "user"));
+}
+
+/**
+ * Server Action — odhlásenie.
+ */
+export async function signOutAction() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}

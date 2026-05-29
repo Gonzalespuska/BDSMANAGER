@@ -1,0 +1,21 @@
+# BDSManager — Cloudflare Pages wrangler config
+# Použitie:
+#   npm run pages:preview  → lokálny preview po next-on-pages buildi
+#   npm run pages:deploy   → deploy do Cloudflare Pages
+#
+# Production env vars sa nastavujú v Cloudflare dashboard:
+#   Pages → bdsmanager → Settings → Environment variables → Production:
+#     NEXT_PUBLIC_SUPABASE_URL
+#     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+#     SUPABASE_SECRET_KEY                 (encrypted)
+#     NEXT_PUBLIC_APP_URL                 (napr. https://bdsmanager.pages.dev)
+#     BOOTSTRAP_ADMIN_EMAIL
+#     BOOTSTRAP_ADMIN_NAME
+
+name = "bdsmanager"
+compatibility_date = "2026-05-29"
+# nodejs_compat — povolí Node built-ins (Buffer, crypto, ...) v Workers runtime.
+# Niektoré Supabase deps to potrebujú.
+compatibility_flags = ["nodejs_compat"]
+
+pages_build_output_dir = ".vercel/output/static"
