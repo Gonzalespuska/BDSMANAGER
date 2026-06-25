@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { getCurrentAppUser } from "@/lib/auth";
+import { loadNotifications } from "@/lib/notifications";
 
 export const runtime = "edge";
 
@@ -17,5 +18,10 @@ export default async function GeneratorLayout({
   if (!user) redirect("/login");
 
   const selfPaused = user.capacity === 0;
-  return <AppShell user={user} selfPaused={selfPaused}>{children}</AppShell>;
+  const notifications = await loadNotifications(user.id);
+  return (
+    <AppShell user={user} selfPaused={selfPaused} notifications={notifications}>
+      {children}
+    </AppShell>
+  );
 }

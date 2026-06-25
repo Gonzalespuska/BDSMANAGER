@@ -10,9 +10,11 @@ import {
 
 import type { AppUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import type { Notification } from "@/lib/notifications";
 
 import { NavPillClient } from "./nav-pill-client";
 import { ProfileMenu } from "./profile-menu";
+import { NotificationsBell } from "./notifications-bell";
 
 /**
  * Spoločný layout shell pre /admin, /agent a /generator.
@@ -22,10 +24,12 @@ import { ProfileMenu } from "./profile-menu";
 export function AppShell({
   user,
   selfPaused,
+  notifications,
   children,
 }: {
   user: AppUser;
   selfPaused: boolean;
+  notifications: Notification[];
   children: React.ReactNode;
 }) {
   const isAdmin = user.role === "admin";
@@ -64,6 +68,7 @@ export function AppShell({
               </Link>
             )}
 
+            <NotificationsBell initial={notifications} />
             <ProfileMenu user={user} selfPaused={selfPaused} />
           </div>
         </div>

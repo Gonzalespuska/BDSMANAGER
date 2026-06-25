@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { getCurrentAppUser } from "@/lib/auth";
+import { loadNotifications } from "@/lib/notifications";
 
 export const runtime = "edge";
 
@@ -19,8 +20,9 @@ export default async function WorkloadLayout({
   if (!isDev && user.role !== "admin") redirect("/agent");
 
   const selfPaused = user.capacity === 0;
+  const notifications = await loadNotifications(user.id);
   return (
-    <AppShell user={user} selfPaused={selfPaused}>
+    <AppShell user={user} selfPaused={selfPaused} notifications={notifications}>
       {children}
     </AppShell>
   );

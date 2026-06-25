@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Users } from "lucide-react";
+import { Phone, Users } from "lucide-react";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { loadChatHistory } from "@/lib/team-chat";
@@ -30,6 +30,20 @@ export default async function TeamPage() {
           Spýtaj sa kolegov, zdieľaj tipy. Vyhľadávaj kľúčové slovo v hornej lište.
         </p>
       </header>
+
+      <div className="rounded-2xl border border-sky-200 bg-sky-50 dark:bg-sky-950/30 px-4 py-3 flex items-start gap-3 text-sm">
+        <Phone className="w-5 h-5 text-sky-600 dark:text-sky-300 mt-0.5 shrink-0" aria-hidden />
+        <div className="text-sky-900 dark:text-sky-200">
+          <strong>Ak sa ti problém nezodpovedal,</strong> kontaktuj{" "}
+          <strong>Peťa Nogu</strong> —{" "}
+          <a
+            href="tel:+421915996831"
+            className="font-mono font-bold underline decoration-dotted hover:text-sky-700 dark:hover:text-sky-100"
+          >
+            0915 996 831
+          </a>
+        </div>
+      </div>
 
       <ChatRoom
         meId={me.id}
