@@ -726,16 +726,11 @@ function AddEventModal({
               <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
                 Dátum
               </div>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
-              />
+              <QuickDatePicker value={date} onChange={setDate} />
             </div>
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-                Čas (voliteľný)
+                Čas
               </div>
               <input
                 type="time"
@@ -801,6 +796,150 @@ function AddEventModal({
           </button>
         </footer>
       </div>
+    </div>
+  );
+}
+
+/**
+ * QuickDatePicker — mini popover s dňami aktuálneho mesiaca.
+ *   - Trigger button ukazuje Slovak-formatted dátum bez roku
+ *     (napr. "Št 18. jún") — rok je vždy implicit.
+ *   - Klik otvorí 7-stĺpcovú mriežku dní s nav arrows
+ *   - "Dnes" quick button
+ */
+function QuickDatePicker({
+  value,
+  onChange,
+}: {
+  value: string; // YYYY-MM-DD
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [viewMonth, setViewMonth] = React.useState(value.slice(0, 7));
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const d = new Date(value + "T00:00:00");
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const label = d.toLocaleDateString("sk-SK", {
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+  });
+
+  // viewMonth grid
+  const [vy, vm] = viewMonth.split("-").map(Number);
+  const firstDayWeekday = (new Date(vy, vm - 1, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(vy, vm, 0).getDate();
+  const totalCells = Math.ceil((firstDayWeekday + daysInMonth) / 7) * 7;
+  const cells = Array.from({ length: totalCells }, (_, i) => {
+    const off = i - firstDayWeekday;
+    const cd = new Date(vy, vm - 1, 1 + off);
+    return {
+      iso: cd.toISOString().slice(0, 10),
+      dom: cd.getDate(),
+      inMonth: cd.getMonth() === vm - 1,
+    };
+  });
+
+  function pick(iso: string) {
+    onChange(iso);
+    setOpen(false);
+  }
+
+  function shift(delta: number) {
+    const nd = new Date(vy, vm - 1 + delta, 1);
+    setViewMonth(
+      `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}`,
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2 rounded-lg border bg-background text-sm text-left hover:bg-muted/40 capitalize"
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full mt-1.5 left-0 right-0 sm:right-auto sm:min-w-[260px] rounded-xl border bg-background shadow-2xl p-2">
+          <div className="flex items-center justify-between px-1 py-1 mb-1">
+            <button
+              type="button"
+              onClick={() => shift(-1)}
+              className="p-1 rounded hover:bg-muted"
+              aria-label="Predch. mesiac"
+            >
+              <ChevronLeft className="w-4 h-4" aria-hidden />
+            </button>
+            <span className="text-xs font-bold capitalize">
+              {new Date(vy, vm - 1, 1).toLocaleDateString("sk-SK", {
+                month: "long",
+              })}
+            </span>
+            <button
+              type="button"
+              onClick={() => shift(1)}
+              className="p-1 rounded hover:bg-muted"
+              aria-label="Dalsí mesiac"
+            >
+              <ChevronRight className="w-4 h-4" aria-hidden />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 text-[10px] font-bold uppercase text-muted-foreground text-center mb-0.5">
+            {["P", "U", "S", "Š", "P", "S", "N"].map((w, i) => (
+              <div key={i} className={cn("py-0.5", i >= 5 && "text-red-500/80")}>
+                {w}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {cells.map((c, i) => {
+              const selected = c.iso === value;
+              const isToday = c.iso === todayStr;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => pick(c.iso)}
+                  className={cn(
+                    "h-8 text-xs font-semibold rounded-md transition-colors",
+                    !c.inMonth && "text-muted-foreground/40",
+                    c.inMonth && "hover:bg-muted/60",
+                    selected && "bg-sky-500 text-white hover:bg-sky-600",
+                    !selected && isToday && "ring-1 ring-sky-400",
+                  )}
+                >
+                  {c.dom}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const today = new Date().toISOString().slice(0, 10);
+              setViewMonth(today.slice(0, 7));
+              pick(today);
+            }}
+            className="mt-2 w-full px-2 py-1.5 rounded-md text-xs font-semibold bg-foreground text-background hover:bg-foreground/85"
+          >
+            Dnes
+          </button>
+        </div>
+      )}
     </div>
   );
 }
