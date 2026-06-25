@@ -61,14 +61,18 @@ export async function loadNotifications(
     });
   }
 
-  // 2. Nové leady (status=new) ktoré agent ešte nevidel — limit posledných 5
+  // 2. Nové leady — len tie ktorých sa agent ešte vôbec NEDOTKOL:
+  //    status=new AND phone_revealed_at IS NULL.
+  //    Hneď ako klikne "Odhaliť číslo" alebo zmení status, notifikácia
+  //    sa zo zoznamu odstráni.
   const { data: newLeads } = await admin
     .from("leads")
     .select("id, name, phone, created_at")
     .eq("assigned_to", userId)
     .eq("status", "new")
+    .is("phone_revealed_at", null)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(20);
 
   for (const l of newLeads ?? []) {
     notifs.push({
