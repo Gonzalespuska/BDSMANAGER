@@ -25,12 +25,63 @@ export async function addCalendarNoteAction(
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("calendar_notes")
-    .insert({ user_id: user.id, date, body: trimmed })
+    .insert({ user_id: user.id, date, body: trimmed, kind: "note" })
     .select("id")
     .single();
 
   if (error || !data) return { ok: false, error: error?.message ?? "failed" };
 
+  revalidatePath("/calendar");
+  return { ok: true, id: data.id };
+}
+
+/**
+ * Pridá Hovor / Meeting event do kalendára.
+ */
+export async function addCalendarEventAction(input: {
+  date: string; // YYYY-MM-DD
+  time?: string | null; // HH:MM (lokálny čas)
+  kind: "call" | "meeting";
+  contact_name: string;
+  body: string;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthenticated" };
+  if (user.id === "dev-user") {
+    return { ok: false, error: "dev fallback user" };
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
+    return { ok: false, error: "invalid_date" };
+  }
+  const contact = input.contact_name.trim();
+  if (!contact) return { ok: false, error: "missing_contact" };
+  const body = (input.body ?? "").trim() || `${input.kind === "call" ? "Hovor" : "Meeting"} — ${contact}`;
+  if (body.length > 2000) return { ok: false, error: "too_long" };
+
+  let startsAt: string | null = null;
+  if (input.time && /^\d{2}:\d{2}$/.test(input.time)) {
+    // Local-time → ISO. Browser sa stará o TZ pri zadaní; storeujeme ISO.
+    const [h, m] = input.time.split(":");
+    const d = new Date(`${input.date}T${h}:${m}:00`);
+    startsAt = d.toISOString();
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("calendar_notes")
+    .insert({
+      user_id: user.id,
+      date: input.date,
+      body,
+      kind: input.kind,
+      contact_name: contact,
+      starts_at: startsAt,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) return { ok: false, error: error?.message ?? "failed" };
   revalidatePath("/calendar");
   return { ok: true, id: data.id };
 }

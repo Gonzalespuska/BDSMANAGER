@@ -15,6 +15,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import {
+  addCalendarEventAction,
   addCalendarNoteAction,
   deleteCalendarNoteAction,
   updateCalendarNoteAction,
@@ -24,6 +25,9 @@ export type CalendarNote = {
   id: string;
   date: string; // YYYY-MM-DD
   body: string;
+  kind?: "note" | "call" | "meeting";
+  starts_at?: string | null;
+  contact_name?: string | null;
   created_at: string;
 };
 
@@ -61,6 +65,7 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
   const [monthStr, setMonthStr] = React.useState(initialMonth);
   const [selected, setSelected] = React.useState<string | null>(null);
   const [localNotes, setLocalNotes] = React.useState<CalendarNote[]>(notes);
+  const [addEventOpen, setAddEventOpen] = React.useState(false);
 
   React.useEffect(() => {
     setLocalNotes(notes);
@@ -123,11 +128,19 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
     <>
       {/* Calendar grid */}
       <div className="rounded-2xl border bg-background overflow-hidden h-full flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 gap-2 flex-wrap">
           <div className="font-bold text-base">
             {MONTHS[monthIdx - 1]} {year}
           </div>
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setAddEventOpen(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-foreground text-background hover:bg-foreground/85"
+            >
+              <Plus className="w-3.5 h-3.5" aria-hidden />
+              Hovor / Meeting
+            </button>
             <button
               type="button"
               onClick={gotoToday}
@@ -223,6 +236,15 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
           })}
         </div>
       </div>
+
+      {/* Add Hovor/Meeting modal */}
+      {addEventOpen && (
+        <AddEventModal
+          defaultDate={selected ?? todayStr}
+          onClose={() => setAddEventOpen(false)}
+          onAdded={(note) => setLocalNotes((prev) => [...prev, note])}
+        />
+      )}
 
       {/* Modal popup — selected day */}
       {selected && (
@@ -559,5 +581,226 @@ function EditableNoteRow({
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * Modal — pridanie Hovoru / Meetingu.
+ *
+ * Polia:
+ *  - Typ: Hovor / Meeting (radio)
+ *  - Dátum (default = vybraný deň alebo dnes)
+ *  - Čas (voliteľné)
+ *  - Meno / firma (povinné)
+ *  - Poznámka (voliteľná)
+ */
+function AddEventModal({
+  defaultDate,
+  onClose,
+  onAdded,
+}: {
+  defaultDate: string;
+  onClose: () => void;
+  onAdded: (note: CalendarNote) => void;
+}) {
+  const [kind, setKind] = React.useState<"call" | "meeting">("call");
+  const [date, setDate] = React.useState(defaultDate);
+  const [time, setTime] = React.useState("");
+  const [contact, setContact] = React.useState("");
+  const [body, setBody] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function save() {
+    if (!contact.trim()) {
+      setError("Zadaj meno alebo firmu.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const res = await addCalendarEventAction({
+      date,
+      time: time || null,
+      kind,
+      contact_name: contact,
+      body,
+    });
+    setSaving(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    // Optimistic add — server vrátil len id, dopočítame ostatné
+    let startsAt: string | null = null;
+    if (time) {
+      const [h, m] = time.split(":");
+      startsAt = new Date(`${date}T${h}:${m}:00`).toISOString();
+    }
+    onAdded({
+      id: res.id,
+      date,
+      body: body.trim() || `${kind === "call" ? "Hovor" : "Meeting"} — ${contact.trim()}`,
+      kind,
+      starts_at: startsAt,
+      contact_name: contact.trim(),
+      created_at: new Date().toISOString(),
+    });
+    onClose();
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[130] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[90vh] rounded-2xl border bg-background shadow-2xl overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-4 border-b flex items-start justify-between gap-3 bg-muted/30">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Pridať udalosť
+            </div>
+            <div className="font-extrabold text-lg">
+              {kind === "call" ? "📞 Hovor" : "🤝 Meeting"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+            aria-label="Zavrieť"
+          >
+            <X className="w-5 h-5" aria-hidden />
+          </button>
+        </header>
+
+        <div className="p-5 space-y-4 overflow-y-auto">
+          {/* Typ */}
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+              Typ
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setKind("call")}
+                className={cn(
+                  "px-3 py-2.5 rounded-lg border font-bold text-sm transition-colors",
+                  kind === "call"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-input bg-background hover:bg-muted/50",
+                )}
+              >
+                📞 Hovor
+              </button>
+              <button
+                type="button"
+                onClick={() => setKind("meeting")}
+                className={cn(
+                  "px-3 py-2.5 rounded-lg border font-bold text-sm transition-colors",
+                  kind === "meeting"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-input bg-background hover:bg-muted/50",
+                )}
+              >
+                🤝 Meeting
+              </button>
+            </div>
+          </div>
+
+          {/* Dátum + čas */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                Dátum
+              </div>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+              />
+            </div>
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                Čas (voliteľný)
+              </div>
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Meno / firma */}
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+              Meno / firma *
+            </div>
+            <input
+              type="text"
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              placeholder="napr. Karol Sivák alebo Firma s.r.o."
+              autoFocus
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+            />
+          </div>
+
+          {/* Poznámka */}
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+              Poznámka
+            </div>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={3}
+              placeholder="napr. 'Obhliadka garáže 80 m², ukázať vzorky'"
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm resize-none"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <footer className="px-5 py-3 border-t bg-muted/20 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm font-semibold hover:bg-muted"
+          >
+            Zrušiť
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || !contact.trim()}
+            className="px-4 py-2 rounded-lg text-sm font-bold bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-50"
+          >
+            {saving ? "Pridávam…" : "Pridať"}
+          </button>
+        </footer>
+      </div>
+    </div>
   );
 }
