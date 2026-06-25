@@ -79,15 +79,26 @@ export async function revealPhoneAction(
 }
 
 /**
- * Server Action — agent klikol "NEDVÍHA" tlačidlo (call_attempts++).
- * Logika nasleduje spec:
- *   1× → next_callback_at = NOW + sla_callback_hours
- *   2× → next_callback_at = NOW + sla_callback_hours
- *   3× → status = 'archived' + notifikácia (TODO email)
+ * Server Action — agent klikol "NEDVÍHA" tlačidlo.
+ * Workflow podľa spec:
+ *   1× → next_callback_at = NOW + 4h
+ *   2× → next_callback_at = NOW + 24h
+ *   3× → next_callback_at = NOW + 24h
+ *   4+× → ostáva v Nedvíha, agent manuálne klikne "Archivovať"
+ *         (archiveLeadAction) keď usúdi že lead je mŕtvy.
+ *
+ * Auto-archive sme vypli — agent rozhoduje kedy ide do archivu, a vtedy
+ * sa pošle SMS+Email follow-up zákazníkovi.
  */
+const MISSED_REMINDER_HOURS: Record<number, number> = {
+  1: 4,
+  2: 24,
+  3: 24,
+};
+
 export async function recordMissedCallAction(
   leadId: string,
-): Promise<{ ok: true; archived: boolean } | { ok: false; error: string }> {
+): Promise<{ ok: true; attempts: number } | { ok: false; error: string }> {
   const user = await getCurrentAppUser();
   if (!user) return { ok: false, error: "unauthorized" };
 
@@ -95,47 +106,26 @@ export async function recordMissedCallAction(
   const now = new Date();
   const nowIso = now.toISOString();
 
-  // Načítaj lead + settings
-  const [
-    { data: lead, error: leadError },
-    { data: settings },
-  ] = await Promise.all([
-    supabase
-      .from("leads")
-      .select("id, call_attempts, status")
-      .eq("id", leadId)
-      .maybeSingle(),
-    supabase
-      .from("settings")
-      .select("sla_callback_hours, sla_max_attempts")
-      .eq("id", 1)
-      .maybeSingle(),
-  ]);
+  const { data: lead, error: leadError } = await supabase
+    .from("leads")
+    .select("id, call_attempts, status")
+    .eq("id", leadId)
+    .maybeSingle();
 
   if (leadError || !lead) return { ok: false, error: "not_found" };
 
-  const callbackHours = settings?.sla_callback_hours ?? 6;
-  const maxAttempts = settings?.sla_max_attempts ?? 3;
   const newAttempts = lead.call_attempts + 1;
-
-  const isArchived = newAttempts >= maxAttempts;
-
-  const update: Record<string, unknown> = {
-    call_attempts: newAttempts,
-    status: isArchived ? "archived" : "no_answer",
-    last_activity_at: nowIso,
-  };
-
-  if (!isArchived) {
-    const next = new Date(now.getTime() + callbackHours * 60 * 60 * 1000);
-    update.next_callback_at = next.toISOString();
-  } else {
-    update.next_callback_at = null;
-  }
+  const reminderHours = MISSED_REMINDER_HOURS[newAttempts] ?? 24;
+  const next = new Date(now.getTime() + reminderHours * 60 * 60 * 1000);
 
   const { error: updateError } = await supabase
     .from("leads")
-    .update(update)
+    .update({
+      call_attempts: newAttempts,
+      status: "no_answer",
+      next_callback_at: next.toISOString(),
+      last_activity_at: nowIso,
+    })
     .eq("id", leadId);
 
   if (updateError) {
@@ -148,34 +138,75 @@ export async function recordMissedCallAction(
     type: "call_missed",
     data: {
       attempt_number: newAttempts,
-      archived: isArchived,
+      reminder_at: next.toISOString(),
+      reminder_in_hours: reminderHours,
     },
   });
 
-  // ⚠️ TODO funkčnosť dorobíme keď bude Resend + SMS provider live:
-  //   - SMS: cez Twilio / Vonage / iný SK provider
-  //   - Email: cez Resend (template "po 3 neúspechoch sa nám neozvali")
-  // Zatiaľ len logujeme do lead_activities aby admin videl že trigger zapol.
-  if (isArchived) {
-    await supabase.from("lead_activities").insert({
-      lead_id: leadId,
-      user_id: user.id,
-      type: "auto_archive_notify",
-      data: {
-        reason: `${newAttempts}× neúspešný pokus`,
-        sms_sent: false, // bude true keď nasadíme SMS API
-        email_sent: false, // bude true keď nastavíme Resend template
-        TODO: "Pripojiť Resend + SMS pre auto-notifikáciu zákazníka",
-      },
-    });
-    console.warn(
-      `[recordMissedCall] Lead ${leadId} archivovaný po ${newAttempts}× pokusoch — SMS+Email placeholder loggnuté, treba pripojiť provider.`,
-    );
+  revalidatePath("/agent");
+  return { ok: true, attempts: newAttempts };
+}
+
+/**
+ * Server Action — manuálne archivovať lead z Nedvíha (po >= 3 pokusoch).
+ *
+ * Spustí SMS+Email follow-up (zatiaľ placeholder — log do lead_activities
+ * s TODO flagom). Po nasadení Resendu + SMS providera tu spustíme reálnu
+ * notifikáciu zákazníkovi typu:
+ *   "Skúšali sme sa Vám viackrát dovolať. Ak máte stále záujem, ozvite sa nám."
+ */
+export async function archiveLeadAction(
+  leadId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+
+  const supabase = await createClient();
+  const nowIso = new Date().toISOString();
+
+  const { data: lead, error: readError } = await supabase
+    .from("leads")
+    .select("id, call_attempts, phone, email, name, assigned_to")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (readError || !lead) return { ok: false, error: "not_found" };
+
+  if (lead.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "Tento lead nie je tvoj" };
   }
 
+  const { error: updateError } = await supabase
+    .from("leads")
+    .update({
+      status: "archived",
+      next_callback_at: null,
+      last_activity_at: nowIso,
+    })
+    .eq("id", leadId);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "manually_archived",
+    data: {
+      attempts: lead.call_attempts,
+      sms_sent: false, // bude true keď nasadíme SMS API
+      email_sent: false, // bude true keď nasadíme Resend template
+      target_phone: lead.phone,
+      target_email: lead.email,
+      TODO: "Pripojiť Resend + SMS pre auto-notifikáciu zákazníka",
+    },
+  });
+
+  console.warn(
+    `[archiveLead] Lead ${leadId} (${lead.name}) archivovaný — SMS+Email placeholder. Treba pripojiť provider.`,
+  );
+
   revalidatePath("/agent");
-  revalidatePath("/admin");
-  return { ok: true, archived: isArchived };
+  return { ok: true };
 }
 
 /**

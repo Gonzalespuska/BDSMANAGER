@@ -21,9 +21,9 @@ const TABS = [
   { id: "novy", label: "🆕 Nové" },
   { id: "kontakt", label: "📞 Kontakt" },
   { id: "nedovolany", label: "🟡 Nezdvíhali" },
-  { id: "planovany", label: "📅 Naplánované" },
   { id: "otvorene", label: "🔥 Otvorené" },
-  { id: "ukoncene", label: "🏁 Ukončené" },
+  { id: "ukoncene", label: "🏆 Ukončené" },
+  { id: "archivovane", label: "📦 Archivované" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -95,15 +95,6 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           .order("created_at", { ascending: false })
           .limit(200);
 
-      case "planovany":
-        return supabase
-          .from("leads")
-          .select("*")
-          .eq("assigned_to", user.id)
-          .gt("next_callback_at", nowIso)
-          .order("next_callback_at", { ascending: true })
-          .limit(200);
-
       case "otvorene":
         return supabase
           .from("leads")
@@ -118,7 +109,16 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           .from("leads")
           .select("*")
           .eq("assigned_to", user.id)
-          .in("status", ["won", "lost", "not_interested", "archived"])
+          .eq("status", "won")
+          .order("last_activity_at", { ascending: false })
+          .limit(200);
+
+      case "archivovane":
+        return supabase
+          .from("leads")
+          .select("*")
+          .eq("assigned_to", user.id)
+          .in("status", ["archived", "lost", "not_interested"])
           .order("last_activity_at", { ascending: false })
           .limit(200);
 
@@ -141,9 +141,9 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     novyCountRes,
     kontaktCountRes,
     nedovolanyCountRes,
-    planovanyCountRes,
     otvoreneCountRes,
     ukonceneCountRes,
+    archivovaneCountRes,
   ] = await Promise.all([
     leadsListQuery,
     supabase
@@ -165,17 +165,17 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("assigned_to", user.id)
-      .gt("next_callback_at", nowIso),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("assigned_to", user.id)
       .in("status", ["interested", "quote_sent"]),
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("assigned_to", user.id)
-      .in("status", ["won", "lost", "not_interested", "archived"]),
+      .eq("status", "won"),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("assigned_to", user.id)
+      .in("status", ["archived", "lost", "not_interested"]),
   ]);
 
   const rawLeads = (leadsRes.data ?? []) as Lead[];
@@ -206,9 +206,9 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     novy: novyCountRes.count ?? undefined,
     kontakt: kontaktCountRes.count ?? undefined,
     nedovolany: nedovolanyCountRes.count ?? undefined,
-    planovany: planovanyCountRes.count ?? undefined,
     otvorene: otvoreneCountRes.count ?? undefined,
     ukoncene: ukonceneCountRes.count ?? undefined,
+    archivovane: archivovaneCountRes.count ?? undefined,
   };
 
   const totalToCall = (counts.novy ?? 0) + (counts.nedovolany ?? 0);
@@ -293,12 +293,12 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             {searchMode &&
               "Skús inú časť mena, telefónne číslo, časť emailu alebo lokality."}
-            {!searchMode && tab === "novy" && "Žiadne nové leady na volanie. Čakáme na nový dopyt."}
+            {!searchMode && tab === "novy" && "Žiadne nové leady. Auto-assign ich pridelí keď prídu z webu / Mety / manuálne."}
             {!searchMode && tab === "kontakt" && "Žiadny aktívny kontakt. Po volaní zdvihla → klikni 'Kontakt' a lead bude tu."}
-            {!searchMode && tab === "nedovolany" && "Žiadne nezdvíhajú. Po 3. neúspechu lead automaticky ide do Ukončené."}
-            {!searchMode && tab === "planovany" && "Žiadny naplánovaný callback."}
-            {!searchMode && tab === "otvorene" && "Žiadne otvorené dealy. Po hovore označ lead ako záujem alebo poslať ponuku."}
-            {!searchMode && tab === "ukoncene" && "Žiadne ukončené leady. Vyhraté, stratené a archivované sa zobrazia tu."}
+            {!searchMode && tab === "nedovolany" && "Žiadne nezdvíhajú. Po 3. neúspechu sa pridá tlačidlo 'Archivovať' s SMS+Email follow-up."}
+            {!searchMode && tab === "otvorene" && "Žiadne otvorené dealy. Po hovore označ lead ako 'Otvorené'."}
+            {!searchMode && tab === "ukoncene" && "Žiadne ukončené dealy. Po podpise / dodaní označ lead ako 'Ukončené'."}
+            {!searchMode && tab === "archivovane" && "Žiadne archivované leady. Po neúspešnom kontakte / 3× nezdvihol sa lead presunie sem."}
           </p>
           {!searchMode && process.env.NODE_ENV !== "production" && (
             <div className="mt-4 text-xs text-muted-foreground">

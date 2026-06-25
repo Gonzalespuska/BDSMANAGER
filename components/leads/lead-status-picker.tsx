@@ -7,16 +7,16 @@ import { cn } from "@/lib/utils";
 import { STATUS_META, type LeadStatus } from "@/lib/types/lead";
 import { changeStatusInlineAction } from "@/app/agent/actions";
 
+// Picker zobrazuje iba 6 high-level statusov ktoré matchujú tab kategórie:
+//   Nový → Kontakt → Nedvíha → Otvorené → Ukončené / Archivované
+// (Sub-statuses ako quote_sent, lost, not_interested zostali v DB pre
+// detailný tracking, ale agent ich nepotrebuje meniť ručne.)
 const STATUSES: LeadStatus[] = [
   "new",
   "phone_revealed",
   "no_answer",
-  "scheduled",
   "interested",
-  "quote_sent",
-  "not_interested",
   "won",
-  "lost",
   "archived",
 ];
 
@@ -38,12 +38,12 @@ const STATUS_TEXT: Record<LeadStatus, string> = {
   phone_revealed: "Kontakt",
   no_answer: "Nedvíha",
   scheduled: "Naplánovaný",
-  interested: "Záujem",
+  interested: "Otvorené",
   quote_sent: "Ponuka poslaná",
   not_interested: "Nezáujem",
-  won: "Vyhraný",
+  won: "Ukončené",
   lost: "Stratený",
-  archived: "Archivovaný",
+  archived: "Archivované",
 };
 
 export function LeadStatusPicker({

@@ -30,10 +30,9 @@ import {
 } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
 import {
+  archiveLeadAction,
   changeStatusInlineAction,
-  claimLeadAction,
   recordMissedCallAction,
-  returnLeadAction,
   revealPhoneAction,
   updateLeadOutcomeAction,
 } from "@/app/agent/actions";
@@ -93,9 +92,28 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
     if (result.ok) {
       setLead({
         ...lead,
-        call_attempts: lead.call_attempts + 1,
-        status: result.archived ? "archived" : "no_answer",
+        call_attempts: result.attempts,
+        status: "no_answer",
       });
+    } else {
+      alert(`Chyba: ${result.error}`);
+    }
+    setBusy(false);
+  }
+
+  async function handleArchive() {
+    if (
+      !confirm(
+        "Archivovať lead?\n\n" +
+          "Lead pôjde do Archív tabu a zákazníkovi sa pošle automatický SMS + Email follow-up " +
+          "(zatial placeholder — funkčnosť dorobíme po pripojení SMS a Resend providerov).",
+      )
+    )
+      return;
+    setBusy(true);
+    const result = await archiveLeadAction(lead.id);
+    if (result.ok) {
+      setLead({ ...lead, status: "archived" });
     } else {
       alert(`Chyba: ${result.error}`);
     }
@@ -262,11 +280,11 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             />
           </div>
 
-          {/* Callback timer */}
+          {/* Callback / reminder timer */}
           {lead.next_callback_at && (
             <div className="px-5 pt-3 text-xs text-blue-700 inline-flex items-center gap-1.5 font-semibold">
               <Calendar className="w-3.5 h-3.5" aria-hidden />
-              Ďalší pokus: {new Date(lead.next_callback_at).toLocaleString("sk-SK")}
+              Pripomienka volania: {new Date(lead.next_callback_at).toLocaleString("sk-SK", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
             </div>
           )}
 
@@ -302,29 +320,38 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             </div>
           )}
 
-          {/* Claim banner / Kontakt riadok podľa stavu */}
-          {!lead.assigned_to ? (
-            <ClaimBanner
-              leadId={lead.id}
-              onClaimed={(meName) =>
-                setLead({
-                  ...lead,
-                  assigned_to: "self",
-                  assigned_user_name: meName,
-                })
-              }
-              busy={busy}
-              setBusy={setBusy}
-            />
+          {/* Archivovať s SMS+Email follow-up — len v Nedvíha po >= 3 pokusoch */}
+          {lead.status === "no_answer" && lead.call_attempts >= 3 && (
+            <div className="mb-2 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/30 p-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs text-red-900 dark:text-red-200">
+                <strong>{lead.call_attempts}×</strong> nezdvihol.
+                Archivuj a pošli automatický SMS + Email follow-up.
+                <span className="block text-[10px] opacity-70 mt-0.5">
+                  (SMS+Email zatiaľ placeholder, funkčnosť po pripojení providerov)
+                </span>
+              </div>
+              <Button
+                type="button"
+                onClick={handleArchive}
+                disabled={busy}
+                size="sm"
+                className="h-9 bg-red-600 hover:bg-red-700 text-white font-bold shrink-0"
+              >
+                📦 Archivovať
+              </Button>
+            </div>
+          )}
+
+          {/* Kontakt riadok — pridelený agent. Auto-assign by mal zachytiť
+              všetky leady, takže "Nepriradený" stav by sa nemal stávať
+              v bežnom toku. Ak by sa stal (assign zlyhalo), zobrazí sa
+              len pomlčka — admin to potom manuálne dopridelí. */}
+          {lead.assigned_to ? (
+            <AssignedBanner name={lead.assigned_user_name} />
           ) : (
-            <AssignedBanner
-              name={lead.assigned_user_name}
-              leadId={lead.id}
-              status={lead.status}
-              onReturned={() =>
-                setLead({ ...lead, assigned_to: null, assigned_user_name: null })
-              }
-            />
+            <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+              ⚠ Nepriradený lead — admin musí prideliť agentovi.
+            </div>
           )}
 
           {/* Hlavná akcia row: Email + Zavolať + Ponuka + Detail */}
@@ -635,143 +662,21 @@ function RadioRow({
  * onClaimed dostane meno z server actionu (čerstvo z DB) takže aj v dev
  * móde s mock cache fungs správne.
  */
-function ClaimBanner({
-  leadId,
-  onClaimed,
-  busy,
-  setBusy,
-}: {
-  leadId: string;
-  onClaimed: (userName: string) => void;
-  busy: boolean;
-  setBusy: (b: boolean) => void;
-}) {
-  const [error, setError] = React.useState<string | null>(null);
-  async function claim() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    const res = await claimLeadAction(leadId);
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    onClaimed(res.user_name);
-  }
-  return (
-    <div className="rounded-xl border border-dashed border-sky-300 bg-sky-50 dark:bg-sky-950/30 p-3 flex items-center justify-between gap-3">
-      <div className="text-sm text-sky-900 dark:text-sky-200">
-        <strong>Nepriradený lead</strong> — prevezmi si ho ak ho chceš spracovať.
-        {error && (
-          <span className="ml-2 text-destructive font-medium">⚠ {error}</span>
-        )}
-      </div>
-      <Button
-        type="button"
-        onClick={claim}
-        disabled={busy}
-        size="sm"
-        className="h-9 bg-sky-600 hover:bg-sky-700 text-white font-bold shrink-0"
-      >
-        <Hand className="w-4 h-4 mr-1.5" aria-hidden />
-        {busy ? "Beriem…" : "Prevziať"}
-      </Button>
-    </div>
-  );
-}
+// ClaimBanner odstránený — auto-assign nasadený, lead príde rovno
+// pridelený. (Server actions claimLeadAction / returnLeadAction
+// zostali ako fallback pre admin reassign cez Admin UI fázu.)
 
 /**
- * AssignedBanner — keď je lead pridelený (claimed). Ukazuje meno kontaktu
- * + "Vrátiť" tlačidlo (assigned_to → NULL, lead sa zviera v systéme pre
- * iného agenta).
- *
- * "Vrátiť" je zakázané pre finálne statusy (won/lost/archived).
+ * AssignedBanner — zobrazuje meno pridelenj agenta.
+ * Po zavedení auto-assignu už nie je "Vrátiť do systému" — admin
+ * môže lead reassignuť cez admin UI (zatiaľ TODO).
  */
-function AssignedBanner({
-  name,
-  leadId,
-  status,
-  onReturned,
-}: {
-  name: string | null | undefined;
-  leadId: string;
-  status: string;
-  onReturned: () => void;
-}) {
-  const [confirming, setConfirming] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  // Vrátiť sa dá LEN ak ešte lead nebol kontaktovaný — status = "new".
-  // Po kliknutí "Kontakt" (status → phone_revealed) už agent nemôže
-  // zákazníka "hodiť späť do systému" — má za neho zodpovednosť.
-  const canReturn = status === "new";
-
-  async function doReturn() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    const res = await returnLeadAction(leadId);
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    setConfirming(false);
-    onReturned();
-  }
-
-  if (confirming) {
-    return (
-      <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-center justify-between gap-3 flex-wrap">
-        <div className="text-sm text-amber-900 dark:text-amber-200">
-          <strong>Vrátiť lead?</strong> Lead bude opäť voľný pre iného agenta.
-          {error && (
-            <span className="ml-2 text-destructive font-medium">⚠ {error}</span>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            onClick={doReturn}
-            disabled={busy}
-            size="sm"
-            variant="outline"
-            className="h-8 border-amber-400 text-amber-900 hover:bg-amber-100"
-          >
-            {busy ? "Vraciam…" : "Áno, vrátiť"}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => setConfirming(false)}
-            disabled={busy}
-            size="sm"
-            variant="ghost"
-            className="h-8"
-          >
-            Zrušiť
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
+function AssignedBanner({ name }: { name: string | null | undefined }) {
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 flex items-center justify-between gap-3 flex-wrap">
-      <div className="inline-flex items-center gap-2 text-sm text-emerald-900 dark:text-emerald-200">
-        <Hand className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
-        <span className="font-semibold">Kontakt:</span>
-        <span>{name ?? "—"}</span>
-      </div>
-      {canReturn && (
-        <button
-          type="button"
-          onClick={() => setConfirming(true)}
-          className="text-xs font-semibold text-emerald-800/80 hover:text-emerald-900 hover:underline"
-        >
-          ↩ Vrátiť do systému
-        </button>
-      )}
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 inline-flex items-center gap-2 text-sm text-emerald-900 dark:text-emerald-200">
+      <Hand className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+      <span className="font-semibold">Kontakt:</span>
+      <span>{name ?? "—"}</span>
     </div>
   );
 }

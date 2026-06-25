@@ -97,7 +97,7 @@ export const STATUS_META: Record<
     pill: "bg-purple-500 text-white",
   },
   interested: {
-    label: "✅ ZÁUJEM",
+    label: "✅ OTVORENÉ",
     pill: "bg-emerald-600 text-white",
   },
   not_interested: {
@@ -109,7 +109,7 @@ export const STATUS_META: Record<
     pill: "bg-violet-600 text-white",
   },
   won: {
-    label: "🏆 VYHRANÝ",
+    label: "🏆 UKONČENÉ",
     pill: "bg-green-700 text-white",
   },
   lost: {
@@ -117,7 +117,7 @@ export const STATUS_META: Record<
     pill: "bg-red-700 text-white",
   },
   archived: {
-    label: "📦 ARCHÍV",
+    label: "📦 ARCHIVOVANÉ",
     pill: "bg-zinc-400 text-white",
   },
 };
