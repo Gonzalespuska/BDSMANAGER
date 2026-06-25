@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   AlertCircle,
   Calculator,
-  Calendar,
   CheckCircle2,
   Clock,
   Hand,
@@ -15,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 
+import { CallbackReminder } from "./callback-reminder";
 import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
 
@@ -206,8 +206,9 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             </h2>
           </div>
 
-          {/* Phone display — revealed = velký zelený, nerevealed = subtle hint */}
-          <div className="px-5 pt-3">
+          {/* Phone + email vľavo, callback pripomienka vpravo */}
+          <div className="px-5 pt-3 flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0 flex-1">
             {isRevealed && lead.phone ? (
               <a
                 href={`tel:${lead.phone}`}
@@ -232,6 +233,12 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 <Mail className="w-5 h-5 md:w-6 md:h-6 shrink-0" aria-hidden />
                 {lead.email}
               </a>
+            )}
+            </div>
+
+            {/* Callback reminder vpravo */}
+            {lead.next_callback_at && (
+              <CallbackReminder when={lead.next_callback_at} />
             )}
           </div>
 
@@ -272,27 +279,7 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             />
           </div>
 
-          {/* Callback / reminder timer — výrazný banner pre nezdvihnuté leady */}
-          {lead.next_callback_at && (
-            <div className="px-5 pt-3">
-              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 text-blue-900 dark:text-blue-200">
-                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-300" aria-hidden />
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider opacity-70">
-                    Pripomienka volania
-                  </div>
-                  <div className="text-lg md:text-xl font-extrabold leading-none">
-                    {new Date(lead.next_callback_at).toLocaleString("sk-SK", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Callback reminder zobrazený vpravo v phone+email riadku (vyššie). */}
 
           {/* Action bar */}
           <div className="px-5 pt-4 pb-4 mt-4 border-t bg-zinc-50/60">
