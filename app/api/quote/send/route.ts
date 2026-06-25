@@ -1,9 +1,44 @@
 export const runtime = "edge";
 
 import { NextResponse, type NextRequest } from "next/server";
-import { Resend } from "resend";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * Resend HTTP API (POST https://api.resend.com/emails) used directly
+ * cez fetch — vyhneme sa SDK ktorý ťahá @react-email/render
+ * a padá v edge-bundleri (Cloudflare Workers).
+ */
+async function sendViaResendApi(
+  apiKey: string,
+  payload: {
+    from: string;
+    to: string;
+    subject: string;
+    text: string;
+    attachments?: Array<{ filename: string; content: string }>;
+  },
+): Promise<{ id?: string; error?: { message: string } }> {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    id?: string;
+    message?: string;
+    name?: string;
+  };
+  if (!res.ok) {
+    return {
+      error: { message: json.message || `Resend HTTP ${res.status}` },
+    };
+  }
+  return { id: json.id };
+}
 
 /**
  * POST /api/quote/send
@@ -72,8 +107,7 @@ export async function POST(request: NextRequest) {
     process.env.QUOTE_EMAIL_FROM ?? "EPOXIDOVO <onboarding@resend.dev>";
 
   try {
-    const resend = new Resend(resendKey);
-    const { data, error } = await resend.emails.send({
+    const { id: resendId, error } = await sendViaResendApi(resendKey, {
       from: fromAddress,
       to: body.to_email,
       subject: body.subject,
@@ -104,7 +138,7 @@ export async function POST(request: NextRequest) {
           data: {
             to: body.to_email,
             subject: body.subject,
-            resend_id: data?.id,
+            resend_id: resendId,
             kind: "quote",
           },
         });
@@ -117,7 +151,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       mode: "sent",
       message: `Ponuka odoslaná na ${body.to_email}`,
-      resend_id: data?.id,
+      resend_id: resendId,
     });
   } catch (err) {
     console.error("[quote/send] exception:", err);
