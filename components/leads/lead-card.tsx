@@ -30,8 +30,10 @@ import {
 } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
 import {
+  changeStatusInlineAction,
   claimLeadAction,
   recordMissedCallAction,
+  returnLeadAction,
   revealPhoneAction,
   updateLeadOutcomeAction,
 } from "@/app/agent/actions";
@@ -94,6 +96,23 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
         call_attempts: lead.call_attempts + 1,
         status: result.archived ? "archived" : "no_answer",
       });
+    } else {
+      alert(`Chyba: ${result.error}`);
+    }
+    setBusy(false);
+  }
+
+  /**
+   * "Kontakt" — agent volal a zákazník zdvihol.
+   * Nech sa lead presunie do "Kontakt" tabu (status zostáva phone_revealed
+   * — to už nastavila revealPhoneAction). Tu len značíme last_activity_at
+   * cez inline status change a refetch.
+   */
+  async function handleContact() {
+    setBusy(true);
+    const result = await changeStatusInlineAction(lead.id, "phone_revealed");
+    if (result.ok) {
+      setLead({ ...lead, status: "phone_revealed" });
     } else {
       alert(`Chyba: ${result.error}`);
     }
@@ -258,12 +277,13 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             <div className="grid grid-cols-2 gap-2 mb-2">
               <Button
                 type="button"
-                onClick={() => setModalOpen(true)}
+                onClick={handleContact}
                 disabled={busy}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
+                title="Zdvihla → presunie do Kontakt tabu, tam klasifikuj"
               >
                 <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
-                Zdvihla
+                Kontakt
               </Button>
               <Button
                 type="button"
@@ -297,7 +317,14 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               setBusy={setBusy}
             />
           ) : (
-            <AssignedBanner name={lead.assigned_user_name} />
+            <AssignedBanner
+              name={lead.assigned_user_name}
+              leadId={lead.id}
+              status={lead.status}
+              onReturned={() =>
+                setLead({ ...lead, assigned_to: null, assigned_user_name: null })
+              }
+            />
           )}
 
           {/* Hlavná akcia row: Email + Zavolať + Ponuka + Detail */}
@@ -655,14 +682,96 @@ function ClaimBanner({
 }
 
 /**
- * AssignedBanner — keď je lead pridelený (claimed). Ukazuje meno kontaktu.
+ * AssignedBanner — keď je lead pridelený (claimed). Ukazuje meno kontaktu
+ * + "Vrátiť" tlačidlo (assigned_to → NULL, lead sa zviera v systéme pre
+ * iného agenta).
+ *
+ * "Vrátiť" je zakázané pre finálne statusy (won/lost/archived).
  */
-function AssignedBanner({ name }: { name: string | null | undefined }) {
+function AssignedBanner({
+  name,
+  leadId,
+  status,
+  onReturned,
+}: {
+  name: string | null | undefined;
+  leadId: string;
+  status: string;
+  onReturned: () => void;
+}) {
+  const [confirming, setConfirming] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  // Vrátiť sa dá LEN ak ešte lead nebol kontaktovaný — status = "new".
+  // Po kliknutí "Kontakt" (status → phone_revealed) už agent nemôže
+  // zákazníka "hodiť späť do systému" — má za neho zodpovednosť.
+  const canReturn = status === "new";
+
+  async function doReturn() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const res = await returnLeadAction(leadId);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setConfirming(false);
+    onReturned();
+  }
+
+  if (confirming) {
+    return (
+      <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-sm text-amber-900 dark:text-amber-200">
+          <strong>Vrátiť lead?</strong> Lead bude opäť voľný pre iného agenta.
+          {error && (
+            <span className="ml-2 text-destructive font-medium">⚠ {error}</span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            onClick={doReturn}
+            disabled={busy}
+            size="sm"
+            variant="outline"
+            className="h-8 border-amber-400 text-amber-900 hover:bg-amber-100"
+          >
+            {busy ? "Vraciam…" : "Áno, vrátiť"}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setConfirming(false)}
+            disabled={busy}
+            size="sm"
+            variant="ghost"
+            className="h-8"
+          >
+            Zrušiť
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 inline-flex items-center gap-2 text-sm text-emerald-900 dark:text-emerald-200">
-      <Hand className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
-      <span className="font-semibold">Kontakt:</span>
-      <span>{name ?? "—"}</span>
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 flex items-center justify-between gap-3 flex-wrap">
+      <div className="inline-flex items-center gap-2 text-sm text-emerald-900 dark:text-emerald-200">
+        <Hand className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+        <span className="font-semibold">Kontakt:</span>
+        <span>{name ?? "—"}</span>
+      </div>
+      {canReturn && (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="text-xs font-semibold text-emerald-800/80 hover:text-emerald-900 hover:underline"
+        >
+          ↩ Vrátiť do systému
+        </button>
+      )}
     </div>
   );
 }

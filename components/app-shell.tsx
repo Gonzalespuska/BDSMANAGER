@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Calculator,
+  Calendar as CalendarIcon,
   Phone,
   ShieldCheck,
   Users as UsersIcon,
@@ -71,6 +72,9 @@ export function AppShell({
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 pb-3 flex items-center gap-2 flex-wrap">
           <NavPill href="/agent" icon={<Phone className="w-4 h-4" />}>
             Leady
+          </NavPill>
+          <NavPill href="/calendar" icon={<CalendarIcon className="w-4 h-4" />}>
+            Kalendár
           </NavPill>
           <NavPill
             href="/generator"

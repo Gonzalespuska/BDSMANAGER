@@ -85,7 +85,7 @@ export const STATUS_META: Record<
     pill: "bg-red-500 text-white",
   },
   phone_revealed: {
-    label: "📞 VOLÁ SA",
+    label: "📞 KONTAKT",
     pill: "bg-blue-500 text-white",
   },
   no_answer: {

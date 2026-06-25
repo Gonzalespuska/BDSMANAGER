@@ -35,7 +35,7 @@ const STATUS_DOT: Record<LeadStatus, string> = {
 
 const STATUS_TEXT: Record<LeadStatus, string> = {
   new: "Nový",
-  phone_revealed: "Volá sa",
+  phone_revealed: "Kontakt",
   no_answer: "Nedvíha",
   scheduled: "Naplánovaný",
   interested: "Záujem",

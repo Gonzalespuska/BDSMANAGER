@@ -152,6 +152,27 @@ export async function recordMissedCallAction(
     },
   });
 
+  // ⚠️ TODO funkčnosť dorobíme keď bude Resend + SMS provider live:
+  //   - SMS: cez Twilio / Vonage / iný SK provider
+  //   - Email: cez Resend (template "po 3 neúspechoch sa nám neozvali")
+  // Zatiaľ len logujeme do lead_activities aby admin videl že trigger zapol.
+  if (isArchived) {
+    await supabase.from("lead_activities").insert({
+      lead_id: leadId,
+      user_id: user.id,
+      type: "auto_archive_notify",
+      data: {
+        reason: `${newAttempts}× neúspešný pokus`,
+        sms_sent: false, // bude true keď nasadíme SMS API
+        email_sent: false, // bude true keď nastavíme Resend template
+        TODO: "Pripojiť Resend + SMS pre auto-notifikáciu zákazníka",
+      },
+    });
+    console.warn(
+      `[recordMissedCall] Lead ${leadId} archivovaný po ${newAttempts}× pokusoch — SMS+Email placeholder loggnuté, treba pripojiť provider.`,
+    );
+  }
+
   revalidatePath("/agent");
   revalidatePath("/admin");
   return { ok: true, archived: isArchived };
@@ -388,4 +409,72 @@ export async function claimLeadAction(
 
   revalidatePath("/agent");
   return { ok: true, user_name: user.name };
+}
+
+/**
+ * Server Action — vrátiť lead späť do systému (opak claim).
+ *
+ *   assigned_to → NULL  → lead sa znova zobrazí v "Nové" tabe iným agentom
+ *   ako voľný (s ClaimBanner-om "Prevezmi").
+ *
+ * Audit log type='returned'.
+ */
+export async function returnLeadAction(
+  leadId: string,
+  reason?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+  if (user.id === "dev-user") {
+    return { ok: false, error: "dev fallback user — peter z DB nenájdený" };
+  }
+
+  const supabase = await createClient();
+  const nowIso = new Date().toISOString();
+
+  // Iba môj vlastný lead môžem vrátiť (alebo admin hocijaký — TODO)
+  const { data: lead, error: readError } = await supabase
+    .from("leads")
+    .select("assigned_to, status")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (readError || !lead) {
+    return { ok: false, error: "Lead nenájdený" };
+  }
+  if (lead.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "Tento lead nie je tvoj" };
+  }
+
+  // Reset → assigned_to = NULL, status = "new" (predvolený stav nepriradeného)
+  // Ale ak je už vo finálnom stave (won/lost/archived), nevrátime ho
+  if (["won", "lost", "archived"].includes(lead.status)) {
+    return {
+      ok: false,
+      error: "Ukončené leady sa nedajú vrátiť do systému",
+    };
+  }
+
+  const { error: updateError } = await supabase
+    .from("leads")
+    .update({
+      assigned_to: null,
+      // Po vrátení status resetneme na 'new' iba ak bol vo "Volá sa"
+      // (phone_revealed) — inak ostane (no_answer, scheduled, ...).
+      status: lead.status === "phone_revealed" ? "new" : lead.status,
+      last_activity_at: nowIso,
+    })
+    .eq("id", leadId);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "returned",
+    data: { by: user.email, reason: reason ?? null },
+  });
+
+  revalidatePath("/agent");
+  return { ok: true };
 }
