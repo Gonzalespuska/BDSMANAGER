@@ -20,9 +20,7 @@ import { LeadStatusPicker } from "./lead-status-picker";
 
 import { Button } from "@/components/ui/button";
 import {
-  getSlaBadgeState,
   Lead,
-  SLA_BADGE_META,
   SOURCE_TYPE_LABELS,
   STATUS_META,
   timeAgo,
@@ -55,7 +53,6 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
   const sourceLabel =
     SOURCE_TYPE_LABELS[lead.source_type] ?? `📥 ${lead.source_type}`;
   const isRevealed = Boolean(lead.phone_revealed_at);
-  const slaBadge = SLA_BADGE_META[getSlaBadgeState(lead)];
 
   const dataFields = lead.data as Record<string, string | number | undefined>;
   const infoBits = [
@@ -190,16 +187,8 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                   {lead.call_attempts}× nedvíha
                 </span>
               )}
-              {slaBadge && (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md",
-                    slaBadge.className,
-                  )}
-                >
-                  {slaBadge.label}
-                </span>
-              )}
+              {/* SLA badge odstránený z agent view — agent vidí kedy odhalil
+                  číslo z aktivity timestampu. Metrika zostáva v DB pre admin. */}
             </div>
             <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5 shrink-0">
               <span className="font-semibold">{sourceLabel}</span>

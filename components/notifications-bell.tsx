@@ -93,62 +93,90 @@ export function NotificationsBell({
               Žiadne pripomienky volania, nové leady, ani follow-upy.
             </div>
           ) : (
-            <ul className="max-h-[60vh] overflow-y-auto divide-y">
-              {items.map((n) => {
-                const isOverdue = n.type === "callback_overdue";
-                const isNew = n.type === "new_lead";
-                return (
-                  <li key={n.id}>
-                    <Link
-                      href={`/agent/leads/${n.lead_id}`}
-                      onClick={() => setOpen(false)}
-                      className="block px-4 py-3 hover:bg-muted/40 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span
-                              className={cn(
-                                "inline-block w-2 h-2 rounded-full shrink-0",
-                                isOverdue
-                                  ? "bg-red-500"
-                                  : isNew
-                                    ? "bg-emerald-500"
-                                    : "bg-amber-500",
-                              )}
-                              aria-hidden
-                            />
-                            <span className="font-semibold text-sm truncate">
-                              {n.lead_name}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {n.message}
-                          </div>
-                          {n.lead_phone && (
-                            <div className="text-[11px] text-muted-foreground/80 mt-0.5">
-                              {n.lead_phone}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className="text-[11px] text-muted-foreground">
-                            {timeAgo(n.when_ts)}
-                          </div>
-                          <ExternalLink
-                            className="w-3 h-3 text-muted-foreground/60 mt-1 ml-auto"
-                            aria-hidden
-                          />
-                        </div>
-                      </div>
-                    </Link>
-                  </li>
+            <div className="max-h-[60vh] overflow-y-auto">
+              {/* Sekcia: Pripomienky volať znova */}
+              {(() => {
+                const callbacks = items.filter(
+                  (n) =>
+                    n.type === "callback_due" || n.type === "callback_overdue",
                 );
-              })}
-            </ul>
+                if (callbacks.length === 0) return null;
+                return (
+                  <div>
+                    <div className="px-4 py-2 bg-muted/30 border-b text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 w-full">
+                      <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+                      Pripomienka volať znova ({callbacks.length})
+                    </div>
+                    <ul className="divide-y">
+                      {callbacks.map((n) => (
+                        <NotifRow key={n.id} n={n} onClick={() => setOpen(false)} />
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+
+              {/* Sekcia: Nový lead pridelený */}
+              {(() => {
+                const news = items.filter((n) => n.type === "new_lead");
+                if (news.length === 0) return null;
+                return (
+                  <div>
+                    <div className="px-4 py-2 bg-muted/30 border-b text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 w-full">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                      Nový lead pridelený ({news.length})
+                    </div>
+                    <ul className="divide-y">
+                      {news.map((n) => (
+                        <NotifRow key={n.id} n={n} onClick={() => setOpen(false)} />
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+            </div>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+function NotifRow({
+  n,
+  onClick,
+}: {
+  n: Notification;
+  onClick: () => void;
+}) {
+  return (
+    <li>
+      <Link
+        href={`/agent/leads/${n.lead_id}`}
+        onClick={onClick}
+        className="block px-4 py-3 hover:bg-muted/40 transition-colors"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-sm truncate">{n.lead_name}</div>
+            <div className="text-xs text-muted-foreground">{n.message}</div>
+            {n.lead_phone && (
+              <div className="text-[11px] text-muted-foreground/80 mt-0.5">
+                {n.lead_phone}
+              </div>
+            )}
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-[11px] text-muted-foreground">
+              {timeAgo(n.when_ts)}
+            </div>
+            <ExternalLink
+              className="w-3 h-3 text-muted-foreground/60 mt-1 ml-auto"
+              aria-hidden
+            />
+          </div>
+        </div>
+      </Link>
+    </li>
   );
 }
