@@ -272,11 +272,25 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             />
           </div>
 
-          {/* Callback / reminder timer */}
+          {/* Callback / reminder timer — výrazný banner pre nezdvihnuté leady */}
           {lead.next_callback_at && (
-            <div className="px-5 pt-3 text-xs text-blue-700 inline-flex items-center gap-1.5 font-semibold">
-              <Calendar className="w-3.5 h-3.5" aria-hidden />
-              Pripomienka volania: {new Date(lead.next_callback_at).toLocaleString("sk-SK", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            <div className="px-5 pt-3">
+              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 text-blue-900 dark:text-blue-200">
+                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-300" aria-hidden />
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider opacity-70">
+                    Pripomienka volania
+                  </div>
+                  <div className="text-lg md:text-xl font-extrabold leading-none">
+                    {new Date(lead.next_callback_at).toLocaleString("sk-SK", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
