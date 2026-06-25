@@ -69,7 +69,10 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
   async function handleCall() {
     if (!lead.phone) return;
     setBusy(true);
-    // Reveal (server action) — log SLA + audit
+    // Reveal (server action) — log SLA + audit. Žiadny automatický tel:
+    // redirect — desktop browsery to blokujú ako "auto-start a call". Po
+    // odhalení je číslo viditeľné ako veľký zelený tel: link, user si
+    // klikne sám.
     const result = await revealPhoneAction(lead.id);
     if (result.ok) {
       setLead({
@@ -77,8 +80,6 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
         phone_revealed_at: new Date().toISOString(),
         status: lead.status === "new" ? "phone_revealed" : lead.status,
       });
-      // Trigger tel: dialer (na mobile otvorí volacie tlačidlo, na desktop často no-op)
-      window.location.href = `tel:${lead.phone}`;
     } else {
       alert(`Chyba: ${result.error}`);
     }
