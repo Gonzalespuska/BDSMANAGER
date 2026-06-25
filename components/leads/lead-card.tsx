@@ -223,7 +223,7 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 Telefón nie je k dispozícii. Kontaktuj cez email.
               </div>
             )}
-            {lead.email && (
+            {lead.email ? (
               <a
                 href={emailHref ?? `mailto:${lead.email}`}
                 target="_blank"
@@ -233,6 +233,11 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 <Mail className="w-5 h-5 md:w-6 md:h-6 shrink-0" aria-hidden />
                 {lead.email}
               </a>
+            ) : (
+              <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground/70">
+                <Mail className="w-4 h-4 shrink-0" aria-hidden />
+                Email neznámy
+              </div>
             )}
             </div>
 
