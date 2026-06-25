@@ -162,7 +162,30 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       .in("status", ["interested", "quote_sent"]),
   ]);
 
-  const leads = (leadsRes.data ?? []) as Lead[];
+  const rawLeads = (leadsRes.data ?? []) as Lead[];
+
+  // Enrich leads with assigned_user_name — 1 join query, in-memory map.
+  const assignedIds = Array.from(
+    new Set(
+      rawLeads
+        .map((l) => l.assigned_to)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const nameMap = new Map<string, string>();
+  if (assignedIds.length > 0) {
+    const { data: usersData } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", assignedIds);
+    for (const u of usersData ?? []) {
+      if (u.id && typeof u.name === "string") nameMap.set(u.id, u.name);
+    }
+  }
+  const leads: Lead[] = rawLeads.map((l) => ({
+    ...l,
+    assigned_user_name: l.assigned_to ? (nameMap.get(l.assigned_to) ?? null) : null,
+  }));
   const counts: Record<TabId, number | undefined> = {
     nepriradene: nepriradeneCountRes.count ?? undefined,
     novy: novyCountRes.count ?? undefined,

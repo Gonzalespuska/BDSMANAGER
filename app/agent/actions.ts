@@ -347,7 +347,10 @@ export async function saveLeadNoteAction(
  */
 export async function claimLeadAction(
   leadId: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; user_name: string }
+  | { ok: false; error: string }
+> {
   const user = await getCurrentAppUser();
   if (!user) return { ok: false, error: "unauthorized" };
   if (user.id === "dev-user") {
@@ -384,5 +387,5 @@ export async function claimLeadAction(
   });
 
   revalidatePath("/agent");
-  return { ok: true };
+  return { ok: true, user_name: user.name };
 }

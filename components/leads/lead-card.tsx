@@ -189,12 +189,8 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
                 {lead.phone}
               </a>
-            ) : lead.phone ? (
-              <div className="text-sm text-muted-foreground inline-flex items-center gap-1.5">
-                <Phone className="w-4 h-4" aria-hidden />
-                Telefón skrytý, klikni „Zavolať" pre odhalenie
-              </div>
-            ) : (
+            ) : null}
+            {!lead.phone && (
               <div className="text-sm text-muted-foreground">
                 Telefón nie je k dispozícii. Kontaktuj cez email.
               </div>
@@ -286,14 +282,22 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             </div>
           )}
 
-          {/* Claim banner — zobrazí sa LEN ked je lead nepriradeny */}
-          {!lead.assigned_to && (
+          {/* Claim banner / Kontakt riadok podľa stavu */}
+          {!lead.assigned_to ? (
             <ClaimBanner
               leadId={lead.id}
-              onClaimed={() => setLead({ ...lead, assigned_to: "pending" })}
+              onClaimed={(meName) =>
+                setLead({
+                  ...lead,
+                  assigned_to: "self",
+                  assigned_user_name: meName,
+                })
+              }
               busy={busy}
               setBusy={setBusy}
             />
+          ) : (
+            <AssignedBanner name={lead.assigned_user_name} />
           )}
 
           {/* Hlavná akcia row: Email + Zavolať + Ponuka + Detail */}
@@ -317,10 +321,22 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 onClick={handleCall}
                 disabled={busy}
                 size="sm"
-                className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
+                title={
+                  isRevealed
+                    ? "Vytočiť — telefón je odhalený"
+                    : "Klikni — odhalí sa číslo a otvorí dialer"
+                }
+                className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)] flex flex-col items-center justify-center leading-none gap-0.5"
               >
-                <Phone className="w-4 h-4 mr-1.5" aria-hidden />
-                Zavolať
+                <span className="inline-flex items-center">
+                  <Phone className="w-4 h-4 mr-1.5" aria-hidden />
+                  Zavolať
+                </span>
+                {!isRevealed && (
+                  <span className="text-[10px] font-medium opacity-90 uppercase tracking-wider">
+                    klikni → odhalí číslo
+                  </span>
+                )}
               </Button>
             ) : (
               <Button variant="outline" size="sm" className="h-10" disabled>
@@ -588,6 +604,9 @@ function RadioRow({
  * ClaimBanner — zobrazí sa na nepriradených leadoch (assigned_to=null).
  * Klik na "Prevziať" → claimLeadAction, lead sa zviaže k tomuto agentovi.
  * Race-condition handled na serveri (atomic UPDATE ... WHERE assigned_to IS NULL).
+ *
+ * onClaimed dostane meno z server actionu (čerstvo z DB) takže aj v dev
+ * móde s mock cache fungs správne.
  */
 function ClaimBanner({
   leadId,
@@ -596,7 +615,7 @@ function ClaimBanner({
   setBusy,
 }: {
   leadId: string;
-  onClaimed: () => void;
+  onClaimed: (userName: string) => void;
   busy: boolean;
   setBusy: (b: boolean) => void;
 }) {
@@ -611,7 +630,7 @@ function ClaimBanner({
       setError(res.error);
       return;
     }
-    onClaimed();
+    onClaimed(res.user_name);
   }
   return (
     <div className="rounded-xl border border-dashed border-sky-300 bg-sky-50 dark:bg-sky-950/30 p-3 flex items-center justify-between gap-3">
@@ -631,6 +650,19 @@ function ClaimBanner({
         <Hand className="w-4 h-4 mr-1.5" aria-hidden />
         {busy ? "Beriem…" : "Prevziať"}
       </Button>
+    </div>
+  );
+}
+
+/**
+ * AssignedBanner — keď je lead pridelený (claimed). Ukazuje meno kontaktu.
+ */
+function AssignedBanner({ name }: { name: string | null | undefined }) {
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 inline-flex items-center gap-2 text-sm text-emerald-900 dark:text-emerald-200">
+      <Hand className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+      <span className="font-semibold">Kontakt:</span>
+      <span>{name ?? "—"}</span>
     </div>
   );
 }

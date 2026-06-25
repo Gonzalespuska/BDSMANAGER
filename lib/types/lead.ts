@@ -48,6 +48,8 @@ export interface Lead {
   priority: LeadPriority;
   value_estimate: number | null;
   assigned_to: string | null;
+  /** Hydrated name of the agent who owns this lead — enriched on server. */
+  assigned_user_name?: string | null;
   call_attempts: number;
   next_callback_at: string | null;
   first_contact_at: string | null;
