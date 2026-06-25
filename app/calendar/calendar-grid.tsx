@@ -192,21 +192,20 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
                   >
                     {c.dayOfMonth}
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex flex-col items-end gap-1">
                     {callsOnDay.length > 0 && (
                       <span
-                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800"
+                        className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800"
                         title={`${callsOnDay.length} pripomienok volania`}
                       >
-                        📞 {callsOnDay.length}
+                        📞 {pluralHovor(callsOnDay.length)}
                       </span>
                     )}
                     {notesOnDay.length > 0 && (
                       <span
-                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800"
-                        title={`${notesOnDay.length} poznámok`}
+                        className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800"
                       >
-                        {notesOnDay.length}
+                        {pluralPoznamka(notesOnDay.length)}
                       </span>
                     )}
                   </div>
@@ -440,4 +439,20 @@ function DayModal({
       </div>
     </div>
   );
+}
+
+/**
+ * Slovenské skloňovanie pre poznámky a hovory.
+ * 1 = nom. sg., 2-4 = nom. pl., 5+ = gen. pl.
+ */
+function pluralPoznamka(n: number): string {
+  if (n === 1) return "1 poznámka";
+  if (n >= 2 && n <= 4) return `${n} poznámky`;
+  return `${n} poznámok`;
+}
+
+function pluralHovor(n: number): string {
+  if (n === 1) return "1 hovor";
+  if (n >= 2 && n <= 4) return `${n} hovory`;
+  return `${n} hovorov`;
 }
