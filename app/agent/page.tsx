@@ -124,13 +124,13 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
 
       case "novy":
       default:
-        // "Nové" — len fresh leady (status=new), moje + nepriradené.
-        // Hneď ako zavolám "Kontakt" → presunie sa do "Kontakt" tabu.
+        // "Nové" — len moje pridelené fresh leady. Auto-assign trigger
+        // sa stará o priradenie hneď pri inserte, agent ne-musí klikať.
         return supabase
           .from("leads")
           .select("*")
           .eq("status", "new")
-          .or(`assigned_to.eq.${user.id},assigned_to.is.null`)
+          .eq("assigned_to", user.id)
           .order("created_at", { ascending: false })
           .limit(200);
     }
@@ -150,7 +150,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("status", "new")
-      .or(`assigned_to.eq.${user.id},assigned_to.is.null`),
+      .eq("assigned_to", user.id),
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
@@ -293,7 +293,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             {searchMode &&
               "Skús inú časť mena, telefónne číslo, časť emailu alebo lokality."}
-            {!searchMode && tab === "novy" && "Žiadne nové leady. Auto-assign ich pridelí keď prídu z webu / Mety / manuálne."}
+            {!searchMode && tab === "novy" && "Žiadne nové leady. Čakáme na ďalší dopyt."}
             {!searchMode && tab === "kontakt" && "Žiadny aktívny kontakt. Po volaní zdvihla → klikni 'Kontakt' a lead bude tu."}
             {!searchMode && tab === "nedovolany" && "Žiadne nezdvíhajú. Po 3. neúspechu sa pridá tlačidlo 'Archivovať' s SMS+Email follow-up."}
             {!searchMode && tab === "otvorene" && "Žiadne otvorené dealy. Po hovore označ lead ako 'Otvorené'."}

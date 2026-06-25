@@ -342,16 +342,11 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             </div>
           )}
 
-          {/* Kontakt riadok — pridelený agent. Auto-assign by mal zachytiť
-              všetky leady, takže "Nepriradený" stav by sa nemal stávať
-              v bežnom toku. Ak by sa stal (assign zlyhalo), zobrazí sa
-              len pomlčka — admin to potom manuálne dopridelí. */}
-          {lead.assigned_to ? (
+          {/* Kontakt — meno prideleného agenta. Auto-assign zaisťuje že
+              každý lead je vždy assigned, capacity=0 (Pauza) toggleom
+              v Profile menu agent dočasne neprijíma nové leady. */}
+          {lead.assigned_to && (
             <AssignedBanner name={lead.assigned_user_name} />
-          ) : (
-            <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-              ⚠ Nepriradený lead — admin musí prideliť agentovi.
-            </div>
           )}
 
           {/* Hlavná akcia row: Email + Zavolať + Ponuka + Detail */}
