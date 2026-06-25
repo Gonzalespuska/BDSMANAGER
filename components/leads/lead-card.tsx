@@ -356,11 +356,13 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             </div>
           )}
 
-          {/* Kontakt — meno prideleného agenta. Auto-assign zaisťuje že
-              každý lead je vždy assigned, capacity=0 (Pauza) toggleom
-              v Profile menu agent dočasne neprijíma nové leady. */}
-          {lead.assigned_to && (
-            <AssignedBanner name={lead.assigned_user_name} />
+          {/* Kontakt banner — len keď lead bol aspoň raz odhalený / klasifikovaný.
+              V "Nové" (status=new) ho neukazujeme, lebo lead ešte nebol
+              kontaktovaný, takže "Kontakt:" by bolo zavádzajúce. */}
+          {lead.assigned_to && lead.status !== "new" && (
+            <div className="mb-3">
+              <AssignedBanner name={lead.assigned_user_name} />
+            </div>
           )}
 
           {/* Hlavná akcia row: Email + Zavolať + Ponuka */}
