@@ -48,12 +48,14 @@ export async function revealPhoneAction(
     newSlaStatus = now <= new Date(lead.sla_deadline) ? "met" : "breached";
   }
 
+  // Status sa NEMENÍ na phone_revealed — to by lead presunulo z Nové do
+  // Kontakt tabu okamžite. Lead je "Kontakt" až keď agent skutočne volal
+  // a klikol "Kontakt" button. Po reveal-i len logujeme čas + SLA.
   const { error: updateError } = await supabase
     .from("leads")
     .update({
       phone_revealed_at: nowIso,
       phone_revealed_by: user.id,
-      status: lead.status === "new" ? "phone_revealed" : lead.status,
       sla_status: newSlaStatus,
       last_activity_at: nowIso,
       first_contact_at: nowIso,
