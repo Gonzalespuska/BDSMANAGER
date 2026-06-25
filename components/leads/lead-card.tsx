@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
+  Hand,
   Mail,
   Phone,
   PhoneOff,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
 import {
+  claimLeadAction,
   recordMissedCallAction,
   revealPhoneAction,
   updateLeadOutcomeAction,
@@ -282,6 +284,16 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 )}
               </Button>
             </div>
+          )}
+
+          {/* Claim banner — zobrazí sa LEN ked je lead nepriradeny */}
+          {!lead.assigned_to && (
+            <ClaimBanner
+              leadId={lead.id}
+              onClaimed={() => setLead({ ...lead, assigned_to: "pending" })}
+              busy={busy}
+              setBusy={setBusy}
+            />
           )}
 
           {/* Hlavná akcia row: Email + Zavolať + Ponuka + Detail */}
@@ -569,5 +581,56 @@ function RadioRow({
         </div>
       </div>
     </label>
+  );
+}
+
+/**
+ * ClaimBanner — zobrazí sa na nepriradených leadoch (assigned_to=null).
+ * Klik na "Prevziať" → claimLeadAction, lead sa zviaže k tomuto agentovi.
+ * Race-condition handled na serveri (atomic UPDATE ... WHERE assigned_to IS NULL).
+ */
+function ClaimBanner({
+  leadId,
+  onClaimed,
+  busy,
+  setBusy,
+}: {
+  leadId: string;
+  onClaimed: () => void;
+  busy: boolean;
+  setBusy: (b: boolean) => void;
+}) {
+  const [error, setError] = React.useState<string | null>(null);
+  async function claim() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const res = await claimLeadAction(leadId);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onClaimed();
+  }
+  return (
+    <div className="rounded-xl border border-dashed border-sky-300 bg-sky-50 dark:bg-sky-950/30 p-3 flex items-center justify-between gap-3">
+      <div className="text-sm text-sky-900 dark:text-sky-200">
+        <strong>Nepriradený lead</strong> — prevezmi si ho ak ho chceš spracovať.
+        {error && (
+          <span className="ml-2 text-destructive font-medium">⚠ {error}</span>
+        )}
+      </div>
+      <Button
+        type="button"
+        onClick={claim}
+        disabled={busy}
+        size="sm"
+        className="h-9 bg-sky-600 hover:bg-sky-700 text-white font-bold shrink-0"
+      >
+        <Hand className="w-4 h-4 mr-1.5" aria-hidden />
+        {busy ? "Beriem…" : "Prevziať"}
+      </Button>
+    </div>
   );
 }

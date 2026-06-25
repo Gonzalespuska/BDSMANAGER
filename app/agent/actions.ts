@@ -335,3 +335,54 @@ export async function saveLeadNoteAction(
   revalidatePath("/admin");
   return { ok: true };
 }
+
+/**
+ * Server Action — claim unassigned lead.
+ *
+ * Logika:
+ *   1. Skontroluje že lead je naozaj unassigned (assigned_to IS NULL).
+ *   2. Atomicky update-ne assigned_to na current user.id.
+ *   3. Audit log (lead_activities type=claimed).
+ *   4. Revaliduje /agent.
+ */
+export async function claimLeadAction(
+  leadId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+  if (user.id === "dev-user") {
+    return { ok: false, error: "dev fallback user — peter z DB nenájdený" };
+  }
+
+  const supabase = await createClient();
+  const nowIso = new Date().toISOString();
+
+  // Atomicky claim — update s WHERE assigned_to IS NULL
+  // Ak medzi tým niekto iný claimol, vráti zero rows = race lost.
+  const { data: claimed, error: claimError } = await supabase
+    .from("leads")
+    .update({ assigned_to: user.id, last_activity_at: nowIso })
+    .eq("id", leadId)
+    .is("assigned_to", null)
+    .select("id")
+    .maybeSingle();
+
+  if (claimError) return { ok: false, error: claimError.message };
+  if (!claimed) {
+    return {
+      ok: false,
+      error: "Lead už pridelil niekto iný (alebo neexistuje).",
+    };
+  }
+
+  // Audit log
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "claimed",
+    data: { by: user.email },
+  });
+
+  revalidatePath("/agent");
+  return { ok: true };
+}

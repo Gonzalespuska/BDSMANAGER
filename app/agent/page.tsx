@@ -17,7 +17,8 @@ interface PageProps {
 }
 
 const TABS = [
-  { id: "novy", label: "🔴 Nové" },
+  { id: "nepriradene", label: "🆕 Nepriradené" },
+  { id: "novy", label: "🔴 Moje nové" },
   { id: "nedovolany", label: "🟡 Nedvíhajú" },
   { id: "planovany", label: "📅 Naplánované" },
   { id: "otvorene", label: "🔥 Otvorené" },
@@ -36,13 +37,25 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
   const nowIso = new Date().toISOString();
 
   // ─── Build queries pre tab + counts ──────────────────────────────────
+  // Auto-assign je VYPNUTÝ — nové leady prídu s assigned_to=NULL a každý
+  // agent ich vidí v "Nepriradené" tabe, kde si ich claimne.
   const leadsListQuery = (() => {
     switch (tab) {
+      case "nepriradene":
+        return supabase
+          .from("leads")
+          .select("*")
+          .is("assigned_to", null)
+          .not("status", "in", "(won,lost,archived)")
+          .order("created_at", { ascending: false })
+          .limit(200);
+
       case "nedovolany":
         return supabase
           .from("leads")
           .select("*")
           .eq("status", "no_answer")
+          .eq("assigned_to", user.id)
           .or(`next_callback_at.is.null,next_callback_at.lte.${nowIso}`)
           .order("created_at", { ascending: false })
           .limit(200);
@@ -51,27 +64,27 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
         return supabase
           .from("leads")
           .select("*")
+          .eq("assigned_to", user.id)
           .gt("next_callback_at", nowIso)
           .order("next_callback_at", { ascending: true })
           .limit(200);
 
       case "otvorene":
-        // "Otvorené" = aktívne deals — agent volal, máme záujem alebo poslanú ponuku
         return supabase
           .from("leads")
           .select("*")
+          .eq("assigned_to", user.id)
           .in("status", ["interested", "quote_sent"])
           .order("last_activity_at", { ascending: false })
           .limit(200);
 
       case "novy":
       default:
-        // "Nové" = leady ktoré agent ešte nevyriešil:
-        //   - 'new' (čerstvé, číslo ešte nevidel)
-        //   - 'phone_revealed' (videl číslo, ale ešte nezavolal alebo nezaznamenal výsledok)
+        // "Moje nové" — leady už pridelené tomuto agentovi, ešte nespracované
         return supabase
           .from("leads")
           .select("*")
+          .eq("assigned_to", user.id)
           .in("status", ["new", "phone_revealed"])
           .order("created_at", { ascending: false })
           .limit(200);
@@ -80,6 +93,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
 
   const [
     leadsRes,
+    nepriradeneCountRes,
     novyCountRes,
     nedovolanyCountRes,
     planovanyCountRes,
@@ -89,31 +103,42 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
+      .is("assigned_to", null)
+      .not("status", "in", "(won,lost,archived)"),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("assigned_to", user.id)
       .in("status", ["new", "phone_revealed"]),
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
+      .eq("assigned_to", user.id)
       .eq("status", "no_answer")
       .or(`next_callback_at.is.null,next_callback_at.lte.${nowIso}`),
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
+      .eq("assigned_to", user.id)
       .gt("next_callback_at", nowIso),
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
+      .eq("assigned_to", user.id)
       .in("status", ["interested", "quote_sent"]),
   ]);
 
   const leads = (leadsRes.data ?? []) as Lead[];
   const counts: Record<TabId, number | undefined> = {
+    nepriradene: nepriradeneCountRes.count ?? undefined,
     novy: novyCountRes.count ?? undefined,
     nedovolany: nedovolanyCountRes.count ?? undefined,
     planovany: planovanyCountRes.count ?? undefined,
     otvorene: otvoreneCountRes.count ?? undefined,
   };
 
-  const totalToCall = (counts.novy ?? 0) + (counts.nedovolany ?? 0);
+  const totalToCall =
+    (counts.nepriradene ?? 0) + (counts.novy ?? 0) + (counts.nedovolany ?? 0);
 
   return (
     <AgentLiveWrapper>

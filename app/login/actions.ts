@@ -2,16 +2,23 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { dashboardPathForRole } from "@/lib/auth";
 
 /**
  * Server Action — odošle 6-cifr OTP kód na email.
  *
- * Flow:
- *   1. Validuje email
- *   2. signInWithOtp({ email, shouldCreateUser: false }) → Supabase pošle kód
- *      iba ak auth.users záznam existuje (žiadni neautorizovaní)
- *   3. Redirect na /login/verify?email=...
+ * Strict whitelist flow:
+ *   1. Validuje email.
+ *   2. Skontroluje že email existuje v public.users s active=true. Ak nie,
+ *      redirect na /login?error=unauthorized BEZ poslania OTP (žiadny spam
+ *      nepoznaným e-mailom, žiadne enumeration leakovanie nie je nutné
+ *      lebo Epoxidovo tím vie kto má prístup).
+ *   3. signInWithOtp({ email, shouldCreateUser: false }) → Supabase pošle kód
+ *      iba ak auth.users záznam existuje. Admin user creation script
+ *      (scripts/add-agent.mjs) zaisťuje že auth.users a public.users
+ *      idú spolu.
+ *   4. Redirect na /login/verify?email=...
  */
 export async function sendOtpAction(formData: FormData) {
   const email = String(formData.get("email") ?? "")
@@ -20,6 +27,41 @@ export async function sendOtpAction(formData: FormData) {
 
   if (!email) {
     redirect("/login?error=missing_email");
+  }
+
+  // ── Whitelist gate ──
+  try {
+    const admin = createAdminClient();
+    const { data: appUser } = await admin
+      .from("users")
+      .select("id, email, active")
+      .ilike("email", email)
+      .maybeSingle();
+    if (!appUser) {
+      console.warn("[sendOtp] BLOCKED — email not in whitelist:", email);
+      redirect(
+        `/login?error=unauthorized&email=${encodeURIComponent(email)}`,
+      );
+    }
+    if (!appUser.active) {
+      console.warn("[sendOtp] BLOCKED — user deactivated:", email);
+      redirect(
+        `/login?error=deactivated&email=${encodeURIComponent(email)}`,
+      );
+    }
+  } catch (e) {
+    // redirect throws NEXT_REDIRECT, ktoré sa propaguje cez try/catch.
+    // Skontrolujeme či je to redirect — ak áno, throw ďalej.
+    if (
+      typeof e === "object" &&
+      e !== null &&
+      "digest" in e &&
+      String((e as { digest: unknown }).digest).startsWith("NEXT_REDIRECT")
+    ) {
+      throw e;
+    }
+    console.error("[sendOtp] whitelist lookup error:", e);
+    redirect(`/login?error=send_failed&email=${encodeURIComponent(email)}`);
   }
 
   const supabase = await createClient();
