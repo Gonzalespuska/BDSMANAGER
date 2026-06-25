@@ -117,7 +117,7 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
     : [];
 
   return (
-    <div className="grid lg:grid-cols-[1fr_360px] gap-4">
+    <div className="space-y-4">
       {/* Calendar grid */}
       <div className="rounded-2xl border bg-background overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
@@ -179,47 +179,36 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
                 type="button"
                 onClick={() => setSelected(c.date)}
                 className={cn(
-                  "relative min-h-[88px] border-r border-b last:border-r-0 px-2 py-1.5 text-left transition-colors group",
+                  "relative aspect-square min-h-[44px] border-r border-b last:border-r-0 px-1 py-1 text-left transition-colors group",
                   !c.inMonth && "bg-muted/30 text-muted-foreground/50",
                   c.inMonth && "hover:bg-muted/40",
                   isSelected && "bg-sky-100 dark:bg-sky-950/40 hover:bg-sky-100",
                 )}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-1">
                   <span
                     className={cn(
-                      "inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-semibold",
+                      "inline-flex items-center justify-center w-6 h-6 rounded-full text-[12px] font-semibold",
                       isToday && "bg-sky-500 text-white",
                     )}
                   >
                     {c.dayOfMonth}
                   </span>
-                  {(notesOnDay.length > 0 || callsOnDay.length > 0) && (
-                    <div className="flex items-center gap-1">
-                      {callsOnDay.length > 0 && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800">
-                          📞 {callsOnDay.length}
-                        </span>
-                      )}
-                      {notesOnDay.length > 0 && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800">
-                          {notesOnDay.length}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-0.5">
+                    {callsOnDay.length > 0 && (
+                      <span
+                        className="inline-block w-1.5 h-1.5 rounded-full bg-red-500"
+                        title={`${callsOnDay.length} pripomienok volania`}
+                      />
+                    )}
+                    {notesOnDay.length > 0 && (
+                      <span
+                        className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500"
+                        title={`${notesOnDay.length} poznámok`}
+                      />
+                    )}
+                  </div>
                 </div>
-                {/* First note preview */}
-                {notesOnDay.length > 0 && (
-                  <div className="mt-1 text-[10px] text-muted-foreground line-clamp-1">
-                    {notesOnDay[0].body}
-                  </div>
-                )}
-                {callsOnDay.length > 0 && (
-                  <div className="mt-0.5 text-[10px] text-red-700 dark:text-red-300 line-clamp-1 font-semibold">
-                    {callsOnDay[0].lead_name}
-                  </div>
-                )}
               </button>
             );
           })}

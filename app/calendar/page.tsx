@@ -8,6 +8,8 @@ import {
   type CalendarCallback,
   type CalendarNote,
 } from "./calendar-grid";
+import { NotesPanel } from "./notes-panel";
+import type { NotePayload } from "./notes-actions";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -17,10 +19,7 @@ interface Props {
 }
 
 /**
- * /calendar — mesačný kalendár agenta s poznámkami per deň + pripomienky volaní.
- *
- * Query param `?m=YYYY-MM` umožňuje deep-linkovať na konkrétny mesiac
- * (default = aktuálny). Klient sa potom medzi mesiacmi prepína bez reloadu.
+ * /calendar — kalendár (vľavo, kompaktný) + Apple-Notes-like panel (vpravo).
  */
 export default async function CalendarPage({ searchParams }: Props) {
   const me = await getCurrentAppUser();
@@ -33,7 +32,6 @@ export default async function CalendarPage({ searchParams }: Props) {
       ? params.m
       : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  // Pre kalendár pracujeme s mesiacom ±1 (aby boli pokryté susedné týždne)
   const [yearStr, monthStr] = initialMonth.split("-");
   const year = Number(yearStr);
   const monthIdx = Number(monthStr);
@@ -41,25 +39,32 @@ export default async function CalendarPage({ searchParams }: Props) {
   const toDate = new Date(year, monthIdx + 1, 0, 23, 59, 59);
 
   const admin = createAdminClient();
-  const [{ data: notesRows }, { data: callbackRows }] = await Promise.all([
-    admin
-      .from("calendar_notes")
-      .select("id, date, body, created_at")
-      .eq("user_id", me.id)
-      .gte("date", fromDate.toISOString().slice(0, 10))
-      .lte("date", toDate.toISOString().slice(0, 10))
-      .order("created_at", { ascending: true }),
-    admin
-      .from("leads")
-      .select("id, name, phone, next_callback_at, call_attempts")
-      .eq("assigned_to", me.id)
-      .not("next_callback_at", "is", null)
-      .gte("next_callback_at", fromDate.toISOString())
-      .lte("next_callback_at", toDate.toISOString())
-      .order("next_callback_at", { ascending: true }),
-  ]);
+  const [{ data: notesRows }, { data: callbackRows }, { data: generalNotes }] =
+    await Promise.all([
+      admin
+        .from("calendar_notes")
+        .select("id, date, body, created_at")
+        .eq("user_id", me.id)
+        .gte("date", fromDate.toISOString().slice(0, 10))
+        .lte("date", toDate.toISOString().slice(0, 10))
+        .order("created_at", { ascending: true }),
+      admin
+        .from("leads")
+        .select("id, name, phone, next_callback_at, call_attempts")
+        .eq("assigned_to", me.id)
+        .not("next_callback_at", "is", null)
+        .gte("next_callback_at", fromDate.toISOString())
+        .lte("next_callback_at", toDate.toISOString())
+        .order("next_callback_at", { ascending: true }),
+      admin
+        .from("notes")
+        .select("id, title, body, pinned, updated_at")
+        .eq("user_id", me.id)
+        .order("updated_at", { ascending: false })
+        .limit(100),
+    ]);
 
-  const notes: CalendarNote[] = (notesRows ?? []).map((n) => ({
+  const calendarNotes: CalendarNote[] = (notesRows ?? []).map((n) => ({
     id: n.id,
     date: n.date,
     body: n.body,
@@ -74,6 +79,14 @@ export default async function CalendarPage({ searchParams }: Props) {
     attempts: c.call_attempts ?? 0,
   }));
 
+  const notesForPanel: NotePayload[] = (generalNotes ?? []).map((n) => ({
+    id: n.id,
+    title: n.title,
+    body: n.body,
+    pinned: !!n.pinned,
+    updated_at: n.updated_at,
+  }));
+
   return (
     <div className="space-y-6">
       <header>
@@ -82,16 +95,19 @@ export default async function CalendarPage({ searchParams }: Props) {
           Kalendár
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Tvoj osobný mesačný kalendár. Klikni na deň pre poznámky a
-          pripomienky volaní.
+          Kalendár s pripomienkami volaní vľavo, voľné Apple-Notes-like
+          poznámky vpravo. Klikni na deň pre detail.
         </p>
       </header>
 
-      <CalendarGrid
-        initialMonth={initialMonth}
-        notes={notes}
-        callbacks={callbacks}
-      />
+      <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-4 items-start">
+        <CalendarGrid
+          initialMonth={initialMonth}
+          notes={calendarNotes}
+          callbacks={callbacks}
+        />
+        <NotesPanel initial={notesForPanel} />
+      </div>
     </div>
   );
 }
