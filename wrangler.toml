@@ -19,3 +19,17 @@ compatibility_date = "2026-05-29"
 compatibility_flags = ["nodejs_compat"]
 
 pages_build_output_dir = ".vercel/output/static"
+
+# ─── Runtime + Build env vars ──────────────────────────────────────────
+# Tieto sa picknu pri build (NEXT_PUBLIC_* inline) aj v runtime Workers.
+# Secret values (service role key) sa NEdávajú sem — sú v CF Pages dashboard
+# → Settings → Environment variables → Secret (SUPABASE_SECRET_KEY).
+#
+# NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY je verejný — Supabase je designed
+# aby anon/publishable kľúč mohol byť v client bundle.
+[vars]
+NODE_VERSION = "20"
+NEXT_PUBLIC_SUPABASE_URL = "https://wzcehdynanuuzztfrqyi.supabase.co"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable__1punPgjgE97um8_t4Ul-w_TeS6C1RR"
+BOOTSTRAP_ADMIN_EMAIL = "info@epoxidovo.sk"
+META_WEBHOOK_VERIFY_TOKEN = "epoxidovo_meta_xK9pQ2vN8r"
