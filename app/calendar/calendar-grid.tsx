@@ -143,13 +143,6 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
             </button>
             <button
               type="button"
-              onClick={gotoToday}
-              className="px-2.5 py-1 rounded-md text-xs font-semibold border bg-background hover:bg-muted/50"
-            >
-              Dnes
-            </button>
-            <button
-              type="button"
               onClick={prevMonth}
               className="p-1.5 rounded-md hover:bg-muted/50"
               aria-label="Predchádzajúci mesiac"
