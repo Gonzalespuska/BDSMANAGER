@@ -1,3 +1,5 @@
+export const runtime = "edge";
+
 import { NextResponse } from "next/server";
 
 // runtime = "edge" disabled — @supabase/supabase-js admin fetch fails in Next edge dev
