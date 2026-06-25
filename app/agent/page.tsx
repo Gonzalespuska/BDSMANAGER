@@ -5,6 +5,7 @@ import { getCurrentAppUser } from "@/lib/auth";
 import { AgentLiveWrapper } from "@/components/agent-live-wrapper";
 import { LeadCard } from "@/components/leads/lead-card";
 import { NewLeadButton } from "@/components/leads/new-lead-modal";
+import { LeadsSearch } from "@/components/leads/leads-search";
 import type { Lead } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +14,7 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; q?: string }>;
 }
 
 const TABS = [
@@ -29,6 +30,8 @@ type TabId = (typeof TABS)[number]["id"];
 export default async function AgentDashboard({ searchParams }: PageProps) {
   const params = await searchParams;
   const tab: TabId = TABS.find((t) => t.id === params.tab)?.id ?? "novy";
+  const q = (params.q ?? "").trim();
+  const searchMode = q.length > 0;
 
   const user = await getCurrentAppUser();
   if (!user) return null;
@@ -39,7 +42,38 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
   // ─── Build queries pre tab + counts ──────────────────────────────────
   // Auto-assign je VYPNUTÝ — nové leady prídu s assigned_to=NULL a každý
   // agent ich vidí v "Nepriradené" tabe, kde si ich claimne.
-  const leadsListQuery = (() => {
+  //
+  // Search mode (q present): ignoruje tab filter, hľadá vo všetkých
+  // leadov ktoré užívateľ vidí (vlastné + nepriradené), cez:
+  //   - name, phone, email
+  //   - source_campaign
+  //   - data.lokalita, data.priestor, data.typ_podlahy, data.message,
+  //     data.agent_note, data.plocha
+  const leadsListQuery = searchMode
+    ? (() => {
+        const safe = q.replace(/[\\%_,]/g, (m) => "\\" + m);
+        const like = `*${safe}*`;
+        return supabase
+          .from("leads")
+          .select("*")
+          .or(
+            [
+              `name.ilike.${like}`,
+              `phone.ilike.${like}`,
+              `email.ilike.${like}`,
+              `source_campaign.ilike.${like}`,
+              `data->>lokalita.ilike.${like}`,
+              `data->>priestor.ilike.${like}`,
+              `data->>typ_podlahy.ilike.${like}`,
+              `data->>message.ilike.${like}`,
+              `data->>agent_note.ilike.${like}`,
+              `data->>plocha.ilike.${like}`,
+            ].join(","),
+          )
+          .order("created_at", { ascending: false })
+          .limit(200);
+      })()
+    : (() => {
     switch (tab) {
       case "nepriradene":
         return supabase
@@ -146,17 +180,37 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
             <Phone className="w-6 h-6 text-sky-500" aria-hidden />
-            Leady na volanie{" "}
-            <span className="text-sky-500">({totalToCall})</span>
+            {searchMode ? (
+              <>
+                Hľadanie: <span className="text-sky-500">&quot;{q}&quot;</span>{" "}
+                <span className="text-muted-foreground font-bold">({leads.length})</span>
+              </>
+            ) : (
+              <>
+                Leady na volanie{" "}
+                <span className="text-sky-500">({totalToCall})</span>
+              </>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Čerstvé + nedovolané čakajú na hovor.
+            {searchMode
+              ? "Hľadám naprieč všetkými leadmi (meno, telefón, email, lokalita, kampaň, poznámka)."
+              : "Čerstvé + nedovolané čakajú na hovor."}
           </p>
         </div>
-        <NewLeadButton />
+        <div className="flex items-center gap-3 flex-wrap">
+          <LeadsSearch />
+          <NewLeadButton />
+        </div>
       </header>
 
-      <div className="flex flex-wrap gap-2">
+      <div
+        className={cn(
+          "flex flex-wrap gap-2",
+          searchMode && "opacity-40 pointer-events-none",
+        )}
+        aria-disabled={searchMode}
+      >
         {TABS.map(({ id, label }) => {
           const active = tab === id;
           const count = counts[id];
@@ -191,23 +245,32 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
 
       {leads.length === 0 ? (
         <div className="rounded-2xl border bg-background p-12 text-center">
-          <div className="text-4xl mb-3">🎉</div>
-          <h3 className="text-lg font-bold mb-1">Žiadne leady v tejto kategórii</h3>
+          <div className="text-4xl mb-3">{searchMode ? "🔍" : "🎉"}</div>
+          <h3 className="text-lg font-bold mb-1">
+            {searchMode
+              ? `Žiadne výsledky pre "${q}"`
+              : "Žiadne leady v tejto kategórii"}
+          </h3>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            {tab === "novy" && "Všetky nové leady sú spracované. Čakáme na nový dopyt."}
-            {tab === "nedovolany" && "Žiadne čakajúce nedovíhajú hovory."}
-            {tab === "planovany" && "Žiadny naplánovaný callback."}
-            {tab === "otvorene" && "Žiadne otvorené dealy. Po hovore označ lead ako 'záujem' alebo 'ponuka' a objaví sa tu."}
+            {searchMode &&
+              "Skús inú časť mena, telefónne číslo, časť emailu alebo lokality."}
+            {!searchMode && tab === "novy" && "Všetky nové leady sú spracované. Čakáme na nový dopyt."}
+            {!searchMode && tab === "nepriradene" && "Žiadne nepriradené leady. Všetky sú už prebraté."}
+            {!searchMode && tab === "nedovolany" && "Žiadne čakajúce nedovíhajú hovory."}
+            {!searchMode && tab === "planovany" && "Žiadny naplánovaný callback."}
+            {!searchMode && tab === "otvorene" && "Žiadne otvorené dealy. Po hovore označ lead ako 'záujem' alebo 'ponuka' a objaví sa tu."}
           </p>
-          <div className="mt-4 text-xs text-muted-foreground">
-            Pre vygenerovanie testovacích leadov navštív{" "}
-            <a
-              href="/api/dev/seed-leads"
-              className="text-sky-600 hover:underline font-medium"
-            >
-              /api/dev/seed-leads
-            </a>
-          </div>
+          {!searchMode && process.env.NODE_ENV !== "production" && (
+            <div className="mt-4 text-xs text-muted-foreground">
+              Pre vygenerovanie testovacích leadov navštív{" "}
+              <a
+                href="/api/dev/seed-leads"
+                className="text-sky-600 hover:underline font-medium"
+              >
+                /api/dev/seed-leads
+              </a>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
