@@ -203,16 +203,12 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             </div>
           </div>
 
-          {/* Name + campaign */}
+          {/* Name — source_campaign (keyword z reklamy) je viditeľný iba
+              v admin panely. Pre obchodáka by to bolo iba šum. */}
           <div className="px-5 pt-3">
             <h2 className="text-xl md:text-2xl font-extrabold tracking-tight leading-tight">
               {lead.name}
             </h2>
-            {lead.source_campaign && (
-              <p className="text-xs text-muted-foreground mt-1 font-medium">
-                {lead.source_campaign}
-              </p>
-            )}
           </div>
 
           {/* Phone display — revealed = velký zelený, nerevealed = subtle hint */}
