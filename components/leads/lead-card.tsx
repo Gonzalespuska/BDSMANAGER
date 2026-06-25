@@ -133,11 +133,6 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 status={lead.status}
                 onChange={(s) => setLead({ ...lead, status: s })}
               />
-              {lead.priority === "high" && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md bg-orange-100 text-orange-800">
-                  ⚡ HIGH
-                </span>
-              )}
               {lead.call_attempts > 0 && (
                 <span
                   className={cn(

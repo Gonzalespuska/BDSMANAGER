@@ -107,13 +107,22 @@ export function LeadStatusPicker({
         onClick={() => setOpen(!open)}
         disabled={busy}
         className={cn(
-          "inline-flex items-center gap-1 text-xs font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-md cursor-pointer hover:brightness-95 transition-all",
+          "group inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider pl-2.5 pr-1.5 py-1 rounded-md cursor-pointer hover:brightness-95 hover:ring-2 hover:ring-foreground/20 transition-all border border-black/10",
           meta.pill,
           busy && "opacity-50",
         )}
+        aria-label="Zmeniť stav leadu"
       >
         {meta.label}
-        <ChevronDown className="w-3 h-3 -mr-0.5" aria-hidden />
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-black/20 group-hover:bg-black/30 transition-colors">
+          <ChevronDown
+            className={cn(
+              "w-3 h-3 stroke-[3] transition-transform",
+              open && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </span>
       </button>
 
       {open && (

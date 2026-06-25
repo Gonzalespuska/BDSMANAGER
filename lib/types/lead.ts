@@ -170,23 +170,34 @@ export const SLA_BADGE_META: Record<
   na: null,
 };
 
-/** "pred X" formátovanie do slovenčiny */
+/** "pred X" formátovanie do slovenčiny — minúty + hodiny + dni */
 export function timeAgo(d: string | Date): string {
   const totalSeconds = Math.floor(
     (Date.now() - new Date(d).getTime()) / 1000,
   );
   if (totalSeconds < 60) return "práve teraz";
-  const minutes = Math.floor(totalSeconds / 60);
-  if (minutes < 60) {
-    return minutes === 1 ? "pred 1 min" : `pred ${minutes} min`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) {
+    return totalMinutes === 1 ? "pred 1 min" : `pred ${totalMinutes} min`;
   }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return hours === 1 ? "pred 1 hod" : `pred ${hours} hod`;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutesPart = totalMinutes % 60;
+  if (totalHours < 24) {
+    // pred 4h 12min  /  pred 1h (ak presne 0 min)
+    if (minutesPart === 0) {
+      return totalHours === 1 ? "pred 1 hod" : `pred ${totalHours} hod`;
+    }
+    return `pred ${totalHours}h ${minutesPart}min`;
   }
-  const days = Math.floor(hours / 24);
-  if (days < 30) {
-    return days === 1 ? "pred 1 dňom" : `pred ${days} dňami`;
+  const totalDays = Math.floor(totalHours / 24);
+  const hoursPart = totalHours % 24;
+  if (totalDays < 30) {
+    if (hoursPart === 0) {
+      return totalDays === 1 ? "pred 1 dňom" : `pred ${totalDays} dňami`;
+    }
+    return totalDays === 1
+      ? `pred 1 dňom ${hoursPart}h`
+      : `pred ${totalDays}d ${hoursPart}h`;
   }
   return new Intl.DateTimeFormat("sk-SK", {
     day: "2-digit",
