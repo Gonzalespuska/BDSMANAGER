@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, Pencil, StickyNote, X } from "lucide-react";
+import { Check, Pencil, StickyNote, Trash2, X } from "lucide-react";
 
 import { saveLeadNoteAction } from "@/app/agent/actions";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,20 @@ export function LeadNotesInline({
     setBusy(false);
   }
 
+  async function handleDelete() {
+    if (!confirm("Naozaj vymazať poznámku?")) return;
+    setBusy(true);
+    const result = await saveLeadNoteAction(leadId, "");
+    if (result.ok) {
+      setNote("");
+      setDraft("");
+      setEditing(false);
+    } else {
+      alert(`Chyba: ${result.error}`);
+    }
+    setBusy(false);
+  }
+
   function handleCancel() {
     setDraft(note);
     setEditing(false);
@@ -70,7 +84,7 @@ export function LeadNotesInline({
           placeholder="napr. 'chce ponuku do piatka, volať po 17h'"
           className="w-full px-2 py-1.5 rounded-md border border-amber-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
         />
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={handleSave}
@@ -92,6 +106,17 @@ export function LeadNotesInline({
             <X className="w-3.5 h-3.5" aria-hidden />
             Zrušiť
           </button>
+          {note && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-white hover:bg-red-50 border border-red-300 text-red-700 text-xs font-semibold transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" aria-hidden />
+              Vymazať
+            </button>
+          )}
           <span className="text-[10px] text-amber-700 ml-auto">
             ⌘ + Enter pre uloženie
           </span>

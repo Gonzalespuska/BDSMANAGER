@@ -405,7 +405,7 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                   onClick={handleCall}
                   disabled={busy}
                   size="sm"
-                  className="h-10 bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
+                  className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
                 >
                   <Phone className="w-4 h-4 mr-1.5" aria-hidden />
                   Odhaliť číslo
