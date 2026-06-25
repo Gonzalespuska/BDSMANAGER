@@ -23,7 +23,13 @@ export default async function CalendarLayout({
       notifications={notifications}
       wide
     >
-      {children}
+      {/*
+        Calendar musí byt fixed na viewport bez scrollu. Header AppShell
+        zaberá ~125px (top bar 70px + nav 55px) + DEV banner cca 26px keď
+        je dev. Pre presný fit používame flexbox: main flex-1 + tento
+        div ber 100% hostingu cez h-full. Body scroll-lock cez body class.
+      */}
+      <div className="h-full min-h-0 overflow-hidden">{children}</div>
     </AppShell>
   );
 }

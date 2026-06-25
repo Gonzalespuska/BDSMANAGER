@@ -88,22 +88,13 @@ export default async function CalendarPage({ searchParams }: Props) {
   }));
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] min-h-[520px] gap-4">
-      <header className="shrink-0">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
-          <CalendarIcon className="w-6 h-6 text-sky-500" aria-hidden />
-          Kalendár
-        </h1>
-      </header>
-
-      <div className="grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 flex-1 min-h-0">
-        <CalendarGrid
-          initialMonth={initialMonth}
-          notes={calendarNotes}
-          callbacks={callbacks}
-        />
-        <NotesPanel initial={notesForPanel} />
-      </div>
+    <div className="grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-3 h-full min-h-0">
+      <CalendarGrid
+        initialMonth={initialMonth}
+        notes={calendarNotes}
+        callbacks={callbacks}
+      />
+      <NotesPanel initial={notesForPanel} />
     </div>
   );
 }

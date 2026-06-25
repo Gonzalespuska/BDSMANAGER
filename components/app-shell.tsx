@@ -39,7 +39,12 @@ export function AppShell({
   const isDev = process.env.NODE_ENV !== "production";
 
   return (
-    <div className="min-h-screen flex flex-col bg-muted/30">
+    <div
+      className={cn(
+        "flex flex-col bg-muted/30",
+        wide ? "h-screen overflow-hidden" : "min-h-screen",
+      )}
+    >
       {isDev && (
         <div className="bg-amber-100 border-b border-amber-200 text-amber-900 text-[11px] font-medium px-4 py-1.5 text-center">
           ⚡ DEV mode · auth bypass aktívny (prihlásený ako bootstrap admin). Vypne sa v produkcii.
@@ -103,8 +108,10 @@ export function AppShell({
 
       <main
         className={cn(
-          "flex-1 w-full mx-auto px-4 sm:px-6 py-6 md:py-8",
-          wide ? "max-w-[1600px]" : "max-w-7xl",
+          "flex-1 w-full mx-auto",
+          wide
+            ? "max-w-none px-4 sm:px-6 py-4"
+            : "max-w-7xl px-4 sm:px-6 py-6 md:py-8",
         )}
       >
         {children}
