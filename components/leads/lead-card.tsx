@@ -4,16 +4,19 @@ import * as React from "react";
 import Link from "next/link";
 import {
   AlertCircle,
+  Calculator,
   Calendar,
   CheckCircle2,
   Clock,
   ExternalLink,
   Mail,
-  MessageCircle,
   Phone,
   PhoneOff,
   X,
 } from "lucide-react";
+
+import { LeadNotesInline } from "./lead-notes-inline";
+import { LeadStatusPicker } from "./lead-status-picker";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -101,141 +104,162 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
     : null;
   const emailHref = lead.email ? `mailto:${lead.email}` : null;
 
+  // Status color pre vertical accent strip (vľavo)
+  const accentColor =
+    lead.status === "new"
+      ? "bg-red-500"
+      : lead.status === "phone_revealed"
+        ? "bg-blue-500"
+        : lead.status === "no_answer"
+          ? "bg-amber-500"
+          : lead.status === "interested" || lead.status === "quote_sent"
+            ? "bg-emerald-500"
+            : lead.status === "won"
+              ? "bg-green-600"
+              : "bg-zinc-400";
+
   return (
     <>
-      <article className="rounded-2xl border bg-background shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-        {/* Top row: status pill + priority + SLA + source/time */}
-        <div className="px-4 sm:px-5 pt-4 flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={cn(
-                "inline-flex items-center text-xs font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full",
-                statusMeta.pill,
+      <article className="relative rounded-2xl border bg-background shadow-sm hover:shadow-md transition-shadow overflow-hidden flex">
+        {/* Left accent strip — farba podľa statusu */}
+        <div className={cn("w-1.5 shrink-0", accentColor)} aria-hidden />
+
+        <div className="flex-1 min-w-0">
+          {/* Top row: badges + source/time */}
+          <div className="px-5 pt-4 flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <LeadStatusPicker
+                leadId={lead.id}
+                status={lead.status}
+                onChange={(s) => setLead({ ...lead, status: s })}
+              />
+              {lead.priority === "high" && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md bg-orange-100 text-orange-800">
+                  ⚡ HIGH
+                </span>
               )}
-            >
-              {statusMeta.label}
-            </span>
-            {lead.priority === "high" && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
-                ⚡ HIGH
-              </span>
-            )}
-            {lead.call_attempts > 0 && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full border",
-                  lead.call_attempts >= 3
-                    ? "bg-red-100 text-red-800 border-red-200"
-                    : "bg-amber-100 text-amber-800 border-amber-200",
-                )}
-              >
-                <AlertCircle className="w-3 h-3" aria-hidden />
-                {lead.call_attempts}× nedvíha
-              </span>
-            )}
-            {slaBadge && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full border",
-                  slaBadge.className,
-                )}
-              >
-                {slaBadge.label}
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-muted-foreground inline-flex items-center gap-2">
-            <span className="font-semibold">{sourceLabel}</span>
-            <span aria-hidden>·</span>
-            <span className="inline-flex items-center gap-1">
+              {lead.call_attempts > 0 && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md",
+                    lead.call_attempts >= 3
+                      ? "bg-red-100 text-red-800"
+                      : "bg-amber-100 text-amber-800",
+                  )}
+                >
+                  <AlertCircle className="w-3 h-3" aria-hidden />
+                  {lead.call_attempts}× nedvíha
+                </span>
+              )}
+              {slaBadge && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md",
+                    slaBadge.className,
+                  )}
+                >
+                  {slaBadge.label}
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5 shrink-0">
+              <span className="font-semibold">{sourceLabel}</span>
+              <span className="text-muted-foreground/40">·</span>
               <Clock className="w-3 h-3" aria-hidden />
-              {timeAgo(lead.created_at)}
-            </span>
+              <span>{timeAgo(lead.created_at)}</span>
+            </div>
           </div>
-        </div>
 
-        {/* Name + campaign */}
-        <div className="px-4 sm:px-5 pt-3">
-          <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">
-            {lead.name}
-          </h2>
-          {lead.source_campaign && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {lead.source_campaign}
-            </p>
-          )}
-        </div>
+          {/* Name + campaign */}
+          <div className="px-5 pt-3">
+            <h2 className="text-xl md:text-2xl font-extrabold tracking-tight leading-tight">
+              {lead.name}
+            </h2>
+            {lead.source_campaign && (
+              <p className="text-xs text-muted-foreground mt-1 font-medium">
+                {lead.source_campaign}
+              </p>
+            )}
+          </div>
 
-        {/* Phone — primary CTA alebo revealed number */}
-        <div className="px-4 sm:px-5 pt-3">
-          {!isRevealed && lead.phone ? (
-            <Button
-              type="button"
-              onClick={handleCall}
-              disabled={busy}
-              size="lg"
-              className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold text-base px-6 h-12 shadow-[0_4px_14px_rgba(22,163,74,0.35)]"
-            >
-              <Phone className="w-5 h-5 mr-2" aria-hidden />
-              ZAVOLAŤ
-            </Button>
-          ) : isRevealed && lead.phone ? (
-            <a
-              href={`tel:${lead.phone}`}
-              className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight"
-            >
-              <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
-              {lead.phone}
-            </a>
-          ) : (
-            <div className="text-sm text-muted-foreground italic">
-              Telefón nie je k dispozícii — kontaktuj cez email
+          {/* Phone display — revealed = velký zelený, nerevealed = subtle hint */}
+          <div className="px-5 pt-3">
+            {isRevealed && lead.phone ? (
+              <a
+                href={`tel:${lead.phone}`}
+                className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight"
+              >
+                <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
+                {lead.phone}
+              </a>
+            ) : lead.phone ? (
+              <div className="text-sm text-muted-foreground inline-flex items-center gap-1.5">
+                <Phone className="w-4 h-4" aria-hidden />
+                Telefón skrytý, klikni „Zavolať" pre odhalenie
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Telefón nie je k dispozícii. Kontaktuj cez email.
+              </div>
+            )}
+            {lead.email && (
+              <a
+                href={`mailto:${lead.email}`}
+                className="mt-2 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <Mail className="w-4 h-4" aria-hidden />
+                {lead.email}
+              </a>
+            )}
+          </div>
+
+          {/* Info bits (custom fields) */}
+          {infoBits.length > 0 && (
+            <div className="px-5 pt-4 flex flex-wrap items-center gap-1.5">
+              {infoBits.map((bit, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-800 text-xs font-semibold"
+                >
+                  {bit}
+                </span>
+              ))}
             </div>
           )}
-          {lead.email && (
-            <a
-              href={`mailto:${lead.email}`}
-              className="mt-1.5 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <Mail className="w-4 h-4" aria-hidden />
-              {lead.email}
-            </a>
+
+          {/* Message excerpt — pekný blockquote namiesto italic kvôli AI vibe */}
+          {typeof dataFields.message === "string" && dataFields.message && (
+            <div className="px-5 pt-3">
+              <div className="border-l-2 border-zinc-300 pl-3 py-0.5">
+                <p className="text-sm text-zinc-700 leading-snug line-clamp-2">
+                  {dataFields.message}
+                </p>
+              </div>
+            </div>
           )}
-        </div>
 
-        {/* Info bits (custom fields) */}
-        {infoBits.length > 0 && (
-          <div className="px-4 sm:px-5 pt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-            {infoBits.map((bit, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center px-2.5 py-1 rounded-lg bg-muted text-foreground text-sm font-semibold"
-              >
-                {bit}
-              </span>
-            ))}
+          {/* Inline poznámka agenta */}
+          <div className="px-5 pt-3">
+            <LeadNotesInline
+              leadId={lead.id}
+              initialNote={
+                typeof dataFields.agent_note === "string"
+                  ? dataFields.agent_note
+                  : ""
+              }
+            />
           </div>
-        )}
 
-        {/* Message excerpt */}
-        {typeof dataFields.message === "string" && dataFields.message && (
-          <div className="px-4 sm:px-5 pt-3">
-            <p className="text-sm text-muted-foreground leading-snug line-clamp-2 italic">
-              „{dataFields.message}"
-            </p>
-          </div>
-        )}
+          {/* Callback timer */}
+          {lead.next_callback_at && (
+            <div className="px-5 pt-3 text-xs text-blue-700 inline-flex items-center gap-1.5 font-semibold">
+              <Calendar className="w-3.5 h-3.5" aria-hidden />
+              Ďalší pokus: {new Date(lead.next_callback_at).toLocaleString("sk-SK")}
+            </div>
+          )}
 
-        {/* Callback timer */}
-        {lead.next_callback_at && (
-          <div className="px-4 sm:px-5 pt-3 text-xs text-blue-700 inline-flex items-center gap-1.5 font-semibold">
-            <Calendar className="w-3.5 h-3.5" aria-hidden />
-            Ďalší pokus: {new Date(lead.next_callback_at).toLocaleString("sk-SK")}
-          </div>
-        )}
-
-        {/* Action bar — secondary buttons + outcome */}
-        <div className="px-4 sm:px-5 pt-4 pb-4 mt-3 border-t bg-muted/30">
+          {/* Action bar */}
+          <div className="px-5 pt-4 pb-4 mt-4 border-t bg-zinc-50/60">
           {/* Outcome buttons — iba ak je číslo odhalené */}
           {isRevealed && lead.status !== "archived" && (
             <div className="grid grid-cols-2 gap-2 mb-2">
@@ -265,45 +289,56 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             </div>
           )}
 
-          {/* Secondary actions — vždy viditeľné */}
-          <div className="grid grid-cols-3 gap-2">
-            {whatsappHref ? (
-              <Button asChild variant="outline" size="sm" className="h-9">
-                <a
-                  href={whatsappHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 mr-1" aria-hidden />
-                  WhatsApp
-                </a>
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" className="h-9" disabled>
-                <MessageCircle className="w-3.5 h-3.5 mr-1" aria-hidden />
-                WhatsApp
-              </Button>
-            )}
+          {/* Hlavná akcia row: Email + Zavolať + Ponuka + Detail */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {emailHref ? (
-              <Button asChild variant="outline" size="sm" className="h-9">
+              <Button asChild variant="outline" size="sm" className="h-10">
                 <a href={emailHref}>
-                  <Mail className="w-3.5 h-3.5 mr-1" aria-hidden />
+                  <Mail className="w-4 h-4 mr-1.5" aria-hidden />
                   Email
                 </a>
               </Button>
             ) : (
-              <Button variant="outline" size="sm" className="h-9" disabled>
-                <Mail className="w-3.5 h-3.5 mr-1" aria-hidden />
+              <Button variant="outline" size="sm" className="h-10" disabled>
+                <Mail className="w-4 h-4 mr-1.5" aria-hidden />
                 Email
               </Button>
             )}
-            <Button asChild variant="outline" size="sm" className="h-9">
+            {lead.phone ? (
+              <Button
+                type="button"
+                onClick={handleCall}
+                disabled={busy}
+                size="sm"
+                className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
+              >
+                <Phone className="w-4 h-4 mr-1.5" aria-hidden />
+                Zavolať
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="h-10" disabled>
+                <Phone className="w-4 h-4 mr-1.5" aria-hidden />
+                Zavolať
+              </Button>
+            )}
+            <Button
+              asChild
+              size="sm"
+              className="h-10 bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
+            >
+              <Link href={`/generator?lead=${lead.id}`}>
+                <Calculator className="w-4 h-4 mr-1.5" aria-hidden />
+                Ponuka
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="h-10">
               <Link href={`/agent/leads/${lead.id}`}>
-                <ExternalLink className="w-3.5 h-3.5 mr-1" aria-hidden />
+                <ExternalLink className="w-4 h-4 mr-1.5" aria-hidden />
                 Detail
               </Link>
             </Button>
           </div>
+        </div>
         </div>
       </article>
 

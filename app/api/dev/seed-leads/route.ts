@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
+// runtime = "edge" disabled — @supabase/supabase-js admin fetch fails in Next edge dev
 
 /**
  * GET /api/dev/seed-leads
@@ -183,8 +183,9 @@ export async function GET() {
     );
   }
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3100";
+  // V dev móde vždy localhost — NEXT_PUBLIC_APP_URL je production URL
+  // ktorý možno ešte nežije (pred deploy).
+  const baseUrl = "http://localhost:3100";
 
   const results: Array<{
     name: string;

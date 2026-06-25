@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const runtime = "edge";
+// runtime = "edge" disabled — @supabase/supabase-js admin fetch fails in Next edge dev
 
 /**
  * GET /api/dev/get-otp?email=<email>

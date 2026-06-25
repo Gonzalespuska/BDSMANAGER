@@ -36,7 +36,7 @@ export default async function Home() {
         </div>
 
         <div className="text-xs text-muted-foreground border-t pt-6">
-          Fáza 1 — interný nástroj pre <strong>Epoxidovo s. r. o.</strong>
+          Interný nástroj pre <strong>Epoxidovo s. r. o.</strong>
         </div>
       </div>
     </main>

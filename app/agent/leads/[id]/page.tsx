@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock } from "lucide-react";
+import { ArrowLeft, Calculator, Clock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
@@ -69,7 +69,7 @@ export default async function LeadDetailPage({ params }: PageProps) {
         </Button>
       </div>
 
-      <header className="flex items-start gap-4 flex-wrap">
+      <header className="flex items-start gap-4 flex-wrap justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <span
@@ -91,6 +91,14 @@ export default async function LeadDetailPage({ params }: PageProps) {
             </p>
           )}
         </div>
+
+        {/* Primary CTA — vytvor ponuku */}
+        <Button asChild size="lg" className="bg-sky-600 hover:bg-sky-700">
+          <Link href={`/generator?lead=${lead.id}`}>
+            <Calculator className="w-5 h-5 mr-2" aria-hidden />
+            Vygenerovať ponuku
+          </Link>
+        </Button>
       </header>
 
       <div className="grid gap-6 md:grid-cols-3">

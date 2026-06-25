@@ -236,3 +236,102 @@ export async function updateLeadOutcomeAction(formData: FormData): Promise<
   revalidatePath("/admin");
   return { ok: true };
 }
+
+/**
+ * Server Action — inline status zmena z karty (status picker dropdown).
+ */
+export async function changeStatusInlineAction(
+  leadId: string,
+  newStatus: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+
+  const valid = [
+    "new",
+    "phone_revealed",
+    "no_answer",
+    "scheduled",
+    "interested",
+    "not_interested",
+    "quote_sent",
+    "won",
+    "lost",
+    "archived",
+  ];
+  if (!valid.includes(newStatus)) {
+    return { ok: false, error: "invalid_status" };
+  }
+
+  const supabase = await createClient();
+  const nowIso = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ status: newStatus, last_activity_at: nowIso })
+    .eq("id", leadId);
+
+  if (error) return { ok: false, error: error.message };
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "status_changed",
+    data: { new_status: newStatus, source: "inline_picker" },
+  });
+
+  revalidatePath("/agent");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+/**
+ * Server Action — uloží inline poznámku do `lead.data.agent_note`.
+ *
+ * Používame JSONB `data` namiesto novej kolumny, aby sme sa vyhli migrácii.
+ * (V budúcnosti môžeme presunúť do dedikovaného `agent_notes` stĺpca.)
+ */
+export async function saveLeadNoteAction(
+  leadId: string,
+  note: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+
+  const supabase = await createClient();
+
+  // Načítame existing data, vložíme agent_note, uložíme späť
+  const { data: existing, error: readError } = await supabase
+    .from("leads")
+    .select("data")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (readError) return { ok: false, error: readError.message };
+  if (!existing) return { ok: false, error: "not_found" };
+
+  const currentData = (existing.data ?? {}) as Record<string, unknown>;
+  const newData = { ...currentData, agent_note: note.trim() || undefined };
+  // Odstráň agent_note keď je prázdny string
+  if (!note.trim()) delete newData.agent_note;
+
+  const nowIso = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("leads")
+    .update({ data: newData, last_activity_at: nowIso })
+    .eq("id", leadId);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  // Audit log (best-effort)
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "note_added",
+    data: { note: note.trim() || null, source: "inline" },
+  });
+
+  revalidatePath("/agent");
+  revalidatePath("/admin");
+  return { ok: true };
+}

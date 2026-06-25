@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LeadWebhookInputSchema } from "@/lib/schemas/lead";
 
-export const runtime = "edge";
+// runtime = "edge" disabled — @supabase/supabase-js admin fetch fails in Next edge dev
 
 /**
  * POST /api/webhook/lead/[source_id]

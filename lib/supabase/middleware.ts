@@ -17,6 +17,12 @@ const PROTECTED_PREFIXES = ["/admin", "/agent"];
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  // 🔓 DEV BYPASS: žiadny auth wall, /admin a /agent dostupné bez prihlásenia.
+  // getCurrentAppUser v dev vždy vráti bootstrap admina, takže layouts fungujú.
+  if (process.env.NODE_ENV !== "production") {
+    return response;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,

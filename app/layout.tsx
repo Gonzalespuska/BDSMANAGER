@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BDSManager — Business Data Sales Manager",
+  title: "BDSManager · Business Data Sales Manager",
   description:
     "Call-agent CRM s SLA trackingom. Združuje leady zo všetkých zdrojov na jedno miesto.",
   robots: { index: false, follow: false },

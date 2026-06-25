@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AppUserRole = "admin" | "user";
 
@@ -12,19 +13,37 @@ export interface AppUser {
 }
 
 /**
- * Vráti aktuálne prihláseného usera kombinujúc Supabase Auth + naše `public.users`.
+ * Vráti aktuálne prihláseného usera.
  *
- * Tieto musia byť oba:
- *   1. Auth session existuje (user sa prihlásil)
- *   2. V `public.users` má riadok s prepojeným auth_id
- *   3. active = true
+ * 🔓 DEV MÓDE (NODE_ENV !== "production"):
+ *   Vždy vráti bootstrap admina z DB — auth wall vypnutý, žiadne klikanie
+ *   po /login pri každom F5. Logout button v hlavičke je naďalej zobrazený
+ *   ale prakticky no-op (re-auth ihneď).
  *
- * Ak čokoľvek chýba → vracia null (volajúci by mal redirect na /login).
- *
- * RLS auto-filtruje `users` na riadky kde `auth_id = auth.uid()` (cez policy
- * `users_select`), takže `.maybeSingle()` vráti len jeho riadok.
+ * 🔒 PROD:
+ *   Cez Supabase Auth + lookup do public.users + active=true check.
  */
+// Module-level cache pre dev bypass — DB query iba pri prvom hite.
+// Default v dev: obchodák (user) rola, aby si videl appku tak ako ju vidia oni.
+// Admin chrome (Admin pill, Admin view →) sa neukazuje.
+let DEV_USER_CACHE: AppUser | null = null;
+
 export async function getCurrentAppUser(): Promise<AppUser | null> {
+  // ─── DEV BYPASS — vystupuje ako obchodák ─────────────────────────────
+  if (process.env.NODE_ENV !== "production") {
+    if (DEV_USER_CACHE) return DEV_USER_CACHE;
+    DEV_USER_CACHE = {
+      id: "dev-user",
+      auth_id: null,
+      email: "peter@epoxidovo.sk",
+      name: "Peter (Obchodák)",
+      role: "user",
+      active: true,
+    };
+    return DEV_USER_CACHE;
+  }
+
+  // ─── PROD path ──────────────────────────────────────────────────────
   const supabase = await createClient();
   const {
     data: { user: authUser },
@@ -50,7 +69,6 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
 
 /**
  * Vráti správny dashboard URL pre rolu.
- * Používa sa po prihlásení a v middleware redirectoch.
  */
 export function dashboardPathForRole(role: AppUserRole): string {
   return role === "admin" ? "/admin" : "/agent";

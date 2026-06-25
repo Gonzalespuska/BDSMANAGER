@@ -2,7 +2,9 @@ import { Phone } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAppUser } from "@/lib/auth";
+import { AgentLiveWrapper } from "@/components/agent-live-wrapper";
 import { LeadCard } from "@/components/leads/lead-card";
+import { NewLeadButton } from "@/components/leads/new-lead-modal";
 import type { Lead } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +21,6 @@ const TABS = [
   { id: "nedovolany", label: "🟡 Nedvíhajú" },
   { id: "planovany", label: "📅 Naplánované" },
   { id: "otvorene", label: "🔥 Otvorené" },
-  { id: "moje", label: "👤 Moje" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -63,14 +64,6 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           .order("last_activity_at", { ascending: false })
           .limit(200);
 
-      case "moje":
-        return supabase
-          .from("leads")
-          .select("*")
-          .eq("assigned_to", user.id)
-          .order("created_at", { ascending: false })
-          .limit(200);
-
       case "novy":
       default:
         // "Nové" = leady ktoré agent ešte nevyriešil:
@@ -91,7 +84,6 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     nedovolanyCountRes,
     planovanyCountRes,
     otvoreneCountRes,
-    mojeCountRes,
   ] = await Promise.all([
     leadsListQuery,
     supabase
@@ -111,10 +103,6 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       .from("leads")
       .select("id", { count: "exact", head: true })
       .in("status", ["interested", "quote_sent"]),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("assigned_to", user.id),
   ]);
 
   const leads = (leadsRes.data ?? []) as Lead[];
@@ -123,22 +111,24 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     nedovolany: nedovolanyCountRes.count ?? undefined,
     planovany: planovanyCountRes.count ?? undefined,
     otvorene: otvoreneCountRes.count ?? undefined,
-    moje: mojeCountRes.count ?? undefined,
   };
 
   const totalToCall = (counts.novy ?? 0) + (counts.nedovolany ?? 0);
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
-          <Phone className="w-6 h-6 text-sky-500" aria-hidden />
-          Leady na volanie{" "}
-          <span className="text-sky-500">({totalToCall})</span>
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Čerstvé + nedovolané čakajú na hovor.
-        </p>
+    <AgentLiveWrapper>
+      <header className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
+            <Phone className="w-6 h-6 text-sky-500" aria-hidden />
+            Leady na volanie{" "}
+            <span className="text-sky-500">({totalToCall})</span>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Čerstvé + nedovolané čakajú na hovor.
+          </p>
+        </div>
+        <NewLeadButton />
       </header>
 
       <div className="flex flex-wrap gap-2">
@@ -179,11 +169,10 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           <div className="text-4xl mb-3">🎉</div>
           <h3 className="text-lg font-bold mb-1">Žiadne leady v tejto kategórii</h3>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            {tab === "novy" && "Všetky nové leady sú spracované — čakáme na nový dopyt."}
+            {tab === "novy" && "Všetky nové leady sú spracované. Čakáme na nový dopyt."}
             {tab === "nedovolany" && "Žiadne čakajúce nedovíhajú hovory."}
             {tab === "planovany" && "Žiadny naplánovaný callback."}
-            {tab === "otvorene" && "Žiadne otvorené dealy. Po hovore označ lead ako 'záujem' alebo 'ponuka' a objavia sa tu."}
-            {tab === "moje" && "Žiadne leady ti zatiaľ neboli pridelené."}
+            {tab === "otvorene" && "Žiadne otvorené dealy. Po hovore označ lead ako 'záujem' alebo 'ponuka' a objaví sa tu."}
           </p>
           <div className="mt-4 text-xs text-muted-foreground">
             Pre vygenerovanie testovacích leadov navštív{" "}
@@ -202,6 +191,6 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           ))}
         </div>
       )}
-    </div>
+    </AgentLiveWrapper>
   );
 }

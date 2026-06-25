@@ -9,7 +9,7 @@ export default function AdminDashboard() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Tu budú KPI karty, grafy, zoznam agentov a live leady. Zatiaľ
-          placeholder — postavíme v Kroku 7.
+          placeholder, postavíme v Kroku 7.
         </p>
       </header>
 
