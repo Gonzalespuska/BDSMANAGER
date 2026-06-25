@@ -69,16 +69,14 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
   async function handleCall() {
     if (!lead.phone) return;
     setBusy(true);
-    // Reveal (server action) — log SLA + audit. Žiadny automatický tel:
-    // redirect — desktop browsery to blokujú ako "auto-start a call". Po
-    // odhalení je číslo viditeľné ako veľký zelený tel: link, user si
-    // klikne sám.
+    // Reveal — server action zapíše phone_revealed_at + SLA. Status sa
+    // NEMENÍ — lead zostáva v Nové. Až klik na "Kontakt" / "Nedvíha"
+    // ho presunie. (Žiadny auto-dial — desktop browsery to blokujú.)
     const result = await revealPhoneAction(lead.id);
     if (result.ok) {
       setLead({
         ...lead,
         phone_revealed_at: new Date().toISOString(),
-        status: lead.status === "new" ? "phone_revealed" : lead.status,
       });
     } else {
       alert(`Chyba: ${result.error}`);
