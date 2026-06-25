@@ -6,14 +6,34 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 /**
- * Pill v hornom nav-bare — aktívny stav (matchuje aktuálnu route) je
- * zvýraznený sky-blue gradientom, neaktívne sú biele s borderom.
+ * Pill v hornom nav-bare — aktívny stav matchuje aktuálnu route.
  *
- * Match logika:
- *   - href="/agent" → aktívne ak path začína /agent (vrátane /agent/leads/...)
- *   - href="/generator" → aktívne ak path začína /generator
- *   - href="/admin" → aktívne ak path začína /admin
+ * Longest-prefix wins logika: ak je viacero hrefov ktoré by mohli matchovať
+ * (napr. /agent aj /agent/team), aktívny je ten najšpecifickejší — takže
+ * /agent/team má prednost pred /agent ked si na /agent/team.
  */
+const ALL_NAV_HREFS = [
+  "/agent/team",
+  "/agent/leads",
+  "/agent",
+  "/generator",
+  "/admin",
+];
+
+function isActive(pathname: string, href: string): boolean {
+  // Match prefix
+  if (pathname !== href && !pathname.startsWith(href + "/")) return false;
+  // Defer ak existuje špecifickejší prefix čo tiež matchuje pathname
+  for (const other of ALL_NAV_HREFS) {
+    if (other === href) continue;
+    if (!other.startsWith(href + "/")) continue; // other not deeper than href
+    if (pathname === other || pathname.startsWith(other + "/")) {
+      return false; // špecifickejšia route vyhráva
+    }
+  }
+  return true;
+}
+
 export function NavPillClient({
   href,
   icon,
@@ -24,7 +44,7 @@ export function NavPillClient({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(href + "/");
+  const active = isActive(pathname, href);
 
   return (
     <Link

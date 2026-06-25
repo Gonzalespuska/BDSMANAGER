@@ -21,5 +21,6 @@ export default async function AdminLayout({
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/agent");
 
-  return <AppShell user={user}>{children}</AppShell>;
+  const selfPaused = user.capacity === 0;
+  return <AppShell user={user} selfPaused={selfPaused}>{children}</AppShell>;
 }

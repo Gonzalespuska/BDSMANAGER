@@ -10,6 +10,7 @@ export interface AppUser {
   name: string;
   role: AppUserRole;
   active: boolean;
+  capacity?: number; // 0-10; undefined ak DB ešte nemá column (pre-migration)
 }
 
 /**
@@ -58,7 +59,7 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
         const admin = createAdminClient();
         const { data: peter } = await admin
           .from("users")
-          .select("id, auth_id, email, name, role, active")
+          .select("id, auth_id, email, name, role, active, capacity")
           .eq("email", "peter@epoxidovo.sk")
           .maybeSingle();
         if (peter && peter.active) {
@@ -100,7 +101,7 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
 
   const { data: appUser, error } = await supabase
     .from("users")
-    .select("id, auth_id, email, name, role, active")
+    .select("id, auth_id, email, name, role, active, capacity")
     .eq("auth_id", authUser.id)
     .maybeSingle();
 

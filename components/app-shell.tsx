@@ -2,18 +2,16 @@ import Link from "next/link";
 import {
   ArrowRight,
   Calculator,
-  LogOut,
   Phone,
   ShieldCheck,
-  User as UserIcon,
   Users as UsersIcon,
 } from "lucide-react";
 
-import { signOutAction } from "@/app/login/actions";
 import type { AppUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 import { NavPillClient } from "./nav-pill-client";
+import { ProfileMenu } from "./profile-menu";
 
 /**
  * Spoločný layout shell pre /admin, /agent a /generator.
@@ -22,9 +20,11 @@ import { NavPillClient } from "./nav-pill-client";
  */
 export function AppShell({
   user,
+  selfPaused,
   children,
 }: {
   user: AppUser;
+  selfPaused: boolean;
   children: React.ReactNode;
 }) {
   const isAdmin = user.role === "admin";
@@ -53,33 +53,6 @@ export function AppShell({
           </Link>
 
           <div className="flex items-center gap-2 md:gap-3">
-            <div
-              className={cn(
-                "hidden sm:inline-flex items-center gap-2.5 rounded-full border bg-muted/60 px-4 py-2",
-                "text-sm font-medium",
-              )}
-            >
-              <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background">
-                <UserIcon className="w-4 h-4" aria-hidden />
-              </div>
-              <span className="text-foreground">{user.email}</span>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                  isAdmin
-                    ? "bg-foreground text-background"
-                    : "bg-sky-100 text-sky-700",
-                )}
-              >
-                {isAdmin ? (
-                  <ShieldCheck className="w-3 h-3" aria-hidden />
-                ) : (
-                  <UserIcon className="w-3 h-3" aria-hidden />
-                )}
-                {user.role}
-              </span>
-            </div>
-
             {isAdmin && (
               <Link
                 href="/agent"
@@ -90,15 +63,7 @@ export function AppShell({
               </Link>
             )}
 
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 px-4 py-2 text-sm font-semibold transition-colors"
-              >
-                <LogOut className="w-4 h-4" aria-hidden />
-                Odhlásiť
-              </button>
-            </form>
+            <ProfileMenu user={user} selfPaused={selfPaused} />
           </div>
         </div>
 

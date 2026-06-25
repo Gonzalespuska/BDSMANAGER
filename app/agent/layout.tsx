@@ -17,5 +17,6 @@ export default async function AgentLayout({
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
 
-  return <AppShell user={user}>{children}</AppShell>;
+  const selfPaused = user.capacity === 0;
+  return <AppShell user={user} selfPaused={selfPaused}>{children}</AppShell>;
 }
