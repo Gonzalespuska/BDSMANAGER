@@ -141,7 +141,14 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
   const whatsappHref = lead.phone
     ? `https://wa.me/${lead.phone.replace(/[^\d+]/g, "")}`
     : null;
-  const emailHref = lead.email ? `mailto:${lead.email}` : null;
+  // Gmail compose v novom tabe — funguje pre lognutý Google Workspace
+  // (vrátane custom domén ako @epoxidovo.sk). Subject TODO: konfigurovateľný
+  // v admin UI; zatiaľ hardcoded.
+  const emailHref = lead.email
+    ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+        lead.email,
+      )}&su=${encodeURIComponent("Epoxidovo.sk, Dopyt")}`
+    : null;
 
   // Status color pre vertical accent strip (vľavo)
   const accentColor =
@@ -366,7 +373,12 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
           <div className="grid grid-cols-3 gap-2">
             {emailHref ? (
               <Button asChild variant="outline" size="sm" className="h-10">
-                <a href={emailHref}>
+                <a
+                  href={emailHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Otvorí Gmail compose s predvyplneným adresátom"
+                >
                   <Mail className="w-4 h-4 mr-1.5" aria-hidden />
                   Email
                 </a>
