@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Bell, BellRing, ExternalLink } from "lucide-react";
+import { Bell, BellRing, ChevronDown, ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/lib/notifications";
@@ -20,6 +20,7 @@ export function NotificationsBell({
 }) {
   const [open, setOpen] = React.useState(false);
   const [items] = React.useState<Notification[]>(initial);
+  const [showNewLeads, setShowNewLeads] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -121,31 +122,43 @@ export function NotificationsBell({
               );
             })()}
 
-            {/* Sekcia 2: Nový lead pridelený — vždy viditeľná */}
+            {/* Sekcia 2: Nový lead pridelený — collapsed by default, klik na header rozbalí */}
             {(() => {
               const news = items.filter((n) => n.type === "new_lead");
               return (
                 <div>
-                  <div className="px-4 py-2 bg-muted/30 border-b border-t text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 w-full">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewLeads(!showNewLeads)}
+                    className="px-4 py-2 bg-muted/30 border-b border-t text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 w-full hover:bg-muted/50 transition-colors"
+                    aria-expanded={showNewLeads}
+                  >
                     <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
                     Nový lead pridelený ({news.length})
-                  </div>
-                  {news.length === 0 ? (
-                    <div className="px-4 py-4 text-xs text-muted-foreground/80">
-                      Žiadne nepridané leady. Keď príde nový z webu / Mety /
-                      manuálne, zobrazí sa tu.
-                    </div>
-                  ) : (
-                    <ul className="divide-y">
-                      {news.map((n) => (
-                        <NotifRow
-                          key={n.id}
-                          n={n}
-                          onClick={() => setOpen(false)}
-                        />
-                      ))}
-                    </ul>
-                  )}
+                    <ChevronDown
+                      className={cn(
+                        "w-3.5 h-3.5 ml-auto transition-transform",
+                        showNewLeads && "rotate-180",
+                      )}
+                      aria-hidden
+                    />
+                  </button>
+                  {showNewLeads &&
+                    (news.length === 0 ? (
+                      <div className="px-4 py-4 text-xs text-muted-foreground/80">
+                        Žiadne nepridelené leady.
+                      </div>
+                    ) : (
+                      <ul className="divide-y">
+                        {news.map((n) => (
+                          <NotifRow
+                            key={n.id}
+                            n={n}
+                            onClick={() => setOpen(false)}
+                          />
+                        ))}
+                      </ul>
+                    ))}
                 </div>
               );
             })()}
