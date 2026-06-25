@@ -57,9 +57,7 @@ export async function loadNotifications(
       lead_name: l.name,
       lead_phone: l.phone,
       when_ts: l.next_callback_at,
-      message: isOverdue
-        ? `Skúsiť volať znova (${l.call_attempts}× nezdvihol)`
-        : `Pripomienka volania za chvíľu`,
+      message: "Pripomienka volania",
     });
   }
 

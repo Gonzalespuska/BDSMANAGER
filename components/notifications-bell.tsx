@@ -204,7 +204,7 @@ function NotifRow({
               className={cn(
                 "text-xs",
                 isReminder
-                  ? "text-red-700/90 dark:text-red-300/90"
+                  ? "text-red-700 dark:text-red-300 font-bold uppercase tracking-wider"
                   : "text-muted-foreground",
               )}
             >
