@@ -88,54 +88,68 @@ export function NotificationsBell({
             </div>
           </div>
 
-          {items.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              Žiadne pripomienky volania, nové leady, ani follow-upy.
-            </div>
-          ) : (
-            <div className="max-h-[60vh] overflow-y-auto">
-              {/* Sekcia: Pripomienky volať znova */}
-              {(() => {
-                const callbacks = items.filter(
-                  (n) =>
-                    n.type === "callback_due" || n.type === "callback_overdue",
-                );
-                if (callbacks.length === 0) return null;
-                return (
-                  <div>
-                    <div className="px-4 py-2 bg-muted/30 border-b text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 w-full">
-                      <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
-                      Pripomienka volať znova ({callbacks.length})
+          <div className="max-h-[60vh] overflow-y-auto">
+            {/* Sekcia 1: Pripomienka volať znova — vždy viditeľná */}
+            {(() => {
+              const callbacks = items.filter(
+                (n) =>
+                  n.type === "callback_due" || n.type === "callback_overdue",
+              );
+              return (
+                <div>
+                  <div className="px-4 py-2 bg-muted/30 border-b text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 w-full">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+                    Pripomienka volať znova ({callbacks.length})
+                  </div>
+                  {callbacks.length === 0 ? (
+                    <div className="px-4 py-4 text-xs text-muted-foreground/80">
+                      Žiadne pripomienky. Keď zákazník nezdvihne, automatická
+                      pripomienka sa zobrazí tu.
                     </div>
+                  ) : (
                     <ul className="divide-y">
                       {callbacks.map((n) => (
-                        <NotifRow key={n.id} n={n} onClick={() => setOpen(false)} />
+                        <NotifRow
+                          key={n.id}
+                          n={n}
+                          onClick={() => setOpen(false)}
+                        />
                       ))}
                     </ul>
-                  </div>
-                );
-              })()}
+                  )}
+                </div>
+              );
+            })()}
 
-              {/* Sekcia: Nový lead pridelený */}
-              {(() => {
-                const news = items.filter((n) => n.type === "new_lead");
-                if (news.length === 0) return null;
-                return (
-                  <div>
-                    <div className="px-4 py-2 bg-muted/30 border-b text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 w-full">
-                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-                      Nový lead pridelený ({news.length})
+            {/* Sekcia 2: Nový lead pridelený — vždy viditeľná */}
+            {(() => {
+              const news = items.filter((n) => n.type === "new_lead");
+              return (
+                <div>
+                  <div className="px-4 py-2 bg-muted/30 border-b border-t text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 w-full">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                    Nový lead pridelený ({news.length})
+                  </div>
+                  {news.length === 0 ? (
+                    <div className="px-4 py-4 text-xs text-muted-foreground/80">
+                      Žiadne nepridané leady. Keď príde nový z webu / Mety /
+                      manuálne, zobrazí sa tu.
                     </div>
+                  ) : (
                     <ul className="divide-y">
                       {news.map((n) => (
-                        <NotifRow key={n.id} n={n} onClick={() => setOpen(false)} />
+                        <NotifRow
+                          key={n.id}
+                          n={n}
+                          onClick={() => setOpen(false)}
+                        />
                       ))}
                     </ul>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
     </div>
