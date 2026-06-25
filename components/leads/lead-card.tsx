@@ -360,16 +360,11 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             </div>
           )}
 
-          {/* Kontakt banner — len keď lead bol aspoň raz odhalený / klasifikovaný.
-              V "Nové" (status=new) ho neukazujeme, lebo lead ešte nebol
-              kontaktovaný, takže "Kontakt:" by bolo zavádzajúce. */}
-          {lead.assigned_to && lead.status !== "new" && (
-            <div className="mb-3">
-              <AssignedBanner name={lead.assigned_user_name} />
-            </div>
-          )}
+          {/* AssignedBanner ("Kontakt: <name>") odstránený — leady sú
+              rozdelené medzi agentov rovnomerne (auto-assign), nepotrebujeme
+              značiť kto ich vlastní. */}
 
-          {/* Hlavná akcia row: Email + Zavolať + Ponuka */}
+          {/* Hlavná akcia row: Email + Odhaliť/Zavolať + Ponuka */}
           <div className="grid grid-cols-3 gap-2">
             {emailHref ? (
               <Button asChild variant="outline" size="sm" className="h-10">
@@ -390,28 +385,32 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               </Button>
             )}
             {lead.phone ? (
-              <Button
-                type="button"
-                onClick={handleCall}
-                disabled={busy}
-                size="sm"
-                title={
-                  isRevealed
-                    ? "Vytočiť — telefón je odhalený"
-                    : "Klikni — odhalí sa číslo a otvorí dialer"
-                }
-                className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)] flex flex-col items-center justify-center leading-none gap-0.5"
-              >
-                <span className="inline-flex items-center">
+              isRevealed ? (
+                // Po odhalení: priamy tel: link (user gesture → browser
+                // dovolí dial bez warningu)
+                <Button
+                  asChild
+                  size="sm"
+                  className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
+                >
+                  <a href={`tel:${lead.phone}`} title="Vytočiť">
+                    <Phone className="w-4 h-4 mr-1.5" aria-hidden />
+                    Zavolať
+                  </a>
+                </Button>
+              ) : (
+                // Pred odhalením: reveal action, žiadny dial
+                <Button
+                  type="button"
+                  onClick={handleCall}
+                  disabled={busy}
+                  size="sm"
+                  className="h-10 bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
+                >
                   <Phone className="w-4 h-4 mr-1.5" aria-hidden />
-                  Zavolať
-                </span>
-                {!isRevealed && (
-                  <span className="text-[10px] font-medium opacity-90 uppercase tracking-wider">
-                    klikni → odhalí číslo
-                  </span>
-                )}
-              </Button>
+                  Odhaliť číslo
+                </Button>
+              )
             ) : (
               <Button variant="outline" size="sm" className="h-10" disabled>
                 <Phone className="w-4 h-4 mr-1.5" aria-hidden />
