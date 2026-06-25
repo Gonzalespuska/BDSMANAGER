@@ -70,7 +70,7 @@ export function NotesPanel({ initial }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border bg-amber-50/40 dark:bg-amber-950/10 overflow-hidden flex flex-col h-[calc(100vh-220px)] min-h-[480px]">
+    <div className="rounded-2xl border bg-amber-50/40 dark:bg-amber-950/10 overflow-hidden flex flex-col h-full min-h-[480px]">
       {/* Header */}
       <header className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-amber-100/40 dark:bg-amber-950/20">
         <h2 className="font-extrabold text-base">

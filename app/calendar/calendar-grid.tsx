@@ -117,9 +117,9 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
     : [];
 
   return (
-    <div className="space-y-4">
+    <>
       {/* Calendar grid */}
-      <div className="rounded-2xl border bg-background overflow-hidden">
+      <div className="rounded-2xl border bg-background overflow-hidden h-full flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
           <div className="font-bold text-base">
             {MONTHS[monthIdx - 1]} {year}
@@ -166,10 +166,9 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
           ))}
         </div>
 
-        {/* Day cells */}
-        <div className="grid grid-cols-7">
+        {/* Day cells — flex-1 fills the parent height so cells grow */}
+        <div className="grid grid-cols-7 flex-1 auto-rows-fr">
           {cells.map((c, i) => {
-            const isSelected = selected === c.date;
             const isToday = c.date === todayStr;
             const notesOnDay = notesByDate.get(c.date) ?? [];
             const callsOnDay = callbacksByDate.get(c.date) ?? [];
@@ -179,45 +178,53 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
                 type="button"
                 onClick={() => setSelected(c.date)}
                 className={cn(
-                  "relative aspect-square min-h-[44px] border-r border-b last:border-r-0 px-1 py-1 text-left transition-colors group",
+                  "relative min-h-[60px] border-r border-b last:border-r-0 px-2 py-1.5 text-left transition-colors group",
                   !c.inMonth && "bg-muted/30 text-muted-foreground/50",
-                  c.inMonth && "hover:bg-muted/40",
-                  isSelected && "bg-sky-100 dark:bg-sky-950/40 hover:bg-sky-100",
+                  c.inMonth && "hover:bg-sky-50 dark:hover:bg-sky-950/30",
                 )}
               >
                 <div className="flex items-center justify-between gap-1">
                   <span
                     className={cn(
-                      "inline-flex items-center justify-center w-6 h-6 rounded-full text-[12px] font-semibold",
+                      "inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-semibold",
                       isToday && "bg-sky-500 text-white",
                     )}
                   >
                     {c.dayOfMonth}
                   </span>
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-1">
                     {callsOnDay.length > 0 && (
                       <span
-                        className="inline-block w-1.5 h-1.5 rounded-full bg-red-500"
+                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800"
                         title={`${callsOnDay.length} pripomienok volania`}
-                      />
+                      >
+                        📞 {callsOnDay.length}
+                      </span>
                     )}
                     {notesOnDay.length > 0 && (
                       <span
-                        className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500"
+                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800"
                         title={`${notesOnDay.length} poznámok`}
-                      />
+                      >
+                        {notesOnDay.length}
+                      </span>
                     )}
                   </div>
                 </div>
+                {notesOnDay.length > 0 && (
+                  <div className="mt-1 text-[11px] text-muted-foreground line-clamp-1">
+                    {notesOnDay[0].body}
+                  </div>
+                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Side panel — selected day notes */}
+      {/* Modal popup — selected day */}
       {selected && (
-        <DayPanel
+        <DayModal
           date={selected}
           notes={selectedNotes}
           callbacks={selectedCallbacks}
@@ -228,11 +235,11 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
           }
         />
       )}
-    </div>
+    </>
   );
 }
 
-function DayPanel({
+function DayModal({
   date,
   notes,
   callbacks,
@@ -247,6 +254,14 @@ function DayPanel({
   onAdded: (n: CalendarNote) => void;
   onDeleted: (id: string) => void;
 }) {
+  // Esc → zatvor modal
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const [input, setInput] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -287,23 +302,33 @@ function DayPanel({
   }
 
   return (
-    <aside className="rounded-2xl border bg-background overflow-hidden flex flex-col max-h-[70vh]">
-      <header className="px-4 py-3 border-b flex items-start justify-between gap-2">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Detail dňa
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg max-h-[85vh] rounded-2xl border bg-background shadow-2xl overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-4 border-b flex items-start justify-between gap-3 bg-muted/30">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Detail dňa
+            </div>
+            <div className="font-extrabold text-lg capitalize">{niceDate}</div>
           </div>
-          <div className="font-bold capitalize">{niceDate}</div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1 hover:bg-muted rounded"
-          aria-label="Zavrieť"
-        >
-          <X className="w-4 h-4" aria-hidden />
-        </button>
-      </header>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            aria-label="Zavrieť"
+            title="Zavrieť (Esc)"
+          >
+            <X className="w-5 h-5" aria-hidden />
+          </button>
+        </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Callbacks */}
@@ -412,6 +437,7 @@ function DayPanel({
           </button>
         </div>
       </div>
-    </aside>
+      </div>
+    </div>
   );
 }

@@ -25,11 +25,14 @@ export function AppShell({
   user,
   selfPaused,
   notifications,
+  wide,
   children,
 }: {
   user: AppUser;
   selfPaused: boolean;
   notifications: Notification[];
+  /** Calendar a iné full-width stránky majú širší container. */
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   const isAdmin = user.role === "admin";
@@ -98,7 +101,12 @@ export function AppShell({
         </nav>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 md:py-8">
+      <main
+        className={cn(
+          "flex-1 w-full mx-auto px-4 sm:px-6 py-6 md:py-8",
+          wide ? "max-w-[1600px]" : "max-w-7xl",
+        )}
+      >
         {children}
       </main>
     </div>

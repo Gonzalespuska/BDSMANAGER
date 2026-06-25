@@ -88,19 +88,15 @@ export default async function CalendarPage({ searchParams }: Props) {
   }));
 
   return (
-    <div className="space-y-6">
-      <header>
+    <div className="flex flex-col h-[calc(100vh-180px)] min-h-[520px] gap-4">
+      <header className="shrink-0">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
           <CalendarIcon className="w-6 h-6 text-sky-500" aria-hidden />
           Kalendár
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Kalendár s pripomienkami volaní vľavo, voľné Apple-Notes-like
-          poznámky vpravo. Klikni na deň pre detail.
-        </p>
       </header>
 
-      <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-4 items-start">
+      <div className="grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 flex-1 min-h-0">
         <CalendarGrid
           initialMonth={initialMonth}
           notes={calendarNotes}
