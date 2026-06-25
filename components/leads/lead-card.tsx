@@ -280,34 +280,26 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
 
           {/* Action bar */}
           <div className="px-5 pt-4 pb-4 mt-4 border-t bg-zinc-50/60">
-          {/* Outcome buttons:
-              - Kontakt button sa zobrazí LEN ak lead je nový/odhalený a NEBOL ešte
-                klasifikovaný (status !== phone_revealed). V Kontakt tabe ho už
-                netreba — agent tam klasifikuje stav cez status picker / "Ponuka"
-                tlačidlo / atď.
-              - Nedvíha sa zobrazí vždy keď je číslo odhalené (môže sa stať
-                aj na 2. pokuse že znova nezdvihol). */}
-          {isRevealed && lead.status !== "archived" && (
-            <div
-              className={cn(
-                "grid gap-2 mb-2",
-                lead.status === "phone_revealed"
-                  ? "grid-cols-1"
-                  : "grid-cols-2",
-              )}
-            >
-              {lead.status !== "phone_revealed" && (
-                <Button
-                  type="button"
-                  onClick={handleContact}
-                  disabled={busy}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
-                  title="Zdvihla → presunie do Kontakt tabu, tam klasifikuj"
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
-                  Kontakt
-                </Button>
-              )}
+          {/* Outcome row:
+              - V Nové (status=new) + odhalené → Kontakt + Nedvíha
+                ("kam zaradiť?")
+              - V Kontakt (status=phone_revealed) → veľký Ponuka button
+                (lead zdvihol, ďalší krok je poslať CP)
+              - V no_answer/archived → žiadne outcome buttons tu (Nedvíha
+                pokus 2./3. ide tlačidlom Nedvíha v bottom alebo
+                Archivovať banner) */}
+          {isRevealed && lead.status === "new" && (
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <Button
+                type="button"
+                onClick={handleContact}
+                disabled={busy}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
+                title="Zdvihla → presunie do Kontakt tabu"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
+                Kontakt
+              </Button>
               <Button
                 type="button"
                 onClick={handleMissedCall}
@@ -316,11 +308,21 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               >
                 <PhoneOff className="w-4 h-4 mr-1.5" aria-hidden />
                 Nedvíha
-                {lead.call_attempts > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 rounded bg-white/25 text-[10px] font-bold">
-                    {lead.call_attempts}×
-                  </span>
-                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Kontakt tab — veľký Ponuka button (priamy presmer na generátor) */}
+          {lead.status === "phone_revealed" && (
+            <div className="mb-2">
+              <Button
+                asChild
+                className="w-full h-12 bg-sky-600 hover:bg-sky-700 text-white font-bold text-base shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
+              >
+                <Link href={`/generator?lead=${lead.id}`}>
+                  <Calculator className="w-5 h-5 mr-2" aria-hidden />
+                  Poslať cenovú ponuku
+                </Link>
               </Button>
             </div>
           )}
