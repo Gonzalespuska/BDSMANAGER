@@ -176,29 +176,71 @@ function NotifRow({
   n: Notification;
   onClick: () => void;
 }) {
+  const isReminder =
+    n.type === "callback_due" || n.type === "callback_overdue";
   return (
     <li>
       <Link
         href={`/agent/leads/${n.lead_id}`}
         onClick={onClick}
-        className="block px-4 py-3 hover:bg-muted/40 transition-colors"
+        className={cn(
+          "block px-4 py-3 transition-colors",
+          isReminder
+            ? "bg-red-50 dark:bg-red-950/20 hover:bg-red-100/80 dark:hover:bg-red-950/40"
+            : "hover:bg-muted/40",
+        )}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-sm truncate">{n.lead_name}</div>
-            <div className="text-xs text-muted-foreground">{n.message}</div>
+            <div
+              className={cn(
+                "font-semibold text-sm truncate",
+                isReminder && "text-red-900 dark:text-red-200",
+              )}
+            >
+              {n.lead_name}
+            </div>
+            <div
+              className={cn(
+                "text-xs",
+                isReminder
+                  ? "text-red-700/90 dark:text-red-300/90"
+                  : "text-muted-foreground",
+              )}
+            >
+              {n.message}
+            </div>
             {n.lead_phone && (
-              <div className="text-[11px] text-muted-foreground/80 mt-0.5">
+              <div
+                className={cn(
+                  "text-[11px] mt-0.5",
+                  isReminder
+                    ? "text-red-700/70 dark:text-red-300/80"
+                    : "text-muted-foreground/80",
+                )}
+              >
                 {n.lead_phone}
               </div>
             )}
           </div>
           <div className="text-right shrink-0">
-            <div className="text-[11px] text-muted-foreground">
+            <div
+              className={cn(
+                "text-[11px]",
+                isReminder
+                  ? "text-red-700/70 dark:text-red-300/80"
+                  : "text-muted-foreground",
+              )}
+            >
               {timeAgo(n.when_ts)}
             </div>
             <ExternalLink
-              className="w-3 h-3 text-muted-foreground/60 mt-1 ml-auto"
+              className={cn(
+                "w-3 h-3 mt-1 ml-auto",
+                isReminder
+                  ? "text-red-600/70"
+                  : "text-muted-foreground/60",
+              )}
               aria-hidden
             />
           </div>
