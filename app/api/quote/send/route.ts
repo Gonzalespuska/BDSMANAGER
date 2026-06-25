@@ -128,10 +128,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log do lead_activities (best-effort)
+    // Log do lead_activities + presun lead-u do "Otvorené" (status=quote_sent)
     if (body.lead_id && !body.lead_id.startsWith("demo-")) {
       try {
         const admin = createAdminClient();
+        const nowIso = new Date().toISOString();
+
+        // Audit log
         await admin.from("lead_activities").insert({
           lead_id: body.lead_id,
           type: "email_sent",
@@ -142,8 +145,25 @@ export async function POST(request: NextRequest) {
             kind: "quote",
           },
         });
+
+        // Update status: quote_sent → posunie lead z Kontakt do Otvorené tabu.
+        // Nedotýkame sa už-finálnych stavov (won/lost/archived).
+        const { data: leadRow } = await admin
+          .from("leads")
+          .select("status")
+          .eq("id", body.lead_id)
+          .maybeSingle();
+        if (
+          leadRow &&
+          !["won", "lost", "archived"].includes(leadRow.status)
+        ) {
+          await admin
+            .from("leads")
+            .update({ status: "quote_sent", last_activity_at: nowIso })
+            .eq("id", body.lead_id);
+        }
       } catch (e) {
-        console.warn("[quote/send] activity log failed:", e);
+        console.warn("[quote/send] activity log / status update failed:", e);
       }
     }
 

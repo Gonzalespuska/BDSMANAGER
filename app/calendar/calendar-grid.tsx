@@ -3,8 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
+  Pencil,
   Phone,
   Plus,
   Trash2,
@@ -15,6 +17,7 @@ import { cn } from "@/lib/utils";
 import {
   addCalendarNoteAction,
   deleteCalendarNoteAction,
+  updateCalendarNoteAction,
 } from "./actions";
 
 export type CalendarNote = {
@@ -382,24 +385,15 @@ function DayModal({
           ) : (
             <ul className="space-y-2">
               {notes.map((n) => (
-                <li
+                <EditableNoteRow
                   key={n.id}
-                  className="rounded-lg border bg-muted/20 px-3 py-2 group"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm whitespace-pre-wrap break-words">
-                      {n.body}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => removeNote(n.id)}
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1"
-                      aria-label="Zmazať"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" aria-hidden />
-                    </button>
-                  </div>
-                </li>
+                  note={n}
+                  onDelete={() => removeNote(n.id)}
+                  onSave={(newBody) => {
+                    // optimistic — predpoklad že save prejde
+                    n.body = newBody;
+                  }}
+                />
               ))}
             </ul>
           )}
@@ -455,4 +449,115 @@ function pluralHovor(n: number): string {
   if (n === 1) return "1 hovor";
   if (n >= 2 && n <= 4) return `${n} hovory`;
   return `${n} hovorov`;
+}
+
+/**
+ * Editovateľný riadok poznámky v DayModal.
+ * Default zobrazí read-only text. Klik na pencil ikonu → textarea + Save/Cancel.
+ */
+function EditableNoteRow({
+  note,
+  onDelete,
+  onSave,
+}: {
+  note: CalendarNote;
+  onDelete: () => void;
+  onSave: (newBody: string) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(note.body);
+  const [busy, setBusy] = React.useState(false);
+
+  async function commit() {
+    const text = draft.trim();
+    if (!text || text === note.body) {
+      setEditing(false);
+      return;
+    }
+    setBusy(true);
+    const res = await updateCalendarNoteAction(note.id, text);
+    setBusy(false);
+    if (res.ok) {
+      onSave(text);
+      setEditing(false);
+    } else {
+      alert(`Chyba: ${res.error}`);
+    }
+  }
+
+  if (editing) {
+    return (
+      <li className="rounded-lg border border-sky-300 bg-sky-50 dark:bg-sky-950/30 px-3 py-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              commit();
+            }
+            if (e.key === "Escape") {
+              setDraft(note.body);
+              setEditing(false);
+            }
+          }}
+          autoFocus
+          rows={2}
+          className="w-full px-2 py-1.5 rounded border bg-background text-sm resize-none"
+        />
+        <div className="flex items-center justify-end gap-1.5 mt-2">
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(note.body);
+              setEditing(false);
+            }}
+            disabled={busy}
+            className="text-xs px-2.5 py-1 rounded hover:bg-muted"
+          >
+            Zrušiť
+          </button>
+          <button
+            type="button"
+            onClick={commit}
+            disabled={busy || !draft.trim()}
+            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-sky-600 text-white font-semibold hover:bg-sky-700 disabled:opacity-50"
+          >
+            <Check className="w-3 h-3" aria-hidden />
+            {busy ? "…" : "Uložiť"}
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="rounded-lg border bg-muted/20 px-3 py-2 group">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm whitespace-pre-wrap break-words flex-1">
+          {note.body}
+        </p>
+        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-muted-foreground hover:text-sky-600 p-1"
+            aria-label="Upraviť"
+            title="Upraviť"
+          >
+            <Pencil className="w-3.5 h-3.5" aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="text-muted-foreground hover:text-destructive p-1"
+            aria-label="Zmazať"
+            title="Zmazať"
+          >
+            <Trash2 className="w-3.5 h-3.5" aria-hidden />
+          </button>
+        </div>
+      </div>
+    </li>
+  );
 }

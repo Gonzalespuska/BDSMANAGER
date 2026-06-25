@@ -8,7 +8,6 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
-  ExternalLink,
   Hand,
   Mail,
   Phone,
@@ -290,19 +289,34 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
 
           {/* Action bar */}
           <div className="px-5 pt-4 pb-4 mt-4 border-t bg-zinc-50/60">
-          {/* Outcome buttons — iba ak je číslo odhalené */}
+          {/* Outcome buttons:
+              - Kontakt button sa zobrazí LEN ak lead je nový/odhalený a NEBOL ešte
+                klasifikovaný (status !== phone_revealed). V Kontakt tabe ho už
+                netreba — agent tam klasifikuje stav cez status picker / "Ponuka"
+                tlačidlo / atď.
+              - Nedvíha sa zobrazí vždy keď je číslo odhalené (môže sa stať
+                aj na 2. pokuse že znova nezdvihol). */}
           {isRevealed && lead.status !== "archived" && (
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <Button
-                type="button"
-                onClick={handleContact}
-                disabled={busy}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
-                title="Zdvihla → presunie do Kontakt tabu, tam klasifikuj"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
-                Kontakt
-              </Button>
+            <div
+              className={cn(
+                "grid gap-2 mb-2",
+                lead.status === "phone_revealed"
+                  ? "grid-cols-1"
+                  : "grid-cols-2",
+              )}
+            >
+              {lead.status !== "phone_revealed" && (
+                <Button
+                  type="button"
+                  onClick={handleContact}
+                  disabled={busy}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
+                  title="Zdvihla → presunie do Kontakt tabu, tam klasifikuj"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
+                  Kontakt
+                </Button>
+              )}
               <Button
                 type="button"
                 onClick={handleMissedCall}
@@ -349,8 +363,8 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             <AssignedBanner name={lead.assigned_user_name} />
           )}
 
-          {/* Hlavná akcia row: Email + Zavolať + Ponuka + Detail */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {/* Hlavná akcia row: Email + Zavolať + Ponuka */}
+          <div className="grid grid-cols-3 gap-2">
             {emailHref ? (
               <Button asChild variant="outline" size="sm" className="h-10">
                 <a href={emailHref}>
@@ -401,12 +415,6 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               <Link href={`/generator?lead=${lead.id}`}>
                 <Calculator className="w-4 h-4 mr-1.5" aria-hidden />
                 Ponuka
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="h-10">
-              <Link href={`/agent/leads/${lead.id}`}>
-                <ExternalLink className="w-4 h-4 mr-1.5" aria-hidden />
-                Detail
               </Link>
             </Button>
           </div>

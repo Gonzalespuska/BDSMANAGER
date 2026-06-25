@@ -74,7 +74,7 @@ export function NotesPanel({ initial }: Props) {
       {/* Header */}
       <header className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-amber-100/40 dark:bg-amber-950/20">
         <h2 className="font-extrabold text-base">
-          📔 Poznámky{" "}
+          📔 Všeobecné poznámky{" "}
           <span className="text-muted-foreground font-bold">({notes.length})</span>
         </h2>
         <button

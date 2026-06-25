@@ -53,3 +53,30 @@ export async function deleteCalendarNoteAction(
   revalidatePath("/calendar");
   return { ok: true };
 }
+
+/**
+ * Edituje existujúcu kalendárnu poznámku.
+ */
+export async function updateCalendarNoteAction(
+  noteId: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthenticated" };
+  if (user.id === "dev-user") return { ok: false, error: "dev fallback user" };
+
+  const trimmed = body.trim();
+  if (!trimmed) return { ok: false, error: "empty" };
+  if (trimmed.length > 2000) return { ok: false, error: "too_long" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("calendar_notes")
+    .update({ body: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", noteId)
+    .eq("user_id", user.id);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/calendar");
+  return { ok: true };
+}
