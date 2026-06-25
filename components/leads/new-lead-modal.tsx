@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Phone, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { EmailAutocomplete } from "@/components/ui/email-autocomplete";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -166,12 +167,11 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
-              <Input
+              <EmailAutocomplete
                 id="email"
-                type="email"
                 value={form.email}
-                onChange={(e) => update("email", e.target.value)}
-                placeholder="janko@example.sk"
+                onChange={(v) => update("email", v)}
+                placeholder="janko@gmail.com"
               />
             </div>
           </div>

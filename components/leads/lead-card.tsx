@@ -224,10 +224,12 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             )}
             {lead.email && (
               <a
-                href={`mailto:${lead.email}`}
-                className="mt-2 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                href={emailHref ?? `mailto:${lead.email}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 flex items-center gap-2 text-lg md:text-xl font-extrabold text-foreground hover:text-emerald-700 break-all leading-tight"
               >
-                <Mail className="w-4 h-4" aria-hidden />
+                <Mail className="w-5 h-5 md:w-6 md:h-6 shrink-0" aria-hidden />
                 {lead.email}
               </a>
             )}
