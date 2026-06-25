@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSbClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
@@ -8,11 +9,21 @@ import { cookies } from "next/headers";
  * RLS pravidlá platia (toto NIE JE service role) — vidí len to čo prihlásený
  * user má povolené cez Supabase Auth + RLS policies.
  *
- * Použitie:
- *   const supabase = await createClient();
- *   const { data: leads } = await supabase.from("leads").select();
+ * 🔓 DEV BYPASS:
+ *   V dev móde (NODE_ENV !== "production") nemáme reálnu Supabase session
+ *   (lib/auth.ts vracia mock peter usera bez auth cookie), takže RLS by
+ *   filtroval všetko preč. Vrátime admin client (service role) ktorý RLS
+ *   obchádza. App-level filter (assigned_to = peter.id) musí spraviť page.
  */
 export async function createClient() {
+  if (process.env.NODE_ENV !== "production" && process.env.SUPABASE_SECRET_KEY) {
+    return createSbClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SECRET_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient(
