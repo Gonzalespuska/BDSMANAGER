@@ -113,11 +113,9 @@ export function AppShell({
           >
             Generátor ponúk
           </NavPill>
-          {(isAdmin || process.env.NODE_ENV !== "production") && (
-            <NavPill href="/agent/team" icon={<UsersIcon className="w-4 h-4" />}>
-              Tím
-            </NavPill>
-          )}
+          <NavPill href="/agent/team" icon={<UsersIcon className="w-4 h-4" />}>
+            Tím chat
+          </NavPill>
           {isAdmin && (
             <NavPill href="/admin" icon={<ShieldCheck className="w-4 h-4" />}>
               Admin
