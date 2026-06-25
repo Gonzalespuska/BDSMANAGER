@@ -29,6 +29,10 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default async function AgentDashboard({ searchParams }: PageProps) {
+  // Force fresh data — vyhneme sa Next 14 fetch cache pre PostgREST endpointy
+  const { unstable_noStore: noStore } = await import("next/cache");
+  noStore();
+
   const params = await searchParams;
   const tab: TabId = TABS.find((t) => t.id === params.tab)?.id ?? "novy";
   const q = (params.q ?? "").trim();

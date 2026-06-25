@@ -52,43 +52,35 @@ async function touchLastActive(userId: string): Promise<void> {
 export async function getCurrentAppUser(): Promise<AppUser | null> {
   // ─── DEV BYPASS — vystupuje ako obchodák ─────────────────────────────
   if (process.env.NODE_ENV !== "production") {
-    if (!DEV_USER_CACHE) {
-      // Pokus o lookup reálneho peter user-a z DB (aby sme mali správny UUID
-      // pre RLS / assigned_to filtre / last_active tracking).
-      try {
-        const admin = createAdminClient();
-        const { data: peter } = await admin
-          .from("users")
-          .select("id, auth_id, email, name, role, active, capacity")
-          .eq("email", "peter@epoxidovo.sk")
-          .maybeSingle();
-        if (peter && peter.active) {
-          DEV_USER_CACHE = peter as AppUser;
-        } else {
-          DEV_USER_CACHE = {
-            id: "dev-user",
-            auth_id: null,
-            email: "peter@epoxidovo.sk",
-            name: "Peter (Obchodák)",
-            role: "user",
-            active: true,
-          };
-        }
-      } catch {
-        DEV_USER_CACHE = {
-          id: "dev-user",
-          auth_id: null,
-          email: "peter@epoxidovo.sk",
-          name: "Peter (Obchodák)",
-          role: "user",
-          active: true,
-        };
+    // Cache (DEV_USER_CACHE) ostala vypnutá — fresh fetch každý request.
+    // Inak by mohol držať starý UUID po zmenách v users tabuľke (napr.
+    // re-create peter, change role).
+    try {
+      const admin = createAdminClient();
+      const { data: peter } = await admin
+        .from("users")
+        .select("id, auth_id, email, name, role, active, capacity")
+        .eq("email", "peter@epoxidovo.sk")
+        .maybeSingle();
+      if (peter && peter.active) {
+        console.log("[dev bypass] returning peter:", peter.id);
+        void touchLastActive(peter.id);
+        return peter as AppUser;
+      } else {
+        console.warn("[dev bypass] peter not found or not active, peter=", peter);
       }
+    } catch (e) {
+      console.warn("[dev bypass] peter lookup failed:", e);
     }
-    if (DEV_USER_CACHE.id !== "dev-user") {
-      void touchLastActive(DEV_USER_CACHE.id);
-    }
-    return DEV_USER_CACHE;
+    // Fallback iba ak peter naozaj neexistuje v DB
+    return {
+      id: "dev-user",
+      auth_id: null,
+      email: "peter@epoxidovo.sk",
+      name: "Peter (Obchodák)",
+      role: "user",
+      active: true,
+    };
   }
 
   // ─── PROD path ──────────────────────────────────────────────────────

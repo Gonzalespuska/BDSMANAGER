@@ -47,7 +47,6 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
     typ_podlahy: "",
     priestor: "",
     lokalita: "",
-    priority: "medium" as "low" | "medium" | "high",
     message: "",
   });
 
@@ -83,7 +82,6 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
           phone: form.phone.trim() || undefined,
           email: form.email.trim() || undefined,
           source_campaign: "Manuálne pridaný (telefonát / výstava / odporúčanie)",
-          priority: form.priority,
           data,
         }),
       });
@@ -143,33 +141,16 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="name">Meno *</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => update("name", e.target.value)}
-                placeholder="Janko Mrkvička"
-                autoFocus
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="priority">Priorita</Label>
-              <select
-                id="priority"
-                value={form.priority}
-                onChange={(e) =>
-                  update("priority", e.target.value as "low" | "medium" | "high")
-                }
-                className="h-10 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
-              >
-                <option value="low">Nízka</option>
-                <option value="medium">Stredná</option>
-                <option value="high">Vysoká</option>
-              </select>
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="name">Meno *</Label>
+            <Input
+              id="name"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="Janko Mrkvička"
+              autoFocus
+              required
+            />
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
