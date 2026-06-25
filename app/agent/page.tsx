@@ -46,7 +46,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           .from("leads")
           .select("*")
           .is("assigned_to", null)
-          .not("status", "in", "(won,lost,archived)")
+          .in("status", ["new","phone_revealed","no_answer","scheduled","interested","quote_sent","not_interested"])
           .order("created_at", { ascending: false })
           .limit(200);
 
@@ -104,7 +104,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       .from("leads")
       .select("id", { count: "exact", head: true })
       .is("assigned_to", null)
-      .not("status", "in", "(won,lost,archived)"),
+      .in("status", ["new","phone_revealed","no_answer","scheduled","interested","quote_sent","not_interested"]),
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
