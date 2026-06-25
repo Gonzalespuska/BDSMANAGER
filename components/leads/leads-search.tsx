@@ -85,9 +85,13 @@ export function LeadsSearch() {
           <X className="w-3.5 h-3.5" aria-hidden />
         </button>
       )}
-      <kbd className="hidden md:inline-flex absolute -bottom-5 right-0 text-[10px] text-muted-foreground">
-        stlač / pre rýchle hľadanie
-      </kbd>
+      <div className="hidden md:flex absolute -bottom-7 right-0 items-center gap-1.5 text-xs text-foreground/70">
+        <span>stlač</span>
+        <kbd className="inline-flex items-center px-2 py-0.5 rounded-md border border-foreground/30 bg-muted font-mono text-[12px] font-bold leading-none">
+          &quot;/&quot;
+        </kbd>
+        <span>pre rýchle hľadanie</span>
+      </div>
     </div>
   );
 }
