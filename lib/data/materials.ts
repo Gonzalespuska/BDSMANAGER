@@ -1,23 +1,18 @@
 /**
- * Katalóg materiálov a operácií pre Generátor ponúk.
+ * Katalóg operácií pre Generátor ponúk — REALIZÁCIA podlahy.
  *
- * Phase 1: hardcoded zo špecifikácie + epoxidovo.sk ponuky (príkladové sadzby).
- * Phase 2: presunúť do DB (tabuľka `materials`) → admin editor v /admin/materials.
+ * `price_per_sqm` je FINÁLNA PREDAJNÁ CENA za m² (vrátane marže aj DPH).
+ * `calcLine` vracia priamo `m² × price_per_sqm` — žiadny ďalší výpočet.
  *
- * Cenový model:
- *   - kg potrebné = consumption_kg_per_sqm × m²  (alebo × m² × mm pri "level")
- *   - balenia    = pri zlievateľnom: kg_potrebné / package_size  (decimálne)
- *                   pri nezlievateľnom: ceil(kg_potrebné / package_size)
- *   - cena materiálu = balenia × package_price
- *   - cena práce  = m² × work_per_sqm
- *   - výsledná cena riadku = materiál + práca
+ * Pre prasklíny (Zošívanie) je `price_per_unit` = €/ks finálne.
  *
  * 4 typy podlahy zo stránky epoxidovo.sk:
- *   - jednofarebna ,pigmentový epoxid, najjednoduchšia
- *   - chipsova     ,dekoratívne chipsy v transparent laku
- *   - mramorova    ,mramorový efekt 2 farby (nezlievateľný)
- *   - metalicka    ,metalické pigmenty (nezlievateľný)
+ *   - jednofarebna (Epoxid 264 Plus / Polyuretán 3000 — voľba cez variant)
+ *   - chipsova     (epoxidová báza, vrchný lak uzaviera chipy)
+ *   - mramorova    (Topstone — mramorový epoxid)
+ *   - metalicka    (Topstone EP11 + EP02 báza, EP22 Plus vrchný)
  */
+
 
 export type FloorType =
   | "jednofarebna"
@@ -25,19 +20,38 @@ export type FloorType =
   | "mramorova"
   | "metalicka";
 
-export type MaterialUnit = "area" | "level";
+export type MaterialUnit = "area" | "level" | "count";
 
 export interface Material {
   id: string;
   floor_type: FloorType;
   name: string;
   unit: MaterialUnit;
-  consumption_kg_per_sqm: number;
-  package_size_kg: number;
-  package_price: number;
-  work_per_sqm: number;
-  poolable: boolean;
+  /** FINÁLNA PREDAJNÁ CENA za 1 m² (vrát. marže a DPH). Pre unit="count" sa nepoužíva.
+   * Pri unit="level" je to FIXNÁ časť (primer + práca + réžia) nezávislá od mm. */
+  price_per_sqm: number;
+  /** Pre unit="count": FINÁLNA cena za 1 ks (napr. 20 € / prasklina). */
+  price_per_unit?: number;
+  /** Pre unit="level": prírastok cena/m²/mm (napr. Sika Level-30 4,20 €/m²/mm). */
+  price_per_sqm_per_mm?: number;
+  /** Pre unit="level": minimálna hrúbka v mm (default povolenia, default fallback). */
+  min_mm?: number;
+  /** Pre unit="level": default hrúbka v mm pre init. */
+  default_mm?: number;
+  /** Pre unit="count": label jednotky pre UI. */
+  unit_label?: string;
   optional: boolean;
+  /**
+   * Default stav checkboxu — ak je `false`, operácia je v init stave VYPNUTÁ
+   * aj keď nie je optional. Ak nie je nastavené, defaultne `!optional`.
+   */
+  default_enabled?: boolean;
+  /**
+   * Variant materiálu — keď jeden typ podlahy má niekoľko alternatívnych
+   * materiálov (napr. jednofarebná: epoxid vs polyuretán). Do calcs ide len
+   * materiál s aktívnym variantom; ostatné sú odfiltrované.
+   */
+  variant?: "epoxid" | "polyuretan";
 }
 
 export const FLOOR_TYPE_LABELS: Record<FloorType, string> = {
@@ -69,43 +83,32 @@ export const FLOOR_TYPE_META: Record<
   },
 };
 
-// Spoločné prep operácie pre všetky 4 typy
-function commonPrep(floor_type: FloorType): Material[] {
+// ────────────────────────────────────────────────────────────────────────
+// Helper: voliteľné operácie spoločné pre všetky typy podlahy.
+// ────────────────────────────────────────────────────────────────────────
+function commonOptional(floor_type: FloorType): Material[] {
   return [
     {
-      id: `${floor_type}-priprava`,
+      id: `${floor_type}-zosivanie`,
       floor_type,
-      name: "Príprava (diamantové brúsenie)",
-      unit: "area",
-      consumption_kg_per_sqm: 0,
-      package_size_kg: 0,
-      package_price: 0,
-      work_per_sqm: 9,
-      poolable: true,
-      optional: false,
-    },
-    {
-      id: `${floor_type}-penetracia`,
-      floor_type,
-      name: "Penetrácia",
-      unit: "area",
-      consumption_kg_per_sqm: 0.3,
-      package_size_kg: 10,
-      package_price: 75,
-      work_per_sqm: 4,
-      poolable: true,
-      optional: false,
+      name: "Zošívanie podkladu",
+      unit: "count",
+      price_per_sqm: 0,
+      price_per_unit: 20, // 20 € finálne za 1 prasklinu
+      unit_label: "ks prasklín",
+      optional: true,
     },
     {
       id: `${floor_type}-nivelacia`,
       floor_type,
       name: "Nivelácia (samonivelizačná stierka)",
       unit: "level",
-      consumption_kg_per_sqm: 1.6,
-      package_size_kg: 25,
-      package_price: 30,
-      work_per_sqm: 5,
-      poolable: true,
+      // Sika Level-30 — spotreba 1,8 kg/m² za každý 1 mm hrúbky.
+      // Cena = m² × (7,80 + 4,20 × mm). Finálna predajná, vrát. marže a DPH.
+      price_per_sqm: 7.8, // fixná časť: primer + práca + réžia
+      price_per_sqm_per_mm: 4.2, // prírastok za každý 1 mm vrstvy
+      min_mm: 4, // pod 4 mm nivelačka praská (Sika)
+      default_mm: 4,
       optional: true,
     },
   ];
@@ -113,136 +116,183 @@ function commonPrep(floor_type: FloorType): Material[] {
 
 export const MATERIALS: Material[] = [
   // ═══ JEDNOFAREBNÁ ════════════════════════════════════════════════════
-  ...commonPrep("jednofarebna"),
   {
-    id: "jednofarebna-pigmentovy-epoxid",
+    id: "jednofarebna-uprava",
     floor_type: "jednofarebna",
-    name: "Pigmentovaný epoxid (jednofarebný)",
+    name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    consumption_kg_per_sqm: 1.5,
-    package_size_kg: 20,
-    package_price: 450,
-    work_per_sqm: 15,
-    poolable: true,
+    price_per_sqm: 6,
     optional: false,
   },
+  // Penetrácia — variant Epoxid
   {
-    id: "jednofarebna-lak",
+    id: "jednofarebna-penetracia-epoxid",
+    floor_type: "jednofarebna",
+    name: "Penetrácia",
+    unit: "area",
+    price_per_sqm: 8,
+    optional: false,
+    variant: "epoxid",
+  },
+  // Penetrácia — variant Polyuretán
+  {
+    id: "jednofarebna-penetracia-polyuretan",
+    floor_type: "jednofarebna",
+    name: "Penetrácia",
+    unit: "area",
+    price_per_sqm: 9,
+    optional: false,
+    variant: "polyuretan",
+  },
+  // Farebný náter — variant Epoxid (264 Plus)
+  // Cieľ: 6 + 8 + 30 = 50 €/m² bez laku
+  {
+    id: "jednofarebna-farebny-epoxid",
+    floor_type: "jednofarebna",
+    name: "Farebný náter",
+    unit: "area",
+    price_per_sqm: 30,
+    optional: false,
+    variant: "epoxid",
+  },
+  // Farebný náter — variant Polyuretán
+  // Cieľ: 6 + 9 + 56 + 9 = 80 €/m² s lakom
+  {
+    id: "jednofarebna-farebny-polyuretan",
+    floor_type: "jednofarebna",
+    name: "Farebný náter",
+    unit: "area",
+    price_per_sqm: 56,
+    optional: false,
+    variant: "polyuretan",
+  },
+  // Vrchný lak — variant Epoxid (default VYPNUTÝ — 264 je sám o sebe finál)
+  {
+    id: "jednofarebna-lak-epoxid",
     floor_type: "jednofarebna",
     name: "Vrchný lak",
     unit: "area",
-    consumption_kg_per_sqm: 0.15,
-    package_size_kg: 5,
-    package_price: 80,
-    work_per_sqm: 8,
-    poolable: true,
+    price_per_sqm: 6,
     optional: false,
+    default_enabled: false,
+    variant: "epoxid",
   },
+  // Vrchný lak — variant Polyuretán (default ZAPNUTÝ)
+  {
+    id: "jednofarebna-lak-polyuretan",
+    floor_type: "jednofarebna",
+    name: "Vrchný lak",
+    unit: "area",
+    price_per_sqm: 9,
+    optional: false,
+    default_enabled: true,
+    variant: "polyuretan",
+  },
+  ...commonOptional("jednofarebna"),
 
   // ═══ CHIPSOVÁ ════════════════════════════════════════════════════════
-  ...commonPrep("chipsova"),
   {
-    id: "chipsova-zaklad",
+    id: "chipsova-uprava",
     floor_type: "chipsova",
-    name: "Základný náter (color base)",
+    name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    consumption_kg_per_sqm: 0.4,
-    package_size_kg: 10,
-    package_price: 90,
-    work_per_sqm: 6,
-    poolable: true,
+    price_per_sqm: 6,
     optional: false,
   },
   {
-    id: "chipsova-chipsy",
+    id: "chipsova-penetracia",
     floor_type: "chipsova",
-    name: "Chipsy (PVC flakes),aplikácia",
+    name: "Penetrácia",
     unit: "area",
-    consumption_kg_per_sqm: 0.3,
-    package_size_kg: 5,
-    package_price: 45,
-    work_per_sqm: 10,
-    poolable: true,
+    price_per_sqm: 7,
     optional: false,
   },
   {
-    id: "chipsova-clear-coat",
+    id: "chipsova-farebny",
     floor_type: "chipsova",
-    name: "Vrchný lak (clear coat,uzamkne chipsy)",
+    name: "Farebný náter",
     unit: "area",
-    consumption_kg_per_sqm: 0.4,
-    package_size_kg: 5,
-    package_price: 80,
-    work_per_sqm: 8,
-    poolable: true,
+    // TODO: potvrdiť cenu — obsahuje odhad ceny chipov + piesku
+    price_per_sqm: 26,
     optional: false,
   },
+  // Vrchný lak — pri chipsovej sa NEDÁVA (rozhodnutie 2026-06-26)
+  ...commonOptional("chipsova"),
 
-  // ═══ MRAMOROVÁ ═══════════════════════════════════════════════════════
-  ...commonPrep("mramorova"),
+  // ═══ MRAMOROVÁ (Topstone) ════════════════════════════════════════════
   {
-    id: "mramorova-epoxid",
+    id: "mramorova-uprava",
     floor_type: "mramorova",
-    name: "Mramorový epoxid (2 farby)",
+    name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    consumption_kg_per_sqm: 1.8,
-    package_size_kg: 20,
-    package_price: 720,
-    work_per_sqm: 35,
-    poolable: false, // NEZLIEVATEĽNÝ
+    price_per_sqm: 6,
+    optional: false,
+  },
+  {
+    id: "mramorova-penetracia",
+    floor_type: "mramorova",
+    name: "Penetrácia",
+    unit: "area",
+    price_per_sqm: 12, // Topstone báza
+    optional: false,
+  },
+  {
+    id: "mramorova-farebny",
+    floor_type: "mramorova",
+    name: "Farebný náter",
+    unit: "area",
+    // Topstone mramorový epoxid — finálna predajná cena
+    // (zrovnanie s epoxidovo.sk "od 139 €/m²")
+    price_per_sqm: 110,
     optional: false,
   },
   {
     id: "mramorova-lak",
     floor_type: "mramorova",
-    name: "Vrchný high-gloss lak",
+    name: "Vrchný lak",
     unit: "area",
-    consumption_kg_per_sqm: 0.15,
-    package_size_kg: 5,
-    package_price: 90,
-    work_per_sqm: 8,
-    poolable: true,
+    price_per_sqm: 11, // Topstone vrchný lak
     optional: false,
+    default_enabled: true,
   },
+  ...commonOptional("mramorova"),
 
-  // ═══ METALICKÁ ═══════════════════════════════════════════════════════
-  ...commonPrep("metalicka"),
+  // ═══ METALICKÁ (Topstone EP11 + EP02 báza, EP22 Plus vrch) ════════════
   {
-    id: "metalicka-zaklad",
+    id: "metalicka-uprava",
     floor_type: "metalicka",
-    name: "Základný náter (tmavý)",
+    name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    consumption_kg_per_sqm: 0.4,
-    package_size_kg: 10,
-    package_price: 90,
-    work_per_sqm: 6,
-    poolable: true,
+    price_per_sqm: 6,
     optional: false,
   },
   {
-    id: "metalicka-pigment",
+    id: "metalicka-penetracia",
     floor_type: "metalicka",
-    name: "Metalický pigmentový epoxid",
+    name: "Penetrácia",
     unit: "area",
-    consumption_kg_per_sqm: 1.5,
-    package_size_kg: 20,
-    package_price: 600,
-    work_per_sqm: 18,
-    poolable: false, // NEZLIEVATEĽNÝ
+    price_per_sqm: 14, // EP02 báza 2×
     optional: false,
   },
   {
-    id: "metalicka-pu-lak",
+    id: "metalicka-farebny",
     floor_type: "metalicka",
-    name: "Vrchný PU lak lesklý",
+    name: "Farebný náter",
     unit: "area",
-    consumption_kg_per_sqm: 0.15,
-    package_size_kg: 5,
-    package_price: 80,
-    work_per_sqm: 8,
-    poolable: true,
+    // Topstone EP11 metalic — finálna predajná cena (vrát. marže a DPH)
+    price_per_sqm: 90,
     optional: false,
   },
+  {
+    id: "metalicka-lak",
+    floor_type: "metalicka",
+    name: "Vrchný lak",
+    unit: "area",
+    price_per_sqm: 19, // Topstone EP22 Plus — povinný
+    optional: false,
+    default_enabled: true,
+  },
+  ...commonOptional("metalicka"),
 ];
 
 export function getMaterialsByFloorType(type: FloorType): Material[] {
@@ -257,48 +307,54 @@ export interface QuoteLineCalc {
   poolable: boolean;
   kg_needed: number;
   packages: number;
+  /** Náklad pred maržou. */
   material_cost: number;
   work_cost: number;
+  /** Predajná cena = náklad / (1 − marža). */
   total: number;
 }
 
+/**
+ * Vypočíta cenovú položku jednej operácie.
+ *
+ * Sadzby v Material sú UŽ FINÁLNE predajné ceny (vrátane marže aj DPH).
+ *
+ *   - unit="count" → m² parameter je počet ks; cena = ks × price_per_unit
+ *   - unit="area"  → cena = m² × price_per_sqm
+ *   - unit="level" → cena = m² × (price_per_sqm + price_per_sqm_per_mm × mm)
+ *                    mm sa clampuje na min_mm (default 4 pri nivelácii)
+ */
 export function calcLine(
   m: Material,
   m2: number,
   mm: number,
-  poolableOverride?: boolean,
 ): QuoteLineCalc {
-  const poolable = poolableOverride ?? m.poolable;
-  const kg_needed =
-    m.unit === "level"
-      ? m.consumption_kg_per_sqm * m2 * mm
-      : m.consumption_kg_per_sqm * m2;
+  let qty = Math.max(0, m2);
+  let mmEff = 0;
+  let total = 0;
 
-  let packages = 0;
-  let material_cost = 0;
-  if (m.package_size_kg > 0 && kg_needed > 0) {
-    if (poolable) {
-      packages = kg_needed / m.package_size_kg;
-      material_cost = kg_needed * (m.package_price / m.package_size_kg);
-    } else {
-      packages = Math.ceil(kg_needed / m.package_size_kg);
-      material_cost = packages * m.package_price;
-    }
+  if (m.unit === "count") {
+    qty = Math.floor(qty);
+    total = qty * (m.price_per_unit ?? 0);
+  } else if (m.unit === "level") {
+    // Hrúbka clampnutá na minimum (napr. 4 mm pre Sika Level-30)
+    mmEff = Math.max(m.min_mm ?? 0, mm);
+    const ratePerSqm = m.price_per_sqm + (m.price_per_sqm_per_mm ?? 0) * mmEff;
+    total = qty * ratePerSqm;
+  } else {
+    total = qty * m.price_per_sqm;
   }
-
-  const work_cost = m2 * m.work_per_sqm;
-  const total = material_cost + work_cost;
 
   return {
     material_id: m.id,
     material_name: m.name,
-    m2,
-    mm,
-    poolable,
-    kg_needed,
-    packages,
-    material_cost,
-    work_cost,
+    m2: qty,
+    mm: mmEff,
+    poolable: false,
+    kg_needed: 0,
+    packages: 0,
+    material_cost: total,
+    work_cost: 0,
     total,
   };
 }

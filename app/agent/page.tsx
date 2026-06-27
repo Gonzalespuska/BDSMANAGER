@@ -41,6 +41,9 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
   const user = await getCurrentAppUser();
   if (!user) return null;
 
+  // Admin vidí VŠETKY leady, obchodník iba svoje pridelené.
+  const isAdmin = user.role === "admin";
+
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
@@ -79,64 +82,44 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           .limit(200);
       })()
     : (() => {
+    // Helper: pre obchodníka pridá assigned_to filter, pre admina nie.
     switch (tab) {
-      case "kontakt":
-        // "Kontakt" — agent už zavolal, zákazník zdvihol → klasifikuje
-        return supabase
-          .from("leads")
-          .select("*")
-          .eq("status", "phone_revealed")
-          .eq("assigned_to", user.id)
-          .order("last_activity_at", { ascending: false })
-          .limit(200);
+      case "kontakt": {
+        let q = supabase.from("leads").select("*").eq("status", "phone_revealed");
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        return q.order("last_activity_at", { ascending: false }).limit(200);
+      }
 
-      case "nedovolany":
-        return supabase
-          .from("leads")
-          .select("*")
-          .eq("status", "no_answer")
-          .eq("assigned_to", user.id)
-          .order("created_at", { ascending: false })
-          .limit(200);
+      case "nedovolany": {
+        let q = supabase.from("leads").select("*").eq("status", "no_answer");
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        return q.order("created_at", { ascending: false }).limit(200);
+      }
 
-      case "otvorene":
-        return supabase
-          .from("leads")
-          .select("*")
-          .eq("assigned_to", user.id)
-          .in("status", ["interested", "quote_sent"])
-          .order("last_activity_at", { ascending: false })
-          .limit(200);
+      case "otvorene": {
+        let q = supabase.from("leads").select("*").in("status", ["interested", "quote_sent"]);
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        return q.order("last_activity_at", { ascending: false }).limit(200);
+      }
 
-      case "ukoncene":
-        return supabase
-          .from("leads")
-          .select("*")
-          .eq("assigned_to", user.id)
-          .eq("status", "won")
-          .order("last_activity_at", { ascending: false })
-          .limit(200);
+      case "ukoncene": {
+        let q = supabase.from("leads").select("*").eq("status", "won");
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        return q.order("last_activity_at", { ascending: false }).limit(200);
+      }
 
-      case "archivovane":
-        return supabase
-          .from("leads")
-          .select("*")
-          .eq("assigned_to", user.id)
-          .in("status", ["archived", "lost", "not_interested"])
-          .order("last_activity_at", { ascending: false })
-          .limit(200);
+      case "archivovane": {
+        let q = supabase.from("leads").select("*").in("status", ["archived", "lost", "not_interested"]);
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        return q.order("last_activity_at", { ascending: false }).limit(200);
+      }
 
       case "novy":
-      default:
-        // "Nové" — len moje pridelené fresh leady. Auto-assign trigger
-        // sa stará o priradenie hneď pri inserte, agent ne-musí klikať.
-        return supabase
-          .from("leads")
-          .select("*")
-          .eq("status", "new")
-          .eq("assigned_to", user.id)
-          .order("created_at", { ascending: false })
-          .limit(200);
+      default: {
+        let q = supabase.from("leads").select("*").eq("status", "new");
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        return q.order("created_at", { ascending: false }).limit(200);
+      }
     }
   })();
 
@@ -150,36 +133,54 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     archivovaneCountRes,
   ] = await Promise.all([
     leadsListQuery,
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "new")
-      .eq("assigned_to", user.id),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "phone_revealed")
-      .eq("assigned_to", user.id),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "no_answer")
-      .eq("assigned_to", user.id),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("assigned_to", user.id)
-      .in("status", ["interested", "quote_sent"]),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("assigned_to", user.id)
-      .eq("status", "won"),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("assigned_to", user.id)
-      .in("status", ["archived", "lost", "not_interested"]),
+    (() => {
+      let q = supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "new");
+      if (!isAdmin) q = q.eq("assigned_to", user.id);
+      return q;
+    })(),
+    (() => {
+      let q = supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "phone_revealed");
+      if (!isAdmin) q = q.eq("assigned_to", user.id);
+      return q;
+    })(),
+    (() => {
+      let q = supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "no_answer");
+      if (!isAdmin) q = q.eq("assigned_to", user.id);
+      return q;
+    })(),
+    (() => {
+      let q = supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["interested", "quote_sent"]);
+      if (!isAdmin) q = q.eq("assigned_to", user.id);
+      return q;
+    })(),
+    (() => {
+      let q = supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "won");
+      if (!isAdmin) q = q.eq("assigned_to", user.id);
+      return q;
+    })(),
+    (() => {
+      let q = supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["archived", "lost", "not_interested"]);
+      if (!isAdmin) q = q.eq("assigned_to", user.id);
+      return q;
+    })(),
   ]);
 
   const rawLeads = (leadsRes.data ?? []) as Lead[];

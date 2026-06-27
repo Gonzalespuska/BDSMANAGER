@@ -58,10 +58,10 @@ export function AppShell({
             className="hover:opacity-80 transition-opacity"
           >
             <div className="text-2xl md:text-3xl font-extrabold tracking-tight leading-none">
-              BDS<span className="text-sky-500">Manager</span>
+              Epoxidovo<span className="text-sky-500"> Manager</span>
             </div>
             <div className="mt-1 text-[11px] md:text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Epoxidovo
+              CRM
             </div>
           </Link>
 

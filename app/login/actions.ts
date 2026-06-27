@@ -24,9 +24,11 @@ export async function sendOtpAction(formData: FormData) {
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
+  const testMode = String(formData.get("test") ?? "") === "1";
+  const testQuery = testMode ? "&test=1" : "";
 
   if (!email) {
-    redirect("/login?error=missing_email");
+    redirect("/login?error=missing_email" + testQuery);
   }
 
   // ── Whitelist gate ──
@@ -40,13 +42,13 @@ export async function sendOtpAction(formData: FormData) {
     if (!appUser) {
       console.warn("[sendOtp] BLOCKED — email not in whitelist:", email);
       redirect(
-        `/login?error=unauthorized&email=${encodeURIComponent(email)}`,
+        `/login?error=unauthorized&email=${encodeURIComponent(email)}${testQuery}`,
       );
     }
     if (!appUser.active) {
       console.warn("[sendOtp] BLOCKED — user deactivated:", email);
       redirect(
-        `/login?error=deactivated&email=${encodeURIComponent(email)}`,
+        `/login?error=deactivated&email=${encodeURIComponent(email)}${testQuery}`,
       );
     }
   } catch (e) {
@@ -61,7 +63,7 @@ export async function sendOtpAction(formData: FormData) {
       throw e;
     }
     console.error("[sendOtp] whitelist lookup error:", e);
-    redirect(`/login?error=send_failed&email=${encodeURIComponent(email)}`);
+    redirect(`/login?error=send_failed&email=${encodeURIComponent(email)}${testQuery}`);
   }
 
   const supabase = await createClient();
@@ -82,7 +84,7 @@ export async function sendOtpAction(formData: FormData) {
       lower.includes("not allowed")
     ) {
       redirect(
-        `/login?error=unauthorized&email=${encodeURIComponent(email)}`,
+        `/login?error=unauthorized&email=${encodeURIComponent(email)}${testQuery}`,
       );
     }
 
@@ -91,14 +93,14 @@ export async function sendOtpAction(formData: FormData) {
       const match = error.message.match(/after (\d+) seconds?/i);
       const secs = match ? match[1] : "60";
       redirect(
-        `/login?error=rate_limit&seconds=${secs}&email=${encodeURIComponent(email)}`,
+        `/login?error=rate_limit&seconds=${secs}&email=${encodeURIComponent(email)}${testQuery}`,
       );
     }
 
-    redirect(`/login?error=send_failed&email=${encodeURIComponent(email)}`);
+    redirect(`/login?error=send_failed&email=${encodeURIComponent(email)}${testQuery}`);
   }
 
-  redirect(`/login/verify?email=${encodeURIComponent(email)}`);
+  redirect(`/login/verify?email=${encodeURIComponent(email)}${testQuery}`);
 }
 
 /**

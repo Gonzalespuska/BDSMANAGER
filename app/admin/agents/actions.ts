@@ -1,0 +1,282 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+
+import { getCurrentAppUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * Server actions pre /admin/agents.
+ * Všetky vyžadujú role="admin" (vrátia { ok: false, error: "forbidden" }).
+ */
+
+async function requireAdmin() {
+  const me = await getCurrentAppUser();
+  if (!me) return null;
+  if (me.role !== "admin") return null;
+  return me;
+}
+
+type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
+
+// ────────────────────────────────────────────────────────────────────────
+// CREATE
+// ────────────────────────────────────────────────────────────────────────
+export async function createAgentAction(input: {
+  name: string;
+  email: string;
+  role: "admin" | "user";
+  capacity: number;
+}): Promise<ActionResult<{ id: string; magic_link?: string }>> {
+  const me = await requireAdmin();
+  if (!me) return { ok: false, error: "forbidden" };
+
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const role = input.role === "admin" ? "admin" : "user";
+  const capacity = Math.max(0, Math.min(10, Math.floor(input.capacity || 5)));
+
+  if (!name) return { ok: false, error: "Meno je povinné" };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Neplatný email" };
+  }
+
+  const sb = createAdminClient();
+
+  // Existuje už user s týmto emailom?
+  const { data: existing } = await sb
+    .from("users")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (existing) {
+    return { ok: false, error: "User s týmto emailom už existuje" };
+  }
+
+  // 1. Vytvor Supabase auth user — bez hesla, prihlasovanie cez OTP magic link.
+  //    email_confirm: false → user musí klikuť na magic link.
+  let authUserId: string | null = null;
+  let magicLink: string | undefined;
+
+  try {
+    const { data: authUser, error: authError } = await sb.auth.admin.createUser({
+      email,
+      email_confirm: true, // confirmnúť hneď aby OTP fungovalo
+    });
+
+    if (authError) {
+      console.warn("[createAgentAction] auth.admin.createUser failed:", authError);
+      // Pokračujeme bez auth — admin musí ručne pozvať usera.
+    } else if (authUser?.user) {
+      authUserId = authUser.user.id;
+      // Vygeneruj magic link aby ho admin mohol poslať userovi.
+      try {
+        const { data: linkData } = await sb.auth.admin.generateLink({
+          type: "magiclink",
+          email,
+        });
+        magicLink = linkData?.properties?.action_link;
+      } catch (e) {
+        console.warn("[createAgentAction] generateLink failed:", e);
+      }
+    }
+  } catch (e) {
+    console.warn("[createAgentAction] auth admin API not available:", e);
+  }
+
+  // 2. Vlož row do public.users.
+  const { data: newUser, error: insertError } = await sb
+    .from("users")
+    .insert({
+      auth_id: authUserId,
+      email,
+      name,
+      role,
+      active: true,
+      capacity,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !newUser) {
+    return {
+      ok: false,
+      error: insertError?.message ?? "Vytvorenie zlyhalo",
+    };
+  }
+
+  revalidatePath("/admin/agents");
+  revalidatePath("/admin");
+  return { ok: true, data: { id: newUser.id, magic_link: magicLink } };
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// UPDATE (čiastočný)
+// ────────────────────────────────────────────────────────────────────────
+export async function updateAgentAction(
+  id: string,
+  patch: {
+    name?: string;
+    role?: "admin" | "user";
+    capacity?: number;
+    active?: boolean;
+  },
+): Promise<ActionResult> {
+  const me = await requireAdmin();
+  if (!me) return { ok: false, error: "forbidden" };
+
+  const update: Record<string, unknown> = {};
+  if (patch.name !== undefined) {
+    const n = patch.name.trim();
+    if (!n) return { ok: false, error: "Meno nemôže byť prázdne" };
+    update.name = n;
+  }
+  if (patch.role !== undefined) {
+    update.role = patch.role === "admin" ? "admin" : "user";
+  }
+  if (patch.capacity !== undefined) {
+    const c = Math.max(0, Math.min(10, Math.floor(patch.capacity)));
+    update.capacity = c;
+  }
+  if (patch.active !== undefined) {
+    update.active = !!patch.active;
+  }
+  if (Object.keys(update).length === 0) {
+    return { ok: false, error: "Nič na update" };
+  }
+
+  // Safety: admin nemôže sám seba degradovať na user-a (nech sa nezamkne von)
+  if (
+    id === me.id &&
+    patch.role !== undefined &&
+    patch.role !== "admin"
+  ) {
+    return {
+      ok: false,
+      error: "Nemôžeš si zmeniť rolu — len iný admin to môže urobiť.",
+    };
+  }
+  if (id === me.id && patch.active === false) {
+    return { ok: false, error: "Nemôžeš sám seba deaktivovať." };
+  }
+
+  const sb = createAdminClient();
+  const { error } = await sb.from("users").update(update).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/agents");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// DEACTIVATE (soft delete)
+// ────────────────────────────────────────────────────────────────────────
+export async function deactivateAgentAction(id: string): Promise<ActionResult> {
+  return updateAgentAction(id, { active: false });
+}
+
+export async function activateAgentAction(id: string): Promise<ActionResult> {
+  return updateAgentAction(id, { active: true });
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// DELETE AGENT (úplne odstrániť — DB + Supabase auth)
+// Leady sa unassignnú (assigned_to = null), nemažú sa.
+// ────────────────────────────────────────────────────────────────────────
+export async function deleteAgentAction(
+  id: string,
+): Promise<ActionResult<{ deleted_leads_unassigned: number }>> {
+  const me = await requireAdmin();
+  if (!me) return { ok: false, error: "forbidden" };
+  if (id === me.id) {
+    return { ok: false, error: "Nemôžeš sám seba zmazať." };
+  }
+
+  const sb = createAdminClient();
+
+  // 1) Načítaj agenta (kvôli auth_id)
+  const { data: agent } = await sb
+    .from("users")
+    .select("id, auth_id, email")
+    .eq("id", id)
+    .maybeSingle();
+  if (!agent) return { ok: false, error: "Agent neexistuje" };
+
+  // 2) Unassign leady
+  const { error: unassignErr, count } = await sb
+    .from("leads")
+    .update({ assigned_to: null }, { count: "exact" })
+    .eq("assigned_to", id);
+  if (unassignErr) {
+    return {
+      ok: false,
+      error: `Unassign leadov zlyhal: ${unassignErr.message}`,
+    };
+  }
+
+  // 3) Zmazať z public.users
+  const { error: delErr } = await sb.from("users").delete().eq("id", id);
+  if (delErr) {
+    return { ok: false, error: `Mazanie zlyhalo: ${delErr.message}` };
+  }
+
+  // 4) Zmazať Supabase auth user (best-effort)
+  if (agent.auth_id) {
+    try {
+      await sb.auth.admin.deleteUser(agent.auth_id as string);
+    } catch (e) {
+      console.warn("[deleteAgent] auth deleteUser failed (non-fatal):", e);
+    }
+  }
+
+  revalidatePath("/admin/agents");
+  revalidatePath("/admin");
+  revalidatePath("/admin/leads");
+  return { ok: true, data: { deleted_leads_unassigned: count ?? 0 } };
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// SEND INVITE (OTP email)
+// Pošle agentovi 6-cifr OTP kód na email cez Supabase. Agent ho zadá na
+// /login/verify a prihlási sa.
+// ────────────────────────────────────────────────────────────────────────
+export async function sendInviteAction(
+  id: string,
+): Promise<ActionResult> {
+  const me = await requireAdmin();
+  if (!me) return { ok: false, error: "forbidden" };
+
+  const sb = createAdminClient();
+  const { data: user } = await sb
+    .from("users")
+    .select("email, active")
+    .eq("id", id)
+    .single();
+
+  if (!user?.email) return { ok: false, error: "User nenájdený" };
+  if (!user.active)
+    return { ok: false, error: "User je deaktivovaný — najprv ho aktivuj" };
+
+  try {
+    // signInWithOtp pošle 6-cifr kód na email (Supabase SMTP)
+    const { error } = await sb.auth.signInWithOtp({
+      email: user.email,
+      options: { shouldCreateUser: false },
+    });
+    if (error) {
+      const lower = error.message.toLowerCase();
+      if (lower.includes("rate") || lower.includes("security")) {
+        return { ok: false, error: "Rate limit Supabase — skús o chvíľu znova" };
+      }
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Neznáma chyba",
+    };
+  }
+}

@@ -20,7 +20,12 @@ export default async function GeneratorLayout({
   const selfPaused = user.capacity === 0;
   const notifications = await loadNotifications(user.id);
   return (
-    <AppShell user={user} selfPaused={selfPaused} notifications={notifications}>
+    <AppShell
+      user={user}
+      selfPaused={selfPaused}
+      notifications={notifications}
+      wide
+    >
       {children}
     </AppShell>
   );

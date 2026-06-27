@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AlertCircle, ArrowLeft, Mail, Zap } from "lucide-react";
+import { AlertCircle, Mail, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,25 +11,24 @@ import { sendOtpAction } from "./actions";
 export const runtime = "edge";
 
 export const metadata: Metadata = {
-  title: "Prihlásenie · BDSManager",
+  title: "Prihlásenie · Epoxidovo Manager",
   robots: { index: false, follow: false },
 };
 
-interface LoginPageProps {
-  searchParams: Promise<{ error?: string; email?: string; seconds?: string }>;
-}
-
-function errorMessage(error: string | undefined, seconds?: string): string | null {
+function errorMessage(
+  error: string | undefined,
+  seconds?: string,
+): string | null {
   if (!error) return null;
   switch (error) {
     case "missing_email":
       return "Zadaj svoj email.";
     case "unauthorized":
-      return "Tento email nie je pridaný ako používateľ. Kontaktuj administrátora.";
+      return "Tento email nemá prístup. Kontaktuj administrátora.";
     case "deactivated":
       return "Tvoj účet bol deaktivovaný. Kontaktuj administrátora.";
     case "rate_limit":
-      return `Príliš často. Skús znova o ${seconds ?? "60"} sekúnd (Supabase free tier limit).`;
+      return `Príliš často. Skús znova o ${seconds ?? "60"} sekúnd.`;
     case "send_failed":
       return "Posielanie kódu zlyhalo. Skús to znova o chvíľu.";
     default:
@@ -38,33 +36,62 @@ function errorMessage(error: string | undefined, seconds?: string): string | nul
   }
 }
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
-  // Ak je už prihlásený, redirect rovno na dashboard
-  const existing = await getCurrentAppUser();
-  if (existing) {
-    redirect(dashboardPathForRole(existing.role));
-  }
+interface LoginPageSearch {
+  error?: string;
+  email?: string;
+  seconds?: string;
+  test?: string;
+}
 
-  const { error, email: prefillEmail, seconds } = await searchParams;
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<LoginPageSearch>;
+}) {
+  const { error, email: prefillEmail, seconds, test } = await searchParams;
+  const isTestMode = test === "1";
+
+  if (!isTestMode) {
+    const existing = await getCurrentAppUser();
+    if (existing) {
+      redirect(dashboardPathForRole(existing.role));
+    }
+  }
   const msg = errorMessage(error, seconds);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-muted/30 p-6">
-      <div className="w-full max-w-sm space-y-6">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" aria-hidden />
-          Späť
-        </Link>
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 via-white to-sky-100 p-4 sm:p-6 relative overflow-hidden">
+      {/* Dekoračné kruhy v pozadí */}
+      <div
+        className="absolute top-[-160px] left-[-160px] w-[420px] h-[420px] rounded-full bg-sky-200/40 blur-3xl pointer-events-none"
+        aria-hidden
+      />
+      <div
+        className="absolute bottom-[-200px] right-[-160px] w-[480px] h-[480px] rounded-full bg-sky-300/30 blur-3xl pointer-events-none"
+        aria-hidden
+      />
 
-        <div className="rounded-lg border bg-background shadow-sm p-8 space-y-6">
-          <div className="space-y-1.5">
-            <div className="text-xl font-bold tracking-tight">
-              BDS<span className="text-sky-500">Manager</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
+      <div className="w-full max-w-md relative z-10">
+        {/* Logo + nadpis */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-sky-600 text-white shadow-lg shadow-sky-500/30 mb-3">
+            <Sparkles className="w-7 h-7" aria-hidden />
+          </div>
+          <div className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
+            Epoxidovo<span className="text-sky-500"> Manager</span>
+          </div>
+          <div className="mt-0.5 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+            CRM
+          </div>
+        </div>
+
+        {/* Hlavná karta */}
+        <div className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur shadow-2xl shadow-sky-900/5 p-6 sm:p-8 space-y-5">
+          <div>
+            <h1 className="text-lg font-extrabold tracking-tight">
+              Prihlásenie
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 leading-snug">
               Zadaj svoj firemný email — pošleme ti 6-cifrový kód.
             </p>
           </div>
@@ -72,19 +99,25 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           {msg && (
             <div
               role="alert"
-              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              className="flex items-start gap-2 rounded-lg border border-rose-300/60 bg-rose-50 px-3 py-2.5 text-sm text-rose-900"
             >
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+              <AlertCircle
+                className="w-4 h-4 mt-0.5 shrink-0 text-rose-600"
+                aria-hidden
+              />
               <span>{msg}</span>
             </div>
           )}
 
-          <form action={sendOtpAction} className="space-y-4">
+          <form action={sendOtpAction} className="space-y-3">
+            {isTestMode && <input type="hidden" name="test" value="1" />}
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Email
+              </Label>
               <div className="relative">
                 <Mail
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sky-500 pointer-events-none"
                   aria-hidden
                 />
                 <Input
@@ -95,42 +128,25 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   required
                   defaultValue={prefillEmail}
                   placeholder="ty@epoxidovo.sk"
-                  className="pl-9"
+                  className="pl-9 h-11 text-sm font-semibold"
                 />
               </div>
             </div>
 
-            <Button type="submit" className="w-full">
-              Poslať kód
+            <Button
+              type="submit"
+              className="w-full h-11 bg-gradient-to-br from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white font-bold shadow-md shadow-sky-500/30"
+            >
+              <Mail className="w-4 h-4 mr-2" aria-hidden />
+              Pošli mi kód
             </Button>
           </form>
 
-          <p className="text-xs text-muted-foreground text-center leading-relaxed">
-            Prístup majú iba pozvaní používatelia. Ak ti prístup nefunguje,
-            kontaktuj admina — <strong>info@epoxidovo.sk</strong>.
-          </p>
         </div>
 
-        {process.env.NODE_ENV !== "production" && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-800">
-              <Zap className="w-3.5 h-3.5" aria-hidden />
-              Dev only
-            </div>
-            <p className="text-xs text-amber-900 leading-relaxed">
-              Bez OTP, bez emailu, jedným klikom prihlas ako admin
-              (<code className="text-[10px] bg-amber-100 px-1 rounded">info@epoxidovo.sk</code>).
-              Zmizne v production builde.
-            </p>
-            <Button
-              asChild
-              variant="outline"
-              className="w-full border-amber-400 bg-amber-100 hover:bg-amber-200 text-amber-900"
-            >
-              <a href="/api/dev/login">🚀 Quick login</a>
-            </Button>
-          </div>
-        )}
+        <p className="mt-6 text-center text-[10px] text-muted-foreground/70 uppercase tracking-wider font-bold">
+          Epoxidovo s.r.o. · CRM systém
+        </p>
       </div>
     </main>
   );

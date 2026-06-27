@@ -194,24 +194,6 @@ export function ProfileMenu({
             </div>
           )}
 
-          {/* Workload tímu (admin / dev only) */}
-          {showTeamWorkload && (
-            <Link
-              href="/workload"
-              onClick={() => setOpen(false)}
-              className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-muted text-sm font-semibold inline-flex items-center gap-2.5"
-              role="menuitem"
-            >
-              <UsersIcon className="w-4 h-4 text-sky-600" aria-hidden />
-              Workload tímu
-              {isAdmin && (
-                <span className="ml-auto text-[9px] font-bold uppercase tracking-wider bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded">
-                  admin
-                </span>
-              )}
-            </Link>
-          )}
-
           {/* Divider */}
           <div className="border-t my-1.5" />
 

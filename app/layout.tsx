@@ -9,9 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BDSManager · Business Data Sales Manager",
+  title: "Epoxidovo Manager · CRM",
   description:
-    "Call-agent CRM s SLA trackingom. Združuje leady zo všetkých zdrojov na jedno miesto.",
+    "Epoxidovo CRM — leady, generátor ponúk, kalendár pripomienok.",
   robots: { index: false, follow: false },
 };
 

@@ -50,29 +50,59 @@ async function touchLastActive(userId: string): Promise<void> {
 }
 
 export async function getCurrentAppUser(): Promise<AppUser | null> {
-  // ─── DEV BYPASS — vystupuje ako obchodák ─────────────────────────────
+  // ─── DEV BYPASS ──────────────────────────────────────────────────────
+  // Preferenčné poradie:
+  //   1) DEV_AS_EMAIL env (manuálny override pre konkrétny test)
+  //   2) Prvý active=true admin v DB (aby admin sekcia hneď fungovala)
+  //   3) peter@epoxidovo.sk (obchodník — pôvodný default)
   if (process.env.NODE_ENV !== "production") {
-    // Cache (DEV_USER_CACHE) ostala vypnutá — fresh fetch každý request.
-    // Inak by mohol držať starý UUID po zmenách v users tabuľke (napr.
-    // re-create peter, change role).
     try {
       const admin = createAdminClient();
+      const preferEmail = (process.env.DEV_AS_EMAIL ?? "").trim().toLowerCase();
+
+      // 1) Manuálny override
+      if (preferEmail) {
+        const { data: u } = await admin
+          .from("users")
+          .select("id, auth_id, email, name, role, active, capacity")
+          .eq("email", preferEmail)
+          .maybeSingle();
+        if (u && u.active) {
+          void touchLastActive(u.id);
+          return u as AppUser;
+        }
+      }
+
+      // 2) Prvý active admin (aby si videl admin chrome).
+      // POZN: `created_at` musí byť v select-e aj keď podľa neho len orderujeme,
+      // inak PostgREST/Supabase JS vráti prázdny array (overený bug).
+      const { data: admins } = await admin
+        .from("users")
+        .select("id, auth_id, email, name, role, active, capacity, created_at")
+        .eq("role", "admin")
+        .eq("active", true)
+        .order("created_at", { ascending: true })
+        .limit(1);
+      const anyAdmin = admins?.[0];
+      if (anyAdmin) {
+        void touchLastActive(anyAdmin.id);
+        return anyAdmin as AppUser;
+      }
+
+      // 3) Peter (default obchodník)
       const { data: peter } = await admin
         .from("users")
         .select("id, auth_id, email, name, role, active, capacity")
         .eq("email", "peter@epoxidovo.sk")
         .maybeSingle();
       if (peter && peter.active) {
-        console.log("[dev bypass] returning peter:", peter.id);
         void touchLastActive(peter.id);
         return peter as AppUser;
-      } else {
-        console.warn("[dev bypass] peter not found or not active, peter=", peter);
       }
     } catch (e) {
-      console.warn("[dev bypass] peter lookup failed:", e);
+      console.warn("[dev bypass] lookup failed:", e);
     }
-    // Fallback iba ak peter naozaj neexistuje v DB
+    // Fallback iba ak naozaj nič v DB
     return {
       id: "dev-user",
       auth_id: null,
