@@ -25,7 +25,8 @@ type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: st
 export async function createAgentAction(input: {
   name: string;
   email: string;
-  role: "admin" | "user";
+  phone: string;
+  role: "admin" | "obchod" | "obhliadky" | "realizacie";
   capacity: number;
 }): Promise<ActionResult<{ id: string; magic_link?: string }>> {
   const me = await requireAdmin();
@@ -33,12 +34,20 @@ export async function createAgentAction(input: {
 
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
-  const role = input.role === "admin" ? "admin" : "user";
+  const phone = input.phone.trim();
+  const ALLOWED_ROLES = ["admin", "obchod", "obhliadky", "realizacie"] as const;
+  const role = (ALLOWED_ROLES as readonly string[]).includes(input.role)
+    ? input.role
+    : "obchod";
   const capacity = Math.max(0, Math.min(10, Math.floor(input.capacity || 5)));
 
   if (!name) return { ok: false, error: "Meno je povinné" };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, error: "Neplatný email" };
+  }
+  if (!phone) return { ok: false, error: "Telefón je povinný" };
+  if (phone.replace(/\s/g, "").length < 9) {
+    return { ok: false, error: "Telefón je príliš krátky" };
   }
 
   const sb = createAdminClient();
@@ -95,6 +104,7 @@ export async function createAgentAction(input: {
       role,
       active: true,
       capacity,
+      phone,
     })
     .select("id")
     .single();
@@ -118,9 +128,10 @@ export async function updateAgentAction(
   id: string,
   patch: {
     name?: string;
-    role?: "admin" | "user";
+    role?: "admin" | "obchod" | "obhliadky" | "realizacie";
     capacity?: number;
     active?: boolean;
+    phone?: string | null;
   },
 ): Promise<ActionResult> {
   const me = await requireAdmin();
@@ -133,7 +144,11 @@ export async function updateAgentAction(
     update.name = n;
   }
   if (patch.role !== undefined) {
-    update.role = patch.role === "admin" ? "admin" : "user";
+    const ALLOWED_ROLES = ["admin", "obchod", "obhliadky", "realizacie"];
+    if (!ALLOWED_ROLES.includes(patch.role)) {
+      return { ok: false, error: "Neplatná rola" };
+    }
+    update.role = patch.role;
   }
   if (patch.capacity !== undefined) {
     const c = Math.max(0, Math.min(10, Math.floor(patch.capacity)));
@@ -141,6 +156,9 @@ export async function updateAgentAction(
   }
   if (patch.active !== undefined) {
     update.active = !!patch.active;
+  }
+  if (patch.phone !== undefined) {
+    update.phone = patch.phone ? patch.phone.trim() : null;
   }
   if (Object.keys(update).length === 0) {
     return { ok: false, error: "Nič na update" };

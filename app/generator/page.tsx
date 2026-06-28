@@ -81,10 +81,39 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
   const params = await searchParams;
   let leadContext: LeadContext | null = null;
 
+  // Aktuálny obchodák — pre podpis ponuky (PDF footer + email)
+  const { getCurrentAppUser } = await import("@/lib/auth");
+  const me = await getCurrentAppUser();
+
+  // Načítaj phone z DB (nie je v AppUser type)
+  let agentPhone: string | null = null;
+  if (me?.id) {
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      const sb = createAdminClient();
+      const { data } = await sb
+        .from("users")
+        .select("phone")
+        .eq("id", me.id)
+        .maybeSingle();
+      agentPhone = (data?.phone as string | null) ?? null;
+    } catch (e) {
+      console.warn("[generator] phone fetch failed:", e);
+    }
+  }
+
+  const agentInfo = {
+    name: me?.name ?? "Obchodák Epoxidovo",
+    email: me?.email ?? "info@epoxidovo.sk",
+    phone: agentPhone,
+  };
+
   // ─── Demo mock leads (no DB needed) ──────────────────────────────────
   if (params.demo && DEMO_LEADS[params.demo]) {
     leadContext = DEMO_LEADS[params.demo];
-    return <GeneratorClient leadContext={leadContext} />;
+    return (
+      <GeneratorClient leadContext={leadContext} agentInfo={agentInfo} />
+    );
   }
 
   // ─── Real lead from DB ───────────────────────────────────────────────
@@ -121,5 +150,5 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
     }
   }
 
-  return <GeneratorClient leadContext={leadContext} />;
+  return <GeneratorClient leadContext={leadContext} agentInfo={agentInfo} />;
 }

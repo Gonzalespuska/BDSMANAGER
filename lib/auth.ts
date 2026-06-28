@@ -1,7 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type AppUserRole = "admin" | "user";
+// Pure data (typ, labely, farby) je v lib/roles.ts — bezpečné importnúť aj z
+// client komponentov. Tu re-exportujeme pre back-compat starých server súborov.
+export {
+  ROLE_LABELS,
+  ROLE_BADGE_CLASSES,
+  ROLE_ICON_NAME,
+  ALLOWED_ROLES,
+  dashboardPathForRole,
+  type AppUserRole,
+} from "@/lib/roles";
+
+import type { AppUserRole } from "@/lib/roles";
 
 export interface AppUser {
   id: string;
@@ -108,7 +119,7 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
       auth_id: null,
       email: "peter@epoxidovo.sk",
       name: "Peter (Obchodák)",
-      role: "user",
+      role: "obchod",
       active: true,
     };
   }
@@ -138,9 +149,4 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
   return appUser as AppUser;
 }
 
-/**
- * Vráti správny dashboard URL pre rolu.
- */
-export function dashboardPathForRole(role: AppUserRole): string {
-  return role === "admin" ? "/admin" : "/agent";
-}
+// dashboardPathForRole je re-exportované z lib/roles na vrchu súboru.

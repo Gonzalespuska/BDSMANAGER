@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   LogOut,
@@ -14,7 +15,6 @@ import {
 
 import type { AppUser } from "@/lib/auth";
 import { signOutAction } from "@/app/login/actions";
-import { setMyPauseAction } from "@/app/agent/profile-actions";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,6 +32,7 @@ export function ProfileMenu({
   user: AppUser;
   selfPaused: boolean;
 }) {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [confirmPause, setConfirmPause] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -58,15 +59,36 @@ export function ProfileMenu({
     if (busy) return;
     setBusy(true);
     const next = !paused;
-    const res = await setMyPauseAction(next);
-    setBusy(false);
-    if (!res.ok) {
-      alert(`Chyba: ${res.error}`);
+    try {
+      const r = await fetch("/api/agent/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: next }),
+      });
+      const json = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!r.ok || !json.ok) {
+        alert(
+          `Chyba: ${json.error ?? `HTTP ${r.status}` ?? "neznáma chyba"}`,
+        );
+        setBusy(false);
+        return;
+      }
+    } catch (e) {
+      alert(
+        `Chyba: ${e instanceof Error ? e.message : "neznáma chyba pri update"}`,
+      );
+      setBusy(false);
       return;
     }
     setPaused(next);
     setConfirmPause(false);
     setOpen(false);
+    setBusy(false);
+    // Refresh server-rendered chrome (PAUZA badge v headeri, banner v layouts)
+    router.refresh();
   }
 
   return (
@@ -81,10 +103,38 @@ export function ProfileMenu({
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background">
+        <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background relative">
           <UserIcon className="w-4 h-4" aria-hidden />
+          {/* Status bublinka — zelená keď prijíma leady, červená keď pauznutý */}
+          <span
+            className={cn(
+              "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background",
+              paused ? "bg-rose-500" : "bg-emerald-500",
+            )}
+            aria-hidden
+            title={paused ? "Neaktívny — leady prerušené" : "Aktívny — dostávaš leady"}
+          />
         </div>
         <span className="text-foreground">{user.email}</span>
+        {!isAdmin && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border",
+              paused
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : "bg-emerald-50 text-emerald-700 border-emerald-200",
+            )}
+          >
+            <span
+              className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                paused ? "bg-rose-500" : "bg-emerald-500",
+              )}
+              aria-hidden
+            />
+            {paused ? "Neaktívny" : "Aktívny"}
+          </span>
+        )}
         <span
           className={cn(
             "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
@@ -127,7 +177,7 @@ export function ProfileMenu({
           </div>
 
           {/* Pause / Resume */}
-          {user.role === "user" && (
+          {user.role === "obchod" && (
             <div className="px-1">
               {!confirmPause ? (
                 <button

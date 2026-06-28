@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { dashboardPathForRole } from "@/lib/auth";
+import { dashboardPathForRole, type AppUserRole } from "@/lib/auth";
 
 /**
  * Server Action — odošle 6-cifr OTP kód na email.
@@ -167,7 +167,7 @@ export async function verifyOtpAction(formData: FormData) {
     .update({ last_login_at: new Date().toISOString() })
     .eq("auth_id", data.user.id);
 
-  redirect(dashboardPathForRole(appUser.role as "admin" | "user"));
+  redirect(dashboardPathForRole(appUser.role as AppUserRole));
 }
 
 /**

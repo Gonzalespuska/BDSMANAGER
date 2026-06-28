@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Calculator,
@@ -12,8 +13,10 @@ import {
   Info,
   Mail,
   Percent,
+  Search,
   Settings,
   User as UserIcon,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   calcLine,
+  FLOOR_TYPE_ACCUSATIVE,
   FLOOR_TYPE_LABELS,
   FLOOR_TYPE_META,
   formatEur,
@@ -60,9 +64,12 @@ export interface LeadContext {
 
 export function GeneratorClient({
   leadContext,
+  agentInfo,
 }: {
   leadContext?: LeadContext | null;
+  agentInfo?: { name: string; email: string; phone?: string | null };
 }) {
+  const router = useRouter();
   const [floorType, setFloorType] = React.useState<FloorType | null>(
     leadContext?.floor_type ?? null,
   );
@@ -77,7 +84,8 @@ export function GeneratorClient({
           ? m.default_enabled
           : !m.optional;
       init[m.id] = {
-        enabled: defaultEnabled,
+        // Zložka (surcharge) je vždy v init vypnutá — obchodák ju aktívne pridá
+        enabled: m.unit === "surcharge" ? false : defaultEnabled,
         m2:
           isAreaUnit && m.floor_type === leadContext?.floor_type
             ? initialM2
@@ -94,8 +102,26 @@ export function GeneratorClient({
   const [adminMode, setAdminMode] = React.useState(false);
   const [bulkM2] = React.useState<string>(initialM2);
   const [busy, setBusy] = React.useState(false);
-  const [lokalita, setLokalita] = React.useState<string>(
-    leadContext?.lokalita ?? "",
+  // Lokalita zákazky = miesto realizácie (na transport), NIE home adresa zákazníka.
+  // Necháme prázdne aj keď lead má lokalitu vo formulári — agent si po telefonáte
+  // explicitne potvrdí kam ide robiť. Pôvodnú hodnotu z leadu ponúkneme ako
+  // klikateľný suggestion chip pod inputom.
+  const [lokalita, setLokalita] = React.useState<string>("");
+  const leadSuggestedLokalita = leadContext?.lokalita ?? "";
+  // Email zákazníka — prefilled z leadu, ale editovateľný (môžeš ho meniť
+  // alebo zadať manuálne keď generátor otvoríš bez leadu).
+  const [customerEmail, setCustomerEmail] = React.useState<string>(
+    leadContext?.email ?? "",
+  );
+  // Meno zákazníka — rovnaké, prefilled ale editovateľné
+  const [customerName, setCustomerName] = React.useState<string>(
+    leadContext?.name ?? "",
+  );
+  // Voliteľná zľava — opt-in (klikneš na sekciu aby si ju aktivoval, ako optional op)
+  const [discountEnabled, setDiscountEnabled] = React.useState<boolean>(false);
+  const [discountAmount, setDiscountAmount] = React.useState<string>("");
+  const [discountLabel, setDiscountLabel] = React.useState<string>(
+    "Špeciálna zľava pre vás",
   );
 
   // Mode: realizácia podlahy vs iba predaj materiálu + doprava
@@ -120,9 +146,10 @@ export function GeneratorClient({
     for (const p of PRODUCT_CATALOG) {
       const qty = parseFloat(materialQtys[p.id] ?? "") || 0;
       if (qty <= 0) continue;
+      // Skip produktov bez ceny — nepočítame odhady
       if (p.sell_by === "package" && p.cost_per_package !== null) {
         cost += qty * p.cost_per_package;
-      } else {
+      } else if (p.sell_by === "kg" && p.cost_per_kg > 0) {
         cost += qty * p.cost_per_kg;
       }
     }
@@ -159,7 +186,8 @@ export function GeneratorClient({
     setLines((prev) => {
       const next = { ...prev };
       for (const m of getMaterialsByFloorType(floorType)) {
-        if (m.unit === "count") continue;
+        // Skip count (prasklíny) a surcharge (zložka — EUR, nie m²)
+        if (m.unit === "count" || m.unit === "surcharge") continue;
         if (!next[m.id]) continue;
         next[m.id] = { ...next[m.id], m2: value };
       }
@@ -197,6 +225,8 @@ export function GeneratorClient({
     setLines((prev) => {
       const next = { ...prev };
       for (const m of materials) {
+        // Zložka má v "m2" EUR sumu, nie m² — nepretrhuj ju.
+        if (m.unit === "surcharge") continue;
         if (next[m.id].enabled) {
           next[m.id] = { ...next[m.id], m2 };
         }
@@ -297,25 +327,60 @@ export function GeneratorClient({
   // ─── PDF + Email actions ─────────────────────────────────────────────
   async function buildPdfInput() {
     const { generateQuotePdf } = await import("@/lib/quote/generate-pdf");
+
+    // Zložka (hidden_in_pdf) — vyfiltruj zo zobrazenia v PDF, ale jej sumu
+    // proporcionálne rozpočítaj medzi viditeľné area-based riadky (úprava,
+    // penetrácia, náter, lak ...). Zákazník vidí len mierne navýšené ceny
+    // konkrétnych operácií, nie samostatný "zložka €" riadok.
+    const allCalcs = calcs
+      .map((c) => c.calc)
+      .filter((c): c is NonNullable<typeof c> => c !== null);
+
+    const hiddenIds = new Set(
+      calcs
+        .filter((c) => c.m.hidden_in_pdf && lines[c.m.id]?.enabled)
+        .map((c) => c.m.id),
+    );
+
+    const visibleCalcs = allCalcs.filter(
+      (c) => !hiddenIds.has(c.material_id),
+    );
+    const hiddenSum = allCalcs
+      .filter((c) => hiddenIds.has(c.material_id))
+      .reduce((s, c) => s + c.total, 0);
+
+    let pdfLines = visibleCalcs;
+    if (hiddenSum > 0 && visibleCalcs.length > 0) {
+      const visibleSum = visibleCalcs.reduce((s, c) => s + c.total, 0);
+      if (visibleSum > 0) {
+        pdfLines = visibleCalcs.map((c) => ({
+          ...c,
+          total: c.total + hiddenSum * (c.total / visibleSum),
+          material_cost: c.material_cost + hiddenSum * (c.total / visibleSum),
+        }));
+      }
+    }
+
     return {
       generator: generateQuotePdf,
       input: {
-        customer_name: leadContext?.name ?? "Zákazník",
-        customer_email: leadContext?.email ?? null,
+        customer_name: customerName.trim() || "Zákazník",
+        customer_email: customerEmail.trim() || null,
         customer_phone: leadContext?.phone ?? null,
         customer_lokalita: leadContext?.lokalita ?? null,
         customer_priestor: leadContext?.priestor ?? null,
         floor_type_label: floorType ? FLOOR_TYPE_LABELS[floorType] : "",
-        lines: calcs
-          .map((c) => c.calc)
-          .filter((c): c is NonNullable<typeof c> => c !== null),
+        lines: pdfLines,
         subtotal_material: subtotal,
         subtotal_work: 0,
         margin_percent: marginPercent,
         margin_value: marginValue,
         total,
-        agent_name: "Obchodák Epoxidovo",
-        agent_email: "info@epoxidovo.sk",
+        agent_name: agentInfo?.name ?? "Obchodák Epoxidovo",
+        agent_email: agentInfo?.email ?? "info@epoxidovo.sk",
+        agent_phone: agentInfo?.phone ?? undefined,
+        discount_amount: discountEnabled ? parseFloat(discountAmount) || 0 : 0,
+        discount_label: discountLabel || "Špeciálna zľava pre vás",
       },
     };
   }
@@ -325,7 +390,11 @@ export function GeneratorClient({
     try {
       const { generator, input } = await buildPdfInput();
       const { blob, filename } = generator(input);
-      const { downloadBlob } = await import("@/lib/quote/generate-pdf");
+      const { downloadBlob, previewBlob } = await import(
+        "@/lib/quote/generate-pdf"
+      );
+      // Otvor PDF v novom tabe na náhľad + stiahni súbor.
+      previewBlob(blob);
       downloadBlob(blob, filename);
     } catch (e) {
       alert(`PDF chyba: ${e instanceof Error ? e.message : "unknown"}`);
@@ -335,72 +404,88 @@ export function GeneratorClient({
   }
 
   async function handleSendEmail() {
-    if (!leadContext?.email) {
-      alert("Lead nemá email. Pridaj ho ručne v lead detaile.");
+    const recipient = customerEmail.trim();
+    if (!recipient || !recipient.includes("@")) {
+      alert(
+        "Email zákazníka chýba alebo nie je validný. Vyplň ho v poli vyššie.",
+      );
       return;
     }
     setBusy(true);
     try {
       const { generator, input } = await buildPdfInput();
-      const { blob, base64, filename } = generator(input);
+      const { blob, filename } = generator(input);
 
-      const subject = `EPOXIDOVO · Cenová ponuka pre ${input.floor_type_label.toLowerCase()} podlahu`;
-      const firstName = leadContext.name.split(" ")[0];
-      const body = `Dobrý deň ${firstName},
+      const subject = `EPOXIDOVO.SK – Cenová ponuka`;
+      // Akuzatív — "na jednofarebnú/chipsovú/mramorovú/metalickú podlahu"
+      const accusative =
+        floorType && FLOOR_TYPE_ACCUSATIVE[floorType]
+          ? FLOOR_TYPE_ACCUSATIVE[floorType]
+          : input.floor_type_label.toLowerCase();
 
-ďakujeme za Váš dopyt. V prílohe Vám posielam cenovú ponuku
-pre ${input.floor_type_label.toLowerCase()} epoxidovú podlahu.
+      const signatureLines = [
+        input.agent_name,
+        input.agent_phone || null,
+        "EPOXIDOVO s. r. o.",
+        input.agent_email,
+        "www.epoxidovo.sk",
+      ].filter(Boolean);
+      const bodyText = `Dobrý deň prajeme,
 
-Ak máte k ponuke akékoľvek otázky, kedykoľvek ma kontaktujte
-na ${input.agent_email}.
+Na základe nášho telefonátu Vám v prílohe posielam cenovú ponuku na ${accusative} podlahu.
+
+V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
 
 S pozdravom,
-${input.agent_name}
-EPOXIDOVO s. r. o.
-epoxidovo.sk`;
+${signatureLines.join("\n")}`;
 
-      // 1. Try server-side send cez Resend
-      const sendRes = await fetch("/api/quote/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lead_id: leadContext.id,
-          to_email: leadContext.email,
-          to_name: leadContext.name,
-          subject,
-          body_text: body,
-          pdf_base64: base64,
-          pdf_filename: filename,
-        }),
-      });
-      const json = await sendRes.json();
+      // 1. Auto-download PDF aby si ho mal v Downloads na pripnutie
+      const { downloadBlob } = await import("@/lib/quote/generate-pdf");
+      downloadBlob(blob, filename);
 
-      if (sendRes.ok && json.ok) {
-        alert(`✓ ${json.message ?? "Email odoslaný"}`);
+      // 2. Audit log + status zmena na CRM (best-effort, fire-and-forget)
+      if (leadContext?.id && !leadContext.id.startsWith("demo-")) {
+        fetch("/api/quote/log-prepared", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lead_id: leadContext.id,
+            to_email: recipient,
+            subject,
+          }),
+        }).catch(() => {});
+      }
+
+      // 3. Otvor Gmail compose v novom tabe s prefilled údajmi.
+      // `/u/0/` = explicitne primárne logged-in Gmail konto. Ak má obchodník
+      // v browseri len jedno konto (workspace obchod@epoxidovo.sk), pickne sa
+      // ono. Ak má viacero kont, pickne sa to, ktoré je v Gmaili nastavené
+      // ako default — to si user nastaví v Gmaili 1× a hotovo.
+      // `authuser=0` poistka pre niektoré case-y kde u/0/ samé nestačí.
+      const gmailUrl =
+        "https://mail.google.com/mail/u/0/?authuser=0&view=cm&fs=1&tf=1" +
+        `&to=${encodeURIComponent(recipient)}` +
+        `&su=${encodeURIComponent(subject)}` +
+        `&body=${encodeURIComponent(bodyText)}`;
+      const win = window.open(gmailUrl, "_blank", "noopener,noreferrer");
+      if (!win) {
+        alert(
+          "Browser zablokoval otvorenie novej karty. Povol popup pre app.najcrm.sk a skús znova.",
+        );
         return;
       }
 
-      // 2. Fallback — Resend nie je nakonfigurovaný, stiahne .eml
-      const { downloadBlob } = await import("@/lib/quote/generate-pdf");
-      const { generateEml } = await import("@/lib/quote/generate-eml");
-      const eml = generateEml({
-        from_email: "info@epoxidovo.sk",
-        from_name: "EPOXIDOVO",
-        to_email: leadContext.email,
-        to_name: leadContext.name,
-        subject,
-        body_text: body,
-        attachment: { filename, content_base64: base64, mime_type: "application/pdf" },
-      });
-      const emlFilename = filename.replace(/\.pdf$/, ".eml");
-      downloadBlob(eml, emlFilename);
-      downloadBlob(blob, filename);
-
-      alert(
-        `Auto-send cez Resend nie je nakonfigurovaný (chýba RESEND_API_KEY). ` +
-          `Stiahol sa ${emlFilename}. Otvor dvojklikom, Mail.app sa otvorí s predvyplneným adresátom + prílohou. ` +
-          `Pre auto-send sa zaregistruj na resend.com (3 min) a daj mi API kľúč.`,
-      );
+      // 4. Vizuálna nápoveda
+      setTimeout(() => {
+        alert(
+          `✅ Gmail otvorený s prefilled obsahom.\n\n` +
+            `📎 PDF stiahnuté: ${filename}\n` +
+            `   → Drag-drop ho do Gmail compose okna (alebo klikni paperclip)\n` +
+            `   → Klikni Odoslať\n\n` +
+            `Email pôjde z tvojho Gmail účtu (workspace).`,
+        );
+        router.push("/agent?tab=kontakt");
+      }, 600);
     } catch (e) {
       alert(`Email chyba: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
@@ -409,97 +494,83 @@ epoxidovo.sk`;
   }
 
   return (
-    <div className="h-full flex flex-col gap-3 overflow-hidden min-h-0">
-      {/* Lead context banner */}
-      {leadContext && (
-        <div className="rounded-2xl border border-sky-300 bg-sky-50 p-4 flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-sky-500 text-white shrink-0">
-              <UserIcon className="w-5 h-5" aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-bold uppercase tracking-wider text-sky-700">
-                Ponuka pre lead
-              </div>
-              <div className="text-lg font-extrabold tracking-tight mt-0.5">
-                {leadContext.name}
-              </div>
-              <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
-                {leadContext.phone && <span>📞 {leadContext.phone}</span>}
-                {leadContext.email && <span>📧 {leadContext.email}</span>}
-                {leadContext.lokalita && <span>📍 {leadContext.lokalita}</span>}
-                {leadContext.priestor && <span>🏠 {leadContext.priestor}</span>}
-              </div>
-            </div>
-          </div>
-          <Link
-            href={`/agent/leads/${leadContext.id}`}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 hover:text-sky-900"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
-            Späť na lead
-          </Link>
-        </div>
-      )}
-
-      <header className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
-            <Calculator className="w-7 h-7 text-sky-500" aria-hidden />
+    <div className="flex flex-col gap-2 md:gap-2.5">
+      {/* Compact header s lead chip + title + mode toggle v jednom riadku.
+          Šetrí ~200px vertikálneho miesta na notebookoch. */}
+      <div className="flex items-center justify-between gap-2 md:gap-4 flex-wrap">
+        {/* Left: title + lead chip */}
+        <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+          <h1 className="text-lg md:text-xl lg:text-2xl font-extrabold tracking-tight inline-flex items-center gap-1.5">
+            <Calculator className="w-5 h-5 md:w-6 md:h-6 text-sky-500" aria-hidden />
             Generátor ponúk
           </h1>
           {leadContext && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Predvyplnené {initialM2 ? `${initialM2} m² · ` : ""}
-              {floorType ? FLOOR_TYPE_LABELS[floorType] : ""}. Uprav a vygeneruj PDF.
-            </p>
+            <Link
+              href={`/agent/leads/${leadContext.id}`}
+              className="group inline-flex items-center gap-2 rounded-full border border-sky-300 bg-sky-50 hover:bg-sky-100 transition-colors pl-1 pr-3 py-1"
+              title={`${leadContext.name} • klik pre detail leadu`}
+            >
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-white shrink-0">
+                <UserIcon className="w-3.5 h-3.5" aria-hidden />
+              </span>
+              <span className="text-xs md:text-sm font-bold text-sky-900 truncate max-w-[140px] md:max-w-[200px]">
+                {leadContext.name}
+              </span>
+              {leadContext.phone && (
+                <span className="hidden md:inline text-[11px] text-sky-700/80 font-medium tabular-nums">
+                  · {leadContext.phone}
+                </span>
+              )}
+              <ArrowLeft className="w-3 h-3 text-sky-600 group-hover:-translate-x-0.5 transition-transform" aria-hidden />
+            </Link>
           )}
         </div>
-        {/* TODO admin-page: tu pôjde "Ceny a spotreby (admin)" toggle keď
-            postavíme admin sekciu. Zatiaľ skryté. */}
-      </header>
 
-      {/* Mode toggle — realizácia vs iba materiál */}
-      <div className="inline-flex rounded-xl border bg-muted/30 p-1 self-start">
-        <button
-          type="button"
-          onClick={() => setSaleMode("realizacia")}
-          className={cn(
-            "px-4 py-2 rounded-lg text-sm font-bold transition-colors",
-            saleMode === "realizacia"
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          Realizácia podlahy
-        </button>
-        <button
-          type="button"
-          onClick={() => setSaleMode("material")}
-          className={cn(
-            "px-4 py-2 rounded-lg text-sm font-bold transition-colors",
-            saleMode === "material"
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          Iba materiál + doprava
-        </button>
+        {/* Right: mode toggle */}
+        <div className="inline-flex rounded-lg border bg-muted/30 p-0.5 self-start">
+          <button
+            type="button"
+            onClick={() => setSaleMode("realizacia")}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs md:text-sm font-bold transition-colors",
+              saleMode === "realizacia"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Realizácia podlahy
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaleMode("material")}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs md:text-sm font-bold transition-colors",
+              saleMode === "material"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Iba materiál + doprava
+          </button>
+        </div>
       </div>
 
       {/* Floor type picker — pred výberom veľké fotky; po výbere kompaktné pills */}
-      {saleMode === "realizacia" && (
+      {/* Zobrazí sa v oboch módoch: v realizácii filtruje operácie, v materiáli filtruje katalóg produktov. */}
+      {(
       !floorType ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
             {(Object.keys(FLOOR_TYPE_LABELS) as FloorType[]).map((type) => (
               <button
                 key={type}
                 type="button"
                 onClick={() => selectFloorType(type)}
-                className="group rounded-2xl border border-border bg-background hover:border-foreground/30 text-left transition-all overflow-hidden"
+                className="group rounded-xl border border-border bg-background hover:border-foreground/30 text-left transition-all overflow-hidden"
               >
-                <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+                {/* Aspect ratio scales aggressively:
+                    mobile 4:3 vyššie | tablet 16:9 | notebook 24:7 (lg) ultra-thin */}
+                <div className="relative aspect-[4/3] md:aspect-video lg:aspect-[24/7] w-full overflow-hidden bg-muted">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/floor-types/${type}.jpg`}
@@ -507,8 +578,8 @@ epoxidovo.sk`;
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 </div>
-                <div className="p-3">
-                  <div className="text-base md:text-lg font-extrabold tracking-tight">
+                <div className="p-2.5 md:p-3">
+                  <div className="text-sm md:text-base lg:text-lg font-extrabold tracking-tight">
                     {FLOOR_TYPE_LABELS[type]}
                   </div>
                 </div>
@@ -555,8 +626,8 @@ epoxidovo.sk`;
       )}
 
       {/* Lokalita + automatická Doprava v jednej karte */}
-      {(saleMode === "material" || floorType) && (
-        <div className="rounded-2xl border bg-background p-3 flex items-end gap-4 flex-wrap animate-in fade-in duration-300">
+      {floorType && (
+        <div className="rounded-xl border bg-background p-2.5 md:p-3 flex items-end gap-3 md:gap-4 flex-wrap animate-in fade-in duration-300">
           <div className="flex-1 min-w-[220px]">
             <Label
               htmlFor="lokalita"
@@ -628,118 +699,22 @@ epoxidovo.sk`;
         />
       )}
 
-      {/* Material-only catalog */}
-      {saleMode === "material" && (
-        <div className="rounded-xl border bg-background overflow-hidden flex flex-col min-h-0">
-          <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between shrink-0">
-            <h2 className="text-xs font-bold uppercase tracking-wider">
-              Katalóg materiálov
-            </h2>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Marža {Math.round(MARZA_MATERIAL * 100)} %
-            </span>
-          </div>
-          <ul className="divide-y overflow-y-auto">
-            {PRODUCT_CATALOG.map((p) => {
-              const qty = parseFloat(materialQtys[p.id] ?? "") || 0;
-              const sellRate =
-                p.sell_by === "package" && p.cost_per_package !== null
-                  ? applyMargin(p.cost_per_package, MARZA_MATERIAL)
-                  : applyMargin(p.cost_per_kg, MARZA_MATERIAL);
-              const lineSell = qty * sellRate;
-              const unit = p.sell_by === "package" ? "bal." : "kg";
-              const subtitle =
-                p.sell_by === "package"
-                  ? `${p.package_size_kg} kg / balenie · ${formatEur(sellRate)} / bal.`
-                  : `na kg · ${formatEur(sellRate)} / kg`;
-              return (
-                <li
-                  key={p.id}
-                  className={cn(
-                    "px-4 py-2 flex items-center gap-3",
-                    qty > 0 && "bg-sky-50/30",
-                  )}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm truncate inline-flex items-center gap-1.5">
-                      {p.name}
-                      {p.note && (
-                        <span className="text-[9px] uppercase tracking-wider font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded">
-                          {p.note}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {subtitle}
-                    </div>
-                  </div>
-                  <div
-                    className="inline-flex items-center gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMaterialQtys((prev) => {
-                          const cur = parseFloat(prev[p.id] ?? "") || 0;
-                          const next = Math.max(0, cur - 1);
-                          return { ...prev, [p.id]: next > 0 ? String(next) : "" };
-                        });
-                      }}
-                      className="w-7 h-7 rounded-md border bg-background hover:bg-muted/60 text-lg font-bold leading-none"
-                      aria-label="Menej"
-                    >
-                      −
-                    </button>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      step={p.sell_by === "kg" ? 0.5 : 1}
-                      placeholder="0"
-                      value={materialQtys[p.id] ?? ""}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setMaterialQtys((prev) => ({ ...prev, [p.id]: v }));
-                      }}
-                      className="h-7 w-14 text-center text-sm font-bold tabular-nums"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMaterialQtys((prev) => {
-                          const cur = parseFloat(prev[p.id] ?? "") || 0;
-                          return { ...prev, [p.id]: String(cur + 1) };
-                        });
-                      }}
-                      className="w-7 h-7 rounded-md border bg-background hover:bg-muted/60 text-lg font-bold leading-none"
-                      aria-label="Viac"
-                    >
-                      +
-                    </button>
-                    <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground ml-1 w-8">
-                      {unit}
-                    </span>
-                  </div>
-                  <div className="w-24 text-right font-bold tabular-nums text-sm">
-                    {lineSell > 0 ? (
-                      formatEur(lineSell)
-                    ) : (
-                      <span className="text-muted-foreground text-xs font-normal">
-                        —
-                      </span>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+      {/* Material-only catalog — sekciový systém:
+            1. Hlavný náter (krok 1) — obchodník vyberie čo robí
+            2. Penetrácia (krok 2) — iba kompatibilné s vybraným hlavným
+            3. Vrchný lak (krok 3) — voliteľné, iba kompatibilné
+            4. Doplnky (samonivel, posyp, čistič, chipsy ...) */}
+      {saleMode === "material" && floorType && (
+        <MaterialCatalog
+          floorType={floorType}
+          materialQtys={materialQtys}
+          setMaterialQtys={setMaterialQtys}
+        />
       )}
 
       {/* Total bar — visible in oba módy ak je čo počítať */}
-      {(saleMode === "material" || floorType) && (
-      <div className="rounded-xl border-2 border-sky-500 bg-sky-50 px-4 py-3 mt-auto shrink-0 shadow-lg">
+      {floorType && (
+      <div className="rounded-xl border-2 border-sky-500 bg-sky-50 px-3 md:px-4 py-2.5 md:py-3 shrink-0 shadow-lg">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div className="text-[11px] text-sky-700/80 leading-snug">
             {days > 0 && (
@@ -759,13 +734,151 @@ epoxidovo.sk`;
             <div className="text-xs uppercase tracking-wider font-bold text-sky-700">
               Výsledná cena
             </div>
-            <div className="text-3xl md:text-4xl font-extrabold text-sky-700 tabular-nums">
-              {hasRealInput ? formatEur(total) : "—"}
-            </div>
+            {discountEnabled && (parseFloat(discountAmount) || 0) > 0 ? (
+              <>
+                <div className="text-lg font-bold text-muted-foreground line-through tabular-nums">
+                  {hasRealInput ? formatEur(total) : "—"}
+                </div>
+                <div className="text-3xl md:text-4xl font-extrabold text-sky-700 tabular-nums">
+                  {hasRealInput
+                    ? formatEur(
+                        Math.max(0, total - (parseFloat(discountAmount) || 0)),
+                      )
+                    : "—"}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+                  Po zľave −{formatEur(parseFloat(discountAmount) || 0)}
+                </div>
+              </>
+            ) : (
+              <div className="text-3xl md:text-4xl font-extrabold text-sky-700 tabular-nums">
+                {hasRealInput ? formatEur(total) : "—"}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex gap-2 pt-3 border-t border-sky-200 flex-wrap">
+        {/* Zľava — opt-in toggle. Na obchodáckej strane neutrálna sivá/biela;
+            v PDF sa zobrazí ČERVENÝM pre wow-efekt pre zákazníka. */}
+        <div
+          className={cn(
+            "mt-2 pt-2 border-t border-sky-200 rounded-lg transition-all",
+            !discountEnabled && "opacity-60",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setDiscountEnabled((v) => !v)}
+            className={cn(
+              "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover:bg-muted/60 transition-colors",
+              discountEnabled && "bg-muted/40",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-flex items-center justify-center w-5 h-5 rounded border-2 shrink-0 transition-all",
+                discountEnabled
+                  ? "bg-foreground border-foreground text-background"
+                  : "bg-background border-zinc-300",
+              )}
+              aria-hidden
+            >
+              {discountEnabled && (
+                <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={3}>
+                  <path d="M2 6.5L4.5 9L10 3" />
+                </svg>
+              )}
+            </span>
+            <span className="text-[11px] uppercase tracking-wider font-extrabold text-muted-foreground">
+              Špeciálna zľava — kliknutím aktivuj
+            </span>
+            {discountEnabled && (parseFloat(discountAmount) || 0) > 0 && (
+              <span className="ml-auto text-xs font-bold text-foreground tabular-nums">
+                −{formatEur(parseFloat(discountAmount) || 0)}
+              </span>
+            )}
+          </button>
+
+          {discountEnabled && (
+            <div className="mt-2 grid sm:grid-cols-2 gap-2">
+              <div>
+                <Label
+                  htmlFor="discount-amount"
+                  className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground"
+                >
+                  Suma (€)
+                </Label>
+                <Input
+                  id="discount-amount"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step={1}
+                  placeholder="napr. 200"
+                  value={discountAmount}
+                  onChange={(e) => setDiscountAmount(e.target.value)}
+                  autoFocus
+                  className="h-9 text-sm font-bold tabular-nums"
+                />
+              </div>
+              <div>
+                <Label
+                  htmlFor="discount-label"
+                  className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground"
+                >
+                  Názov (zobrazí sa v PDF červeno)
+                </Label>
+                <Input
+                  id="discount-label"
+                  type="text"
+                  placeholder="Špeciálna zľava pre vás"
+                  value={discountLabel}
+                  onChange={(e) => setDiscountLabel(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Customer name + email — prefilled z leadu, ale editovateľné aby si
+            mohol odoslať ponuku komukoľvek (aj bez leadu). */}
+        <div className="mt-2 pt-2 border-t border-sky-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <Label
+              htmlFor="customer-name"
+              className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground"
+            >
+              Meno zákazníka
+            </Label>
+            <Input
+              id="customer-name"
+              type="text"
+              placeholder="napr. Jano Mrkva"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div>
+            <Label
+              htmlFor="customer-email"
+              className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground"
+            >
+              Email zákazníka (pre odoslanie ponuky)
+            </Label>
+            <Input
+              id="customer-email"
+              type="email"
+              placeholder="napr. jano@gmail.com"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-2 mt-2 border-t border-sky-200 flex-wrap">
           <Button
             type="button"
             onClick={handleDownloadPdf}
@@ -780,19 +893,18 @@ epoxidovo.sk`;
           <Button
             type="button"
             onClick={handleSendEmail}
-            disabled={busy || total <= 0 || !leadContext?.email}
+            disabled={
+              busy ||
+              total <= 0 ||
+              !customerEmail.trim() ||
+              !customerEmail.includes("@")
+            }
             className="flex-1 min-w-[200px] bg-emerald-600 hover:bg-emerald-700"
           >
             <Mail className="w-4 h-4 mr-1.5" aria-hidden />
             Pošli email s ponukou
           </Button>
         </div>
-        {!leadContext?.email && (
-          <p className="text-xs text-muted-foreground">
-            Email tlačidlo je aktívne až keď otvoríš generátor z leadu, ktorý má
-            email (linkom z lead detailu).
-          </p>
-        )}
       </div>
       )}
     </div>
@@ -1088,8 +1200,39 @@ function LineRow({
           </div>
         </div>
 
+        {/* Zložka — EUR input (manuálne, skrytý v PDF) */}
+        {material.unit === "surcharge" && (
+          <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <span className="text-sm font-bold text-muted-foreground">€</span>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={0.01}
+              placeholder="0"
+              value={state.m2}
+              onFocus={ensureEnabled}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange((prev) => ({
+                  ...prev,
+                  m2: v,
+                  enabled: (parseFloat(v) || 0) > 0,
+                }));
+              }}
+              className="h-9 w-24 text-sm text-right font-bold tabular-nums"
+            />
+            <span
+              className="text-[9px] uppercase tracking-wider font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded"
+              title="Skryté v cenovej ponuke — len započítané v celkovej cene"
+            >
+              skryté
+            </span>
+          </div>
+        )}
+
         {/* m² + mm inputy.  Klik / focus / type auto-enabne. */}
-        {material.unit !== "count" && (
+        {material.unit !== "count" && material.unit !== "surcharge" && (
             <>
               <div className="w-24" onClick={(e) => e.stopPropagation()}>
                 <Input
@@ -1285,5 +1428,633 @@ function Field({ label, value }: { label: string; value: string }) {
       </div>
       <div className="font-semibold">{value}</div>
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// MaterialCatalog — sekciový systém pre "Iba materiál + doprava"
+//   1. Hlavný náter (povinný krok)
+//   2. Penetrácia (kompatibilná s vybraným hlavným)
+//   3. Vrchný lak (voliteľný, kompatibilný)
+//   4. Doplnky (samonivel, čistič, posyp, chipsy)
+// ──────────────────────────────────────────────────────────────────────
+const ROLE_LABELS_SK: Record<string, string> = {
+  main: "Hlavný náter",
+  primer: "Penetrácia",
+  topcoat: "Vrchný lak",
+  additive: "Doplnky",
+};
+
+function MaterialCatalog({
+  floorType,
+  materialQtys,
+  setMaterialQtys,
+}: {
+  floorType: FloorType;
+  materialQtys: Record<string, string>;
+  setMaterialQtys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+}) {
+  // Search — flat global, hľadá v ID + name + desc, case-insensitive substring
+  const [searchTerm, setSearchTerm] = React.useState("");
+
+  // Filter produktov pre daný typ podlahy
+  const visibleForFloor = React.useMemo(
+    () =>
+      PRODUCT_CATALOG.filter(
+        (p) =>
+          !p.floor_types ||
+          p.floor_types.length === 0 ||
+          p.floor_types.includes(floorType),
+      ),
+    [floorType],
+  );
+
+  // Search results — flat, naprieč všetkými sekciami
+  const searchResults = React.useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return null;
+    return visibleForFloor.filter((p) => {
+      const hay = `${p.name} ${p.id} ${p.desc ?? ""} ${p.brand}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [searchTerm, visibleForFloor]);
+
+  const selectedMains = React.useMemo(() => {
+    const out = new Set<string>();
+    for (const p of visibleForFloor) {
+      if (p.role === "main" && (parseFloat(materialQtys[p.id] ?? "") || 0) > 0) {
+        out.add(p.id);
+      }
+    }
+    return out;
+  }, [visibleForFloor, materialQtys]);
+
+  function isCompatible(p: Product): boolean {
+    if (selectedMains.size === 0) return true;
+    if (!p.compatible_with || p.compatible_with.length === 0) return true;
+    return p.compatible_with.some((id) => selectedMains.has(id));
+  }
+
+  // Aké produkty sú vybraté v krokoch
+  const hasMain = selectedMains.size > 0;
+  const hasPrimer = visibleForFloor.some(
+    (p) => p.role === "primer" && (parseFloat(materialQtys[p.id] ?? "") || 0) > 0,
+  );
+
+  // Produkty filterované pre každý krok
+  const mains = visibleForFloor.filter((p) => p.role === "main");
+  const primers = visibleForFloor.filter(
+    (p) => p.role === "primer" && isCompatible(p),
+  );
+
+  // Krok 3 je iný podľa typu podlahy:
+  //   - jednofarebna → vrchný lak (topcoat)
+  //   - chipsova     → chipsy (chipy STAVEKON, ako "main" doplnok)
+  //   - mramorova    → vrchný lak + kremičitý piesok
+  //   - metalicka    → vrchný lak
+  //
+  // Plus do každého kroku 3 patrí univerzálny tmel na zošívanie prasklín
+  // (Sikadur-30) ako voliteľný príplatok.
+  const step3Title = floorType === "chipsova" ? "Chipsy + dokončenie" : "Vrchný lak + dokončenie";
+  const step3Hint =
+    floorType === "chipsova"
+      ? "Pridaj chipsy + voliteľný tmel na zošitie prasklín."
+      : "Voliteľný ochranný lak + tmel na zošitie prasklín / posyp.";
+
+  const step3Products: Product[] = React.useMemo(() => {
+    const out: Product[] = [];
+    if (floorType === "chipsova") {
+      // Pre chipsovu: chipsy (additive vendored ako role:additive s floor_types=chipsova)
+      out.push(
+        ...visibleForFloor.filter(
+          (p) => p.role === "additive" && p.floor_types?.includes("chipsova"),
+        ),
+      );
+    } else {
+      // Pre ostatné: vrchné laky kompatibilné s hlavným náterom
+      out.push(
+        ...visibleForFloor.filter((p) => p.role === "topcoat" && isCompatible(p)),
+      );
+      // Pre mramorovu pridaj aj kremičitý piesok
+      if (floorType === "mramorova") {
+        out.push(
+          ...visibleForFloor.filter(
+            (p) =>
+              p.role === "additive" && p.floor_types?.includes("mramorova"),
+          ),
+        );
+      }
+    }
+    // Univerzálny tmel na zošitie prasklín — pridaj do každého step 3
+    out.push(
+      ...visibleForFloor.filter((p) => p.id === "sika-sikadur-30"),
+    );
+    return out;
+  }, [floorType, visibleForFloor, selectedMains]);
+
+  // Doplnky = zvyšok additívov (Level-30, DecoCem, čistič) bez už-použitých
+  const step3Ids = new Set(step3Products.map((p) => p.id));
+  const additives = visibleForFloor.filter(
+    (p) => p.role === "additive" && !step3Ids.has(p.id),
+  );
+
+  // Accordion — ktorá sekcia je otvorená.
+  // Default: 1 (Hlavný náter). Nezavretne sa automaticky pri pridaní produktu —
+  // obchodník môže potrebovať pridať viac kusov hlavného náteru, alebo
+  // viac rôznych hlavných náterov naraz. Prepnutie na ďalší step urobí
+  // klikom na header sekcie 2/3/4.
+  const [openStep, setOpenStep] = React.useState<number>(1);
+  // Reset zatvorenia keď user zmení floor type (typy podlahy majú rôzne kroky)
+  React.useEffect(() => {
+    setOpenStep(1);
+  }, [floorType]);
+
+  return (
+    <div className="space-y-3">
+      {/* Search bar — globálne hľadanie naprieč všetkými sekciami */}
+      <div className="rounded-xl border bg-background overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-200">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={`Hľadaj produkt… (napr. 2510, primer, Topstone)`}
+            className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground/70"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Zrušiť vyhľadávanie"
+            >
+              <X className="w-4 h-4" aria-hidden />
+            </button>
+          )}
+        </div>
+        {searchResults !== null && (
+          <div className="max-h-[400px] overflow-y-auto">
+            <div className="px-3 py-1.5 bg-muted/40 text-[11px] uppercase tracking-wider font-bold text-muted-foreground">
+              {searchResults.length === 0
+                ? `Žiadne výsledky pre „${searchTerm}"`
+                : `${searchResults.length} ${searchResults.length === 1 ? "produkt" : searchResults.length < 5 ? "produkty" : "produktov"} pre „${searchTerm}"`}
+            </div>
+            {searchResults.length > 0 && (
+              <ul className="divide-y">
+                {searchResults.map((p) => (
+                  <SearchResultRow
+                    key={p.id}
+                    product={p}
+                    materialQtys={materialQtys}
+                    setMaterialQtys={setMaterialQtys}
+                    sectionLabel={ROLE_LABELS_SK[p.role] ?? p.role}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Section
+        step={1}
+        title="Hlavný náter"
+        hint="Vyber farebný/finálny náter — od neho sa odvíjajú kompatibilné penetrácie a laky."
+        accent="sky"
+        products={mains}
+        materialQtys={materialQtys}
+        setMaterialQtys={setMaterialQtys}
+        emptyMsg="Pre tento typ podlahy zatiaľ nie sú v katalógu hlavné nátery."
+        open={openStep === 1}
+        onToggle={() => setOpenStep(openStep === 1 ? 0 : 1)}
+        completed={hasMain}
+      />
+
+      <Section
+        step={2}
+        title="Penetrácia"
+        hint={
+          selectedMains.size === 0
+            ? "Vyber najprv hlavný náter — penetrácie sa filtrujú podľa kompatibility."
+            : "Iba penetrácie kompatibilné s vybraným hlavným náterom."
+        }
+        accent="emerald"
+        products={primers}
+        materialQtys={materialQtys}
+        setMaterialQtys={setMaterialQtys}
+        emptyMsg={
+          selectedMains.size === 0
+            ? "Vyber najprv hlavný náter."
+            : "Pre tento systém v katalógu nie je primer."
+        }
+        open={openStep === 2}
+        onToggle={() => setOpenStep(openStep === 2 ? 0 : 2)}
+        disabled={!hasMain}
+        completed={hasPrimer}
+      />
+
+      <Section
+        step={3}
+        title={step3Title}
+        hint={step3Hint}
+        accent="amber"
+        products={step3Products}
+        materialQtys={materialQtys}
+        setMaterialQtys={setMaterialQtys}
+        emptyMsg="Pre tento systém v katalógu nie sú dokončovacie produkty."
+        open={openStep === 3}
+        onToggle={() => setOpenStep(openStep === 3 ? 0 : 3)}
+        disabled={!hasMain}
+      />
+
+      {additives.length > 0 && (
+        <Section
+          step={4}
+          title="Doplnky"
+          hint="Stierka, čistič, … — voliteľne k celej zostave."
+          accent="zinc"
+          products={additives}
+          materialQtys={materialQtys}
+          setMaterialQtys={setMaterialQtys}
+          emptyMsg="—"
+          open={openStep === 4}
+          onToggle={() => setOpenStep(openStep === 4 ? 0 : 4)}
+        />
+      )}
+    </div>
+  );
+}
+
+function Section({
+  step,
+  title,
+  hint,
+  accent,
+  products,
+  materialQtys,
+  setMaterialQtys,
+  emptyMsg,
+  disabled,
+  open,
+  onToggle,
+  completed,
+}: {
+  step: number;
+  title: string;
+  hint: string;
+  accent: "sky" | "emerald" | "amber" | "zinc";
+  products: Product[];
+  materialQtys: Record<string, string>;
+  setMaterialQtys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  emptyMsg: string;
+  disabled?: boolean;
+  open: boolean;
+  onToggle: () => void;
+  completed?: boolean;
+}) {
+  const accentClasses = {
+    sky: {
+      header: "bg-sky-50 border-sky-200 hover:bg-sky-100",
+      badge: "bg-sky-500 text-white",
+      title: "text-sky-900",
+    },
+    emerald: {
+      header: "bg-emerald-50 border-emerald-200 hover:bg-emerald-100",
+      badge: "bg-emerald-600 text-white",
+      title: "text-emerald-900",
+    },
+    amber: {
+      header: "bg-amber-50 border-amber-200 hover:bg-amber-100",
+      badge: "bg-amber-500 text-white",
+      title: "text-amber-900",
+    },
+    zinc: {
+      header: "bg-zinc-100 border-zinc-200 hover:bg-zinc-200/70",
+      badge: "bg-zinc-700 text-white",
+      title: "text-zinc-900",
+    },
+  }[accent];
+
+  // Súhrn vybraných produktov (collapsed state)
+  const selectedSummary = React.useMemo(() => {
+    const selected = products.filter(
+      (p) => (parseFloat(materialQtys[p.id] ?? "") || 0) > 0,
+    );
+    if (selected.length === 0) return null;
+    return selected
+      .map((p) => {
+        const qty = parseFloat(materialQtys[p.id] ?? "") || 0;
+        const unit = p.sell_by === "package" ? "bal." : "kg";
+        return `${p.name} × ${qty} ${unit}`;
+      })
+      .join(", ");
+  }, [products, materialQtys]);
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border bg-background overflow-hidden transition-opacity",
+        disabled && "opacity-60",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={disabled}
+        className={cn(
+          "w-full px-4 py-2.5 border-b flex items-center gap-3 text-left transition-colors disabled:cursor-not-allowed",
+          accentClasses.header,
+          !open && "border-b-transparent",
+        )}
+      >
+        <span
+          className={cn(
+            "inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-extrabold tabular-nums shrink-0",
+            completed && !open
+              ? "bg-emerald-600 text-white"
+              : accentClasses.badge,
+          )}
+          aria-hidden
+        >
+          {completed && !open ? "✓" : step}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className={cn("text-sm font-extrabold leading-tight", accentClasses.title)}>
+            {title}
+          </div>
+          <div className="text-[11px] text-muted-foreground leading-snug truncate">
+            {!open && selectedSummary ? selectedSummary : hint}
+          </div>
+        </div>
+        <ChevronDown
+          className={cn(
+            "w-4 h-4 text-muted-foreground shrink-0 transition-transform",
+            open && "rotate-180",
+          )}
+          aria-hidden
+        />
+      </button>
+      {open && (
+        <>
+          {products.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              {emptyMsg}
+            </div>
+          ) : (
+            <ul className="divide-y">
+              {products.map((p) => (
+                <MaterialRow
+                  key={p.id}
+                  product={p}
+                  materialQtys={materialQtys}
+                  setMaterialQtys={setMaterialQtys}
+                  disabled={disabled}
+                />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function MaterialRow({
+  product: p,
+  materialQtys,
+  setMaterialQtys,
+  disabled,
+}: {
+  product: Product;
+  materialQtys: Record<string, string>;
+  setMaterialQtys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  disabled?: boolean;
+}) {
+  const qty = parseFloat(materialQtys[p.id] ?? "") || 0;
+  // Cena = null keď nemáme náklad — neukáž odhad, ukáž pomlčku.
+  const baseCost =
+    p.sell_by === "package" && p.cost_per_package !== null
+      ? p.cost_per_package
+      : p.sell_by === "kg" && p.cost_per_kg > 0
+        ? p.cost_per_kg
+        : null;
+  const sellRate = baseCost !== null ? applyMargin(baseCost, MARZA_MATERIAL) : null;
+  const lineSell = sellRate !== null ? qty * sellRate : null;
+  const unit = p.sell_by === "package" ? "bal." : "kg";
+  const subtitle =
+    p.sell_by === "package"
+      ? sellRate !== null
+        ? `${p.package_size_kg} kg / balenie · ${formatEur(sellRate)} / bal.`
+        : `${p.package_size_kg} kg / balenie · cena ⚠ doplniť`
+      : sellRate !== null
+        ? `na kg · ${formatEur(sellRate)} / kg`
+        : `na kg · cena ⚠ doplniť`;
+
+  return (
+    <li
+      className={cn(
+        "px-4 py-3 flex items-center gap-3",
+        qty > 0 && "bg-sky-50/40",
+      )}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="font-extrabold text-base inline-flex items-center gap-1.5 leading-snug">
+          {p.name}
+          {p.note && (
+            <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+              {p.note}
+            </span>
+          )}
+        </div>
+        {p.desc && (
+          <div className="text-[13px] font-semibold text-foreground/80 leading-snug mt-0.5">
+            {p.desc}
+          </div>
+        )}
+        <div className="text-[12px] font-bold text-muted-foreground mt-0.5 tabular-nums">
+          {subtitle}
+        </div>
+      </div>
+      <div
+        className="inline-flex items-center gap-1"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            setMaterialQtys((prev) => {
+              const cur = parseFloat(prev[p.id] ?? "") || 0;
+              const next = Math.max(0, cur - 1);
+              return { ...prev, [p.id]: next > 0 ? String(next) : "" };
+            });
+          }}
+          className="w-7 h-7 rounded-md border bg-background hover:bg-muted/60 text-lg font-bold leading-none disabled:cursor-not-allowed"
+          aria-label="Menej"
+        >
+          −
+        </button>
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          step={p.sell_by === "kg" ? 0.5 : 1}
+          placeholder="0"
+          value={materialQtys[p.id] ?? ""}
+          disabled={disabled}
+          onChange={(e) => {
+            const v = e.target.value;
+            setMaterialQtys((prev) => ({ ...prev, [p.id]: v }));
+          }}
+          className="h-7 w-14 text-center text-sm font-bold tabular-nums"
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            setMaterialQtys((prev) => {
+              const cur = parseFloat(prev[p.id] ?? "") || 0;
+              return { ...prev, [p.id]: String(cur + 1) };
+            });
+          }}
+          className="w-7 h-7 rounded-md border bg-background hover:bg-muted/60 text-lg font-bold leading-none disabled:cursor-not-allowed"
+          aria-label="Viac"
+        >
+          +
+        </button>
+        <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground ml-1 w-8">
+          {unit}
+        </span>
+      </div>
+      <div className="w-24 text-right font-bold tabular-nums text-sm">
+        {lineSell !== null && lineSell > 0 ? (
+          formatEur(lineSell)
+        ) : (
+          <span className="text-muted-foreground text-xs font-normal">—</span>
+        )}
+      </div>
+    </li>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SearchResultRow — flat result row pre material search.
+// Ukáže produkt + sekcia (Hlavný náter / Penetrácia / ...) + +/- counter
+// rovnaký ako MaterialRow.
+// ──────────────────────────────────────────────────────────────────────
+function SearchResultRow({
+  product: p,
+  materialQtys,
+  setMaterialQtys,
+  sectionLabel,
+}: {
+  product: Product;
+  materialQtys: Record<string, string>;
+  setMaterialQtys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  sectionLabel: string;
+}) {
+  const qty = parseFloat(materialQtys[p.id] ?? "") || 0;
+  const baseCost =
+    p.sell_by === "package" && p.cost_per_package !== null
+      ? p.cost_per_package
+      : p.sell_by === "kg" && p.cost_per_kg > 0
+        ? p.cost_per_kg
+        : null;
+  const sellRate = baseCost !== null ? applyMargin(baseCost, MARZA_MATERIAL) : null;
+  const lineSell = sellRate !== null ? qty * sellRate : null;
+  const unit = p.sell_by === "package" ? "bal." : "kg";
+  const subtitle =
+    p.sell_by === "package"
+      ? sellRate !== null
+        ? `${p.package_size_kg} kg / balenie · ${formatEur(sellRate)} / bal.`
+        : `${p.package_size_kg} kg / balenie · cena ⚠ doplniť`
+      : sellRate !== null
+        ? `na kg · ${formatEur(sellRate)} / kg`
+        : `na kg · cena ⚠ doplniť`;
+
+  return (
+    <li
+      className={cn(
+        "px-3 py-2.5 flex items-center gap-3",
+        qty > 0 && "bg-sky-50/40",
+      )}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-extrabold text-sm leading-tight">{p.name}</span>
+          <span className="text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200">
+            {sectionLabel}
+          </span>
+          {p.note && (
+            <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800 bg-amber-50 border border-amber-300 px-1 py-0.5 rounded">
+              {p.note}
+            </span>
+          )}
+        </div>
+        {p.desc && (
+          <div className="text-[12px] font-semibold text-foreground/75 leading-snug mt-0.5">
+            {p.desc}
+          </div>
+        )}
+        <div className="text-[11px] font-bold text-muted-foreground mt-0.5 tabular-nums">
+          {subtitle}
+        </div>
+      </div>
+      <div
+        className="inline-flex items-center gap-1"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setMaterialQtys((prev) => {
+              const cur = parseFloat(prev[p.id] ?? "") || 0;
+              const next = Math.max(0, cur - 1);
+              return { ...prev, [p.id]: next > 0 ? String(next) : "" };
+            });
+          }}
+          className="w-7 h-7 rounded-md border bg-background hover:bg-muted/60 text-lg font-bold leading-none"
+          aria-label="Menej"
+        >
+          −
+        </button>
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          step={p.sell_by === "kg" ? 0.5 : 1}
+          placeholder="0"
+          value={materialQtys[p.id] ?? ""}
+          onChange={(e) => {
+            setMaterialQtys((prev) => ({ ...prev, [p.id]: e.target.value }));
+          }}
+          className="h-7 w-14 text-center text-sm font-bold tabular-nums"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setMaterialQtys((prev) => {
+              const cur = parseFloat(prev[p.id] ?? "") || 0;
+              return { ...prev, [p.id]: String(cur + 1) };
+            });
+          }}
+          className="w-7 h-7 rounded-md border bg-background hover:bg-muted/60 text-lg font-bold leading-none"
+          aria-label="Viac"
+        >
+          +
+        </button>
+        <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground ml-1 w-8">
+          {unit}
+        </span>
+      </div>
+      <div className="w-20 text-right font-bold tabular-nums text-sm">
+        {lineSell !== null && lineSell > 0 ? (
+          formatEur(lineSell)
+        ) : (
+          <span className="text-muted-foreground text-xs font-normal">—</span>
+        )}
+      </div>
+    </li>
   );
 }

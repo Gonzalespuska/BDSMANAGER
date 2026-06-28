@@ -20,7 +20,7 @@ export type FloorType =
   | "mramorova"
   | "metalicka";
 
-export type MaterialUnit = "area" | "level" | "count";
+export type MaterialUnit = "area" | "level" | "count" | "surcharge";
 
 export interface Material {
   id: string;
@@ -47,12 +47,28 @@ export interface Material {
    */
   default_enabled?: boolean;
   /**
+   * Skrytá pre zákazníka — položka sa nezobrazí v PDF cenovej ponuke, ale jej
+   * suma sa pripočíta k celkovej cene. Používa sa pre "Zložka" (manuálny
+   * príplatok obchodáka, napr. komplikovaný terén / kokot zákazník).
+   */
+  hidden_in_pdf?: boolean;
+  /**
    * Variant materiálu — keď jeden typ podlahy má niekoľko alternatívnych
    * materiálov (napr. jednofarebná: epoxid vs polyuretán). Do calcs ide len
    * materiál s aktívnym variantom; ostatné sú odfiltrované.
    */
   variant?: "epoxid" | "polyuretan";
 }
+
+/** Akuzatív skloneného podstatného mena pre vetu "na ... podlahu":
+ *    na jednofarebnú podlahu / na chipsovú / na mramorovú / na metalickú
+ */
+export const FLOOR_TYPE_ACCUSATIVE: Record<FloorType, string> = {
+  jednofarebna: "jednofarebnú",
+  chipsova: "chipsovú",
+  mramorova: "mramorovú",
+  metalicka: "metalickú",
+};
 
 export const FLOOR_TYPE_LABELS: Record<FloorType, string> = {
   jednofarebna: "Jednofarebná",
@@ -110,6 +126,19 @@ function commonOptional(floor_type: FloorType): Material[] {
       min_mm: 4, // pod 4 mm nivelačka praská (Sika)
       default_mm: 4,
       optional: true,
+    },
+    {
+      // ZLOŽKA — manuálny EUR príplatok ktorý obchodák pridá podľa situácie
+      // (komplikovaný terén, ťažký zákazník, etc.). Skryté v PDF — zákazník
+      // to nevidí ako samostatný riadok, len sumu zarátanú v celkovej cene.
+      id: `${floor_type}-zlozka`,
+      floor_type,
+      name: "Zložka",
+      unit: "surcharge",
+      price_per_sqm: 0,
+      unit_label: "€ (manuálne)",
+      optional: true,
+      hidden_in_pdf: true,
     },
   ];
 }
@@ -341,6 +370,11 @@ export function calcLine(
     mmEff = Math.max(m.min_mm ?? 0, mm);
     const ratePerSqm = m.price_per_sqm + (m.price_per_sqm_per_mm ?? 0) * mmEff;
     total = qty * ratePerSqm;
+  } else if (m.unit === "surcharge") {
+    // Zložka — m2 parameter sa použije ako priamo EUR suma (manuálne).
+    // Ignorujeme price_per_sqm aj mm; obchodák píše konkrétnu sumu v UI.
+    qty = Math.max(0, m2);
+    total = qty;
   } else {
     total = qty * m.price_per_sqm;
   }

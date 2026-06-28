@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AlertCircle, Mail, Sparkles } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getCurrentAppUser, dashboardPathForRole } from "@/lib/auth";
 import { sendOtpAction } from "./actions";
+import { SendOtpSubmit } from "./submit-button";
 
 export const runtime = "edge";
 
@@ -133,13 +133,7 @@ export default async function LoginPage({
               </div>
             </div>
 
-            <Button
-              type="submit"
-              className="w-full h-11 bg-gradient-to-br from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white font-bold shadow-md shadow-sky-500/30"
-            >
-              <Mail className="w-4 h-4 mr-2" aria-hidden />
-              Pošli mi kód
-            </Button>
+            <SendOtpSubmit />
           </form>
 
         </div>

@@ -22,6 +22,19 @@ import { EmailAutocomplete } from "@/components/ui/email-autocomplete";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import {
+  ROLE_BADGE_CLASSES,
+  ROLE_LABELS,
+  type AppUserRole,
+} from "@/lib/roles";
+
+/** Avatar farby per rola — saturovanejšie ako badge variants (full color circle). */
+const ROLE_AVATAR_CLASSES: Record<AppUserRole, string> = {
+  admin: "bg-amber-100 text-amber-800",
+  obchod: "bg-sky-100 text-sky-800",
+  obhliadky: "bg-violet-100 text-violet-800",
+  realizacie: "bg-emerald-100 text-emerald-800",
+};
 
 import {
   activateAgentAction,
@@ -132,15 +145,8 @@ function AgentRow({
     }
   }
 
-  async function toggleRole() {
-    const next = agent.role === "admin" ? "user" : "admin";
-    setBusy(true);
-    setError(null);
-    const res = await updateAgentAction(agent.id, { role: next });
-    setBusy(false);
-    if (!res.ok) setError(res.error);
-    else onChanged();
-  }
+  // Role toggle bol prerobený na full picker v PermissionsCard (admin/agents/[id])
+  // — admin musí explicitne vybrať rolu z 4 možností, nie len flip admin/obchod.
 
   async function toggleActive() {
     setBusy(true);
@@ -174,11 +180,10 @@ function AgentRow({
             <div
               className={cn(
                 "w-8 h-8 rounded-full inline-flex items-center justify-center text-xs font-bold shrink-0",
-                agent.role === "admin"
-                  ? "bg-amber-100 text-amber-800"
-                  : "bg-sky-100 text-sky-800",
+                ROLE_AVATAR_CLASSES[agent.role as AppUserRole] ??
+                  ROLE_AVATAR_CLASSES.obchod,
               )}
-              title={agent.role === "admin" ? "Admin" : "Obchodník"}
+              title={ROLE_LABELS[agent.role as AppUserRole] ?? "Obchod"}
             >
               {initials(agent.name || agent.email)}
             </div>
@@ -193,6 +198,16 @@ function AgentRow({
                     <span className="text-muted-foreground italic">bez mena</span>
                   )}
                 </Link>
+                {/* ROLE BADGE — vedľa mena, farby a label z lib/auth */}
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border",
+                    ROLE_BADGE_CLASSES[agent.role as AppUserRole] ??
+                      ROLE_BADGE_CLASSES.obchod,
+                  )}
+                >
+                  {ROLE_LABELS[agent.role as AppUserRole] ?? "Obchod"}
+                </span>
                 {agent.inactive_flag && (
                   <span
                     className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-800 text-[9px] font-bold uppercase"
@@ -210,7 +225,7 @@ function AgentRow({
         </td>
 
         <td className="px-3 py-2">
-          {agent.role === "user" ? (
+          {agent.role !== "admin" ? (
             agent.capacity > 0 ? (
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -298,8 +313,10 @@ function AddAgentModal({
 }) {
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
-  // Vždy "user" — admini sa pridávajú mimo tohto UI
-  const role: "user" = "user";
+  const [phone, setPhone] = React.useState("");
+  const [role, setRole] = React.useState<
+    "admin" | "obchod" | "obhliadky" | "realizacie"
+  >("obchod");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -313,7 +330,7 @@ function AddAgentModal({
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const res = await createAgentAction({ name, email, role, capacity: 5 });
+    const res = await createAgentAction({ name, email, phone, role, capacity: 5 });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -380,10 +397,62 @@ function AddAgentModal({
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label>Rola *</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    { id: "obchod", label: "Obchod", color: "sky" },
+                    { id: "obhliadky", label: "Obhliadky", color: "violet" },
+                    { id: "realizacie", label: "Realizácie", color: "emerald" },
+                    { id: "admin", label: "Admin", color: "amber" },
+                  ] as const
+                ).map((r) => {
+                  const active = role === r.id;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setRole(r.id)}
+                      className={
+                        "px-3 py-2 rounded-lg border-2 text-sm font-bold transition-all " +
+                        (active
+                          ? r.color === "sky"
+                            ? "border-sky-500 bg-sky-50 text-sky-900"
+                            : r.color === "violet"
+                              ? "border-violet-500 bg-violet-50 text-violet-900"
+                              : r.color === "emerald"
+                                ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                                : "border-amber-500 bg-amber-50 text-amber-900"
+                          : "border-zinc-200 bg-background hover:bg-muted/40 text-muted-foreground")
+                      }
+                    >
+                      {r.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                <strong>Obchod</strong> = volajú leady; <strong>Obhliadky</strong> = chodia obhliadnuť realizáciu; <strong>Realizácie</strong> = robia podlahy.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-phone">Telefón * (do mailov + PDF footera)</Label>
+              <Input
+                id="agent-phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+421 905 123 456"
+                required
+              />
+            </div>
+
             <div className="flex gap-2 pt-2 border-t">
               <Button
                 type="submit"
-                disabled={busy || !name.trim() || !email.trim()}
+                disabled={busy || !name.trim() || !email.trim() || !phone.trim()}
                 className="flex-1 bg-sky-600 hover:bg-sky-700"
               >
                 {busy ? "Vytváram…" : (<>

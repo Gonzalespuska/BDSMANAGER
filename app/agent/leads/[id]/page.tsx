@@ -38,6 +38,45 @@ const ACTIVITY_LABELS: Record<string, string> = {
   email_sent: "📧 Email odoslaný",
 };
 
+/** "27.06.2026 o 14:23:05" — explicitné DD.MM.YYYY o HH:MM:SS */
+function formatAbsolute(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} o ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/**
+ * Trvanie medzi dvomi ISO timestampmi v ľudskej forme:
+ *   "za 17 min 35 s od príchodu leadu"
+ *   "za 2 h 15 min od príchodu leadu"
+ *   "za 5 s od príchodu leadu"
+ */
+function formatDurationFromLead(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): string | null {
+  if (!from || !to) return null;
+  const diffMs = new Date(to).getTime() - new Date(from).getTime();
+  if (diffMs < 0) return null;
+  const sec = Math.floor(diffMs / 1000);
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const seconds = sec % 60;
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days} d`);
+  if (hours > 0) parts.push(`${hours} h`);
+  if (minutes > 0) parts.push(`${minutes} min`);
+  // Sekundy iba ak je celý čas pod 1h (inak je to šum)
+  if (days === 0 && hours === 0) {
+    parts.push(`${seconds} s`);
+  }
+  if (parts.length === 0) parts.push("0 s");
+  return `za ${parts.join(" ")} od príchodu leadu`;
+}
+
 export default async function LeadDetailPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
@@ -79,7 +118,12 @@ export default async function LeadDetailPage({ params }: PageProps) {
             </span>
             <span className="text-xs text-muted-foreground">
               {SOURCE_TYPE_LABELS[lead.source_type]} ·{" "}
-              {timeAgo(lead.created_at)}
+              <span title={formatAbsolute(lead.created_at)} className="font-semibold">
+                {timeAgo(lead.created_at)}
+              </span>
+              <span className="ml-1 text-muted-foreground/80 tabular-nums">
+                ({formatAbsolute(lead.created_at)})
+              </span>
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
@@ -158,6 +202,69 @@ export default async function LeadDetailPage({ params }: PageProps) {
 
           <section className="rounded-lg border bg-background p-5">
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
+              Časová os
+            </h2>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Lead vytvorený
+                </dt>
+                <dd className="font-bold tabular-nums">
+                  {formatAbsolute(lead.created_at)}
+                </dd>
+                <dd className="text-xs text-muted-foreground">
+                  {timeAgo(lead.created_at)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Číslo odhalené obchodákom
+                </dt>
+                <dd className="font-bold tabular-nums">
+                  {lead.phone_revealed_at
+                    ? formatAbsolute(lead.phone_revealed_at)
+                    : "—"}
+                </dd>
+                <dd className="text-xs font-bold text-emerald-700">
+                  {lead.phone_revealed_at
+                    ? (formatDurationFromLead(
+                        lead.created_at,
+                        lead.phone_revealed_at,
+                      ) ?? timeAgo(lead.phone_revealed_at))
+                    : "ešte neodhalené"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Prvý kontakt
+                </dt>
+                <dd className="font-bold tabular-nums">
+                  {lead.first_contact_at
+                    ? formatAbsolute(lead.first_contact_at)
+                    : "—"}
+                </dd>
+                <dd className="text-xs text-muted-foreground">
+                  {lead.first_contact_at
+                    ? timeAgo(lead.first_contact_at)
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Posledná aktivita
+                </dt>
+                <dd className="font-bold tabular-nums">
+                  {formatAbsolute(lead.last_activity_at)}
+                </dd>
+                <dd className="text-xs text-muted-foreground">
+                  {timeAgo(lead.last_activity_at)}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-lg border bg-background p-5">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
               Stav
             </h2>
             <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -200,9 +307,12 @@ export default async function LeadDetailPage({ params }: PageProps) {
                 <div className="font-semibold">
                   {ACTIVITY_LABELS[act.type] ?? act.type}
                 </div>
-                <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-0.5">
+                <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-0.5 tabular-nums">
                   <Clock className="w-3 h-3" aria-hidden />
-                  {timeAgo(act.created_at)}
+                  <span>{timeAgo(act.created_at)}</span>
+                  <span className="text-muted-foreground/70">
+                    · {formatAbsolute(act.created_at)}
+                  </span>
                 </div>
               </li>
             ))}

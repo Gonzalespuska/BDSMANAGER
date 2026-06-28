@@ -39,12 +39,7 @@ export function AppShell({
   const isDev = process.env.NODE_ENV !== "production";
 
   return (
-    <div
-      className={cn(
-        "flex flex-col bg-muted/30",
-        wide ? "h-screen overflow-hidden" : "min-h-screen",
-      )}
-    >
+    <div className="flex flex-col bg-muted/30 min-h-screen">
       {isDev && (
         <div className="bg-amber-100 border-b border-amber-200 text-amber-900 text-[11px] font-medium px-4 py-1.5 text-center">
           ⚡ DEV mode · auth bypass aktívny (prihlásený ako bootstrap admin). Vypne sa v produkcii.
@@ -52,7 +47,9 @@ export function AppShell({
       )}
 
       <header className="border-b bg-background sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 md:py-6 flex items-center justify-between gap-3">
+        {/* Header padding kompaktnejšie na notebookoch — predtým py-5/6 žralo
+            ~80 px vertical space na 16" obrazovkách. py-3/4 stačí. */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 md:py-4 flex items-center justify-between gap-3">
           <Link
             href={isAdmin ? "/admin" : "/agent"}
             className="hover:opacity-80 transition-opacity"
@@ -109,9 +106,11 @@ export function AppShell({
       <main
         className={cn(
           "flex-1 w-full mx-auto",
+          // wide = širšia max-width (generator/leady); natívny body scroll
+          // zachovaný — žiadne h-screen/overflow-hidden gymnastiky.
           wide
-            ? "max-w-none px-4 sm:px-6 py-4"
-            : "max-w-7xl px-4 sm:px-6 py-6 md:py-8",
+            ? "max-w-none px-3 sm:px-4 md:px-6 py-2 md:py-3 pb-6"
+            : "max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8 pb-6",
         )}
       >
         {children}

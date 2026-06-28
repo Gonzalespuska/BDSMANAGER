@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { AppUserRole } from "@/lib/auth";
 import {
   STATUS_META,
   SOURCE_TYPE_LABELS,
@@ -19,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { PermissionsCard } from "./permissions-card";
+import { PhoneEditor } from "./phone-editor";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -35,7 +37,7 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
   const { data: agent } = await sb
     .from("users")
     .select(
-      "id, email, name, role, active, capacity, auth_id, last_active_at, created_at, last_login_at",
+      "id, email, name, phone, role, active, capacity, auth_id, last_active_at, created_at, last_login_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -70,7 +72,7 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
   const inactiveHours = baseTs
     ? (Date.now() - new Date(baseTs).getTime()) / (1000 * 60 * 60)
     : 999;
-  const inactive24h = agent.role === "user" && inactiveHours >= 24;
+  const inactive24h = agent.role !== "admin" && inactiveHours >= 24;
 
   // 4) Stats
   const activeLeadCount = leads.filter(
@@ -200,10 +202,17 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      {/* Phone editor — telefón obchodníka pre email signature + PDF footer */}
+      <PhoneEditor
+        agentId={agent.id as string}
+        initialPhone={(agent.phone as string | null) ?? null}
+        agentName={(agent.name as string) || "obchodník"}
+      />
+
       {/* Permissions */}
       <PermissionsCard
         agentId={agent.id as string}
-        role={(agent.role as "admin" | "user") ?? "user"}
+        role={(agent.role as AppUserRole) ?? "obchod"}
         active={!!agent.active}
         name={(agent.name as string) || (agent.email as string) || "obchodník"}
       />

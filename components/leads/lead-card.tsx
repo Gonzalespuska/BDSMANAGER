@@ -65,35 +65,73 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
 
   async function handleCall() {
     if (!lead.phone) return;
-    setBusy(true);
-    // Reveal — server action zapíše phone_revealed_at + SLA. Status sa
-    // NEMENÍ — lead zostáva v Nové. Až klik na "Kontakt" / "Nedvíha"
-    // ho presunie. (Žiadny auto-dial — desktop browsery to blokujú.)
-    const result = await revealPhoneAction(lead.id);
-    if (result.ok) {
-      setLead({
-        ...lead,
-        phone_revealed_at: new Date().toISOString(),
+    // Optimistic UI — okamžite odhalíme číslo v UI, fetch ide na pozadí.
+    // Ak server zlyhá, vrátime UI späť do pôvodného stavu.
+    const prev = lead;
+    setLead({
+      ...lead,
+      phone_revealed_at: new Date().toISOString(),
+    });
+    try {
+      const r = await fetch("/api/lead/reveal-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_id: lead.id }),
       });
-    } else {
-      alert(`Chyba: ${result.error}`);
+      const json = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!r.ok || !json.ok) {
+        setLead(prev);
+        alert(`Chyba: ${json.error ?? `HTTP ${r.status}`}`);
+      }
+    } catch (e) {
+      setLead(prev);
+      alert(`Chyba: ${e instanceof Error ? e.message : "network"}`);
     }
-    setBusy(false);
+  }
+
+  // Unified helper — všetky akcie cez /api/lead/action
+  async function callLeadAction(
+    action: string,
+    extra?: Record<string, unknown>,
+  ): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
+    try {
+      const r = await fetch("/api/lead/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_id: lead.id, action, ...(extra ?? {}) }),
+      });
+      const json = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!r.ok || !json.ok) {
+        return {
+          ok: false,
+          error: (json.error as string) ?? `HTTP ${r.status}`,
+        };
+      }
+      return { ok: true, data: json };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "network" };
+    }
   }
 
   async function handleMissedCall() {
-    setBusy(true);
-    const result = await recordMissedCallAction(lead.id);
-    if (result.ok) {
-      setLead({
-        ...lead,
-        call_attempts: result.attempts,
-        status: "no_answer",
-      });
-    } else {
+    // Optimistic — okamžite zmeň UI, fetch ide na pozadí
+    const prev = lead;
+    setLead({
+      ...lead,
+      call_attempts: lead.call_attempts + 1,
+      status: "no_answer",
+    });
+    const result = await callLeadAction("missed_call");
+    if (!result.ok) {
+      setLead(prev);
       alert(`Chyba: ${result.error}`);
+    } else if (typeof result.data.attempts === "number") {
+      // Server potvrdil presný attempts count
+      setLead((cur) => ({ ...cur, call_attempts: result.data.attempts as number }));
     }
-    setBusy(false);
   }
 
   async function handleArchive() {
@@ -105,31 +143,26 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
       )
     )
       return;
-    setBusy(true);
-    const result = await archiveLeadAction(lead.id);
-    if (result.ok) {
-      setLead({ ...lead, status: "archived" });
-    } else {
+    const prev = lead;
+    setLead({ ...lead, status: "archived" });
+    const result = await callLeadAction("archive");
+    if (!result.ok) {
+      setLead(prev);
       alert(`Chyba: ${result.error}`);
     }
-    setBusy(false);
   }
 
   /**
    * "Kontakt" — agent volal a zákazník zdvihol.
-   * Nech sa lead presunie do "Kontakt" tabu (status zostáva phone_revealed
-   * — to už nastavila revealPhoneAction). Tu len značíme last_activity_at
-   * cez inline status change a refetch.
    */
   async function handleContact() {
-    setBusy(true);
-    const result = await changeStatusInlineAction(lead.id, "phone_revealed");
-    if (result.ok) {
-      setLead({ ...lead, status: "phone_revealed" });
-    } else {
+    const prev = lead;
+    setLead({ ...lead, status: "phone_revealed" });
+    const result = await callLeadAction("contact");
+    if (!result.ok) {
+      setLead(prev);
       alert(`Chyba: ${result.error}`);
     }
-    setBusy(false);
   }
 
   // WhatsApp deep link — funguje na mobile aj desktop (web.whatsapp.com)
@@ -361,8 +394,20 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               rozdelené medzi agentov rovnomerne (auto-assign), nepotrebujeme
               značiť kto ich vlastní. */}
 
-          {/* Hlavná akcia row: Email + Odhaliť/Zavolať + Ponuka */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* Hlavná akcia row.
+              - Pri NOVOM leade: iba Email + Odhaliť číslo (žiadna Ponuka —
+                najprv treba zavolať a zistiť čo zákazník chce).
+              - Po odhalení / v ďalších stavoch: + Ponuka button. */}
+          <div
+            className={cn(
+              "grid gap-2",
+              // 2 cols keď nie je malý Ponuka button (new + phone_revealed),
+              // 3 cols v ostatných stavoch (no_answer, interested, quote_sent…)
+              lead.status === "new" || lead.status === "phone_revealed"
+                ? "grid-cols-2"
+                : "grid-cols-3",
+            )}
+          >
             {emailHref ? (
               <Button asChild variant="outline" size="sm" className="h-10">
                 <a
@@ -414,16 +459,21 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 Zavolať
               </Button>
             )}
-            <Button
-              asChild
-              size="sm"
-              className="h-10 bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
-            >
-              <Link href={`/generator?lead=${lead.id}`}>
-                <Calculator className="w-4 h-4 mr-1.5" aria-hidden />
-                Ponuka
-              </Link>
-            </Button>
+            {/* Malý Ponuka button — len v stavoch kde nie je veľký CTA hore
+                (no_answer/interested/quote_sent). V "new" žiadny (najprv volaj),
+                v "phone_revealed" je big "Poslať cenovú ponuku" CTA (nedupluj). */}
+            {lead.status !== "new" && lead.status !== "phone_revealed" && (
+              <Button
+                asChild
+                size="sm"
+                className="h-10 bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
+              >
+                <Link href={`/generator?lead=${lead.id}`}>
+                  <Calculator className="w-4 h-4 mr-1.5" aria-hidden />
+                  Ponuka
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
         </div>

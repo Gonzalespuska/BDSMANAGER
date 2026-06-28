@@ -12,7 +12,7 @@ export interface AgentListRow {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "user";
+  role: "admin" | "obchod" | "obhliadky" | "realizacie";
   active: boolean;
   capacity: number;
   auth_id: string | null;
@@ -30,13 +30,14 @@ export default async function AdminAgentsPage() {
   noStore();
   const sb = createAdminClient();
 
-  // 1) Iba obchodníci (admini si robia permissions inde)
+  // 1) Všetci členovia tímu okrem admina (obchod / obhliadky / realizácie).
+  // Admin permissions sa upravujú v users [id] detaile cez permissions-card.
   const { data: usersRaw } = await sb
     .from("users")
     .select(
       "id, email, name, role, active, capacity, auth_id, last_active_at, created_at",
     )
-    .eq("role", "user")
+    .neq("role", "admin")
     .order("created_at", { ascending: true });
 
   const users = (usersRaw ?? []) as Omit<
@@ -98,7 +99,7 @@ export default async function AdminAgentsPage() {
       total_leads: totalMap.get(u.id) ?? 0,
       inactive_hours,
       // 24h+ neaktívny = neodhalil žiadne číslo za posledných 24h
-      inactive_flag: u.role === "user" && baseHours >= 24,
+      inactive_flag: u.role !== "admin" && baseHours >= 24,
     };
   });
 
@@ -114,7 +115,7 @@ export default async function AdminAgentsPage() {
         </Link>
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
           <Users className="w-6 h-6 text-sky-500" aria-hidden />
-          Obchodníci{" "}
+          Tím{" "}
           <span className="text-sky-500 tabular-nums">({agents.length})</span>
         </h1>
       </header>

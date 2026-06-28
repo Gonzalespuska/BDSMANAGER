@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentAppUser } from "@/lib/auth";
 import type { ChatMessage } from "@/lib/team-chat";
-import { searchChat } from "@/lib/team-chat";
+import { DEFAULT_ROOM_ID, searchChat } from "@/lib/team-chat";
 
 /**
  * Server actions pre Tím chat — len authenticated useri (peter, admin, ...).
@@ -11,6 +11,7 @@ import { searchChat } from "@/lib/team-chat";
 
 export async function sendChatMessageAction(
   body: string,
+  roomId: string = DEFAULT_ROOM_ID,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const user = await getCurrentAppUser();
   if (!user) return { ok: false, error: "unauthenticated" };
@@ -29,7 +30,7 @@ export async function sendChatMessageAction(
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("team_messages")
-    .insert({ user_id: user.id, body: trimmed })
+    .insert({ user_id: user.id, body: trimmed, room_id: roomId })
     .select("id")
     .single();
   if (error || !data) {
@@ -40,10 +41,11 @@ export async function sendChatMessageAction(
 
 export async function searchChatAction(
   keyword: string,
+  roomId?: string,
 ): Promise<{ ok: true; results: ChatMessage[] } | { ok: false; error: string }> {
   const user = await getCurrentAppUser();
   if (!user) return { ok: false, error: "unauthenticated" };
-  const results = await searchChat(keyword);
+  const results = await searchChat(keyword, roomId);
   return { ok: true, results };
 }
 
@@ -57,7 +59,6 @@ export async function deleteChatMessageAction(
   }
 
   const admin = createAdminClient();
-  // Owner alebo admin môže mazať
   const { data: msg } = await admin
     .from("team_messages")
     .select("user_id")
@@ -74,4 +75,31 @@ export async function deleteChatMessageAction(
     .eq("id", messageId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * Vytvor novú roomku (each user can — RLS allows authenticated).
+ * Pre rýchlosť používa fetch endpoint v UI (server actions sú v edge runtime
+ * občas pomalé). Túto akciu necháme len ako záloha.
+ */
+export async function createRoomAction(
+  title: string,
+): Promise<{ ok: true; room_id: string } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthenticated" };
+  if (user.id === "dev-user") {
+    return { ok: false, error: "dev fallback user" };
+  }
+  const t = title.trim();
+  if (!t) return { ok: false, error: "title required" };
+  if (t.length > 120) return { ok: false, error: "title too long (max 120)" };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("team_rooms")
+    .insert({ title: t, created_by: user.id })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "insert" };
+  return { ok: true, room_id: data.id };
 }

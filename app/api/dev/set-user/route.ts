@@ -5,9 +5,10 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * GET /api/dev/set-user?email=<email>&name=<name>&role=<user|admin>
+ * GET /api/dev/set-user?email=<email>&name=<name>&role=<admin|obchod|obhliadky|realizacie>
  *
  * Dev-only: vytvorí/aktualizuje usera + Supabase auth.
+ * Default rola: "obchod" (najčastejší prípad).
  */
 export async function GET(request: Request) {
   if (process.env.NODE_ENV === "production") {
@@ -17,7 +18,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const email = (searchParams.get("email") ?? "").trim().toLowerCase();
   const name = searchParams.get("name") ?? "Agent";
-  const role = searchParams.get("role") === "admin" ? "admin" : "user";
+  const ALLOWED_ROLES = ["admin", "obchod", "obhliadky", "realizacie"] as const;
+  const rawRole = searchParams.get("role") ?? "obchod";
+  const role = (ALLOWED_ROLES as readonly string[]).includes(rawRole)
+    ? (rawRole as (typeof ALLOWED_ROLES)[number])
+    : "obchod";
 
   if (!email) {
     return NextResponse.json(

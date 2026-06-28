@@ -3,8 +3,30 @@
 import * as React from "react";
 import { Check, Pencil, StickyNote, Trash2, X } from "lucide-react";
 
-import { saveLeadNoteAction } from "@/app/agent/actions";
 import { cn } from "@/lib/utils";
+
+async function saveNoteFast(
+  leadId: string,
+  note: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch("/api/lead/note", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: leadId, note }),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
+    if (!res.ok || !json.ok) {
+      return { ok: false, error: json.error ?? `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "network" };
+  }
+}
 
 /**
  * Inline poznámka na lead karte.
@@ -30,7 +52,7 @@ export function LeadNotesInline({
 
   async function handleSave() {
     setBusy(true);
-    const result = await saveLeadNoteAction(leadId, draft);
+    const result = await saveNoteFast(leadId, draft);
     if (result.ok) {
       setNote(draft.trim());
       setEditing(false);
@@ -43,7 +65,7 @@ export function LeadNotesInline({
   async function handleDelete() {
     if (!confirm("Naozaj vymazať poznámku?")) return;
     setBusy(true);
-    const result = await saveLeadNoteAction(leadId, "");
+    const result = await saveNoteFast(leadId, "");
     if (result.ok) {
       setNote("");
       setDraft("");

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Phone, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CityAutocomplete } from "@/components/ui/city-autocomplete";
 import { EmailAutocomplete } from "@/components/ui/email-autocomplete";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,10 +14,10 @@ import { Label } from "@/components/ui/label";
  * Manual lead intake form — pre situácie kedy zákazník zavolal priamo,
  * stretol sa na výstave, prišiel cez známeho.
  *
- * Submituje cez webhook s source_id manuálneho zdroja.
- * Po úspechu zatvorí modal + router.refresh() (realtime by tiež broadcasted).
+ * Submituje cez /api/lead/create-manual ktorý lead automaticky priradí
+ * tvorcovi (currentUser). Auto-assign trigger sa preskočí.
+ * Po úspechu zatvorí modal + redirect na lead detail.
  */
-const MANUAL_SOURCE_ID = "55555555-5555-5555-5555-555555555555";
 
 export function NewLeadButton() {
   const [open, setOpen] = React.useState(false);
@@ -75,7 +76,7 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
       if (form.lokalita.trim()) data.lokalita = form.lokalita.trim();
       if (form.message.trim()) data.message = form.message.trim();
 
-      const res = await fetch(`/api/webhook/lead/${MANUAL_SOURCE_ID}`, {
+      const res = await fetch(`/api/lead/create-manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -86,12 +87,17 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
           data,
         }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Vytváranie zlyhalo");
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        lead_id?: string;
+        error?: string;
+      };
+      if (!res.ok || !json.ok || !json.lead_id) {
+        throw new Error(json.error || `Vytváranie zlyhalo (HTTP ${res.status})`);
       }
-      router.refresh();
       onClose();
+      // Skoč rovno na detail leadu — obchodák hneď vidí čo vytvoril
+      router.push(`/agent/leads/${json.lead_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Neznáma chyba");
     } finally {
@@ -219,11 +225,11 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="lokalita">Lokalita</Label>
-              <Input
+              <CityAutocomplete
                 id="lokalita"
                 value={form.lokalita}
-                onChange={(e) => update("lokalita", e.target.value)}
-                placeholder="Bratislava"
+                onChange={(v) => update("lokalita", v)}
+                placeholder="napr. Bratislava"
               />
             </div>
           </div>

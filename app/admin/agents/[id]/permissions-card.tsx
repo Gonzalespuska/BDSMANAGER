@@ -24,9 +24,9 @@ import { cn } from "@/lib/utils";
 /**
  * Permissions karta v detail obchodníka.
  * Akcie:
- *   - Povýšiť na admina (role: user → admin)  — 2× confirm
- *   - Degradovať na obchodníka (admin → user) — 2× confirm
- *   - Odobrať access (DELETE z DB + auth)     — 1× confirm
+ *   - Povýšiť na admina (role: obchod/obhliadky/realizacie → admin) — 2× confirm
+ *   - Degradovať na obchodníka (admin → obchod)                    — 2× confirm
+ *   - Odobrať access (DELETE z DB + auth)                          — 1× confirm
  */
 type ActionType = "promote" | "demote" | "delete";
 
@@ -37,7 +37,7 @@ export function PermissionsCard({
   name,
 }: {
   agentId: string;
-  role: "admin" | "user";
+  role: "admin" | "obchod" | "obhliadky" | "realizacie";
   active: boolean;
   name: string;
 }) {
@@ -69,7 +69,7 @@ export function PermissionsCard({
     if (confirmAction === "promote") {
       res = await updateAgentAction(agentId, { role: "admin" });
     } else if (confirmAction === "demote") {
-      res = await updateAgentAction(agentId, { role: "user" });
+      res = await updateAgentAction(agentId, { role: "obchod" });
     } else {
       res = await deleteAgentAction(agentId);
     }

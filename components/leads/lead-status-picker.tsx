@@ -5,7 +5,6 @@ import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STATUS_META, type LeadStatus } from "@/lib/types/lead";
-import { changeStatusInlineAction } from "@/app/agent/actions";
 
 // Picker zobrazuje iba 6 high-level statusov ktoré matchujú tab kategórie:
 //   Nový → Kontakt → Nedvíha → Otvorené → Ukončené / Archivované
@@ -85,16 +84,35 @@ export function LeadStatusPicker({
       setOpen(false);
       return;
     }
-    setBusy(true);
-    const result = await changeStatusInlineAction(leadId, newStatus);
-    if (result.ok) {
-      setCurrent(newStatus);
-      onChange?.(newStatus);
-      setOpen(false);
-    } else {
-      alert(`Chyba: ${result.error}`);
+    // Optimistic — UI sa prepne hneď, fetch ide na pozadí; revert ak server zlyhá
+    const prev = current;
+    setCurrent(newStatus);
+    onChange?.(newStatus);
+    setOpen(false);
+    try {
+      const r = await fetch("/api/lead/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: leadId,
+          action: "change_status",
+          new_status: newStatus,
+        }),
+      });
+      const json = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!r.ok || !json.ok) {
+        setCurrent(prev);
+        onChange?.(prev);
+        alert(`Chyba: ${json.error ?? `HTTP ${r.status}`}`);
+      }
+    } catch (e) {
+      setCurrent(prev);
+      onChange?.(prev);
+      alert(`Chyba: ${e instanceof Error ? e.message : "network"}`);
     }
-    setBusy(false);
   }
 
   const meta = STATUS_META[current];

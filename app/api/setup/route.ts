@@ -22,7 +22,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * SUPABASE_SECRET_KEY čo je server-only. V production by sa to malo skryť za
  * env-flag alebo zmazať po prvom použití. Pre dev je to OK.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // GUARD: v produkcii sa /api/setup môže spustiť IBA s tajným tokenom.
+  // Bez tokenu (alebo nesprávny) → 403, žiadny info leak.
+  // Token sa nastavuje cez SETUP_TOKEN env var v CF Pages.
+  if (process.env.NODE_ENV === "production") {
+    const setupToken = process.env.SETUP_TOKEN;
+    const providedToken = new URL(request.url).searchParams.get("token");
+    if (!setupToken || providedToken !== setupToken) {
+      return NextResponse.json(
+        { ok: false, error: "forbidden" },
+        { status: 403 },
+      );
+    }
+  }
+
   const bootstrapEmail = (
     process.env.BOOTSTRAP_ADMIN_EMAIL ?? ""
   )

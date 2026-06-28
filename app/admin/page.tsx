@@ -32,7 +32,7 @@ export default async function AdminDashboard() {
         .from("users")
         .select("*", { count: "exact", head: true })
         .eq("active", true)
-        .eq("role", "user"),
+        .eq("role", "obchod"),
       admin
         .from("leads")
         .select("*", { count: "exact", head: true })

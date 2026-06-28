@@ -12,7 +12,7 @@
 #     BOOTSTRAP_ADMIN_EMAIL
 #     BOOTSTRAP_ADMIN_NAME
 
-name = "bdsmanager"
+name = "bdsmanagerr"
 compatibility_date = "2026-05-29"
 # nodejs_compat — povolí Node built-ins (Buffer, crypto, ...) v Workers runtime.
 # Niektoré Supabase deps to potrebujú.

@@ -3,6 +3,17 @@ export const runtime = "edge";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentAppUser } from "@/lib/auth";
+
+/**
+ * Sanitize string pre email header — odstráni CR/LF/Tab a kontrolné znaky
+ * aby attacker nemohol pridať fake hlavičky (header injection).
+ */
+function sanitizeHeader(s: string): string {
+  return s.replace(/[\r\n\t\x00-\x1f\x7f]/g, " ").trim().slice(0, 200);
+}
+
+const EMAIL_RE = /^[^\s<>"@]+@[^\s<>"@]+\.[^\s<>"@]+$/;
 
 /**
  * Resend HTTP API (POST https://api.resend.com/emails) used directly
@@ -16,6 +27,8 @@ async function sendViaResendApi(
     to: string;
     subject: string;
     text: string;
+    bcc?: string | string[];
+    reply_to?: string | string[];
     attachments?: Array<{ filename: string; content: string }>;
   },
 ): Promise<{ id?: string; error?: { message: string } }> {
@@ -65,6 +78,15 @@ async function sendViaResendApi(
  *   → vracia { ok: false, error: "no_resend_key" } a UI fall-back na .eml download.
  */
 export async function POST(request: NextRequest) {
+  // AUTH: iba prihlásený obchodník/admin smie posielať ponuky
+  const user = await getCurrentAppUser();
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "unauthenticated" },
+      { status: 401 },
+    );
+  }
+
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) {
     return NextResponse.json(
@@ -86,6 +108,10 @@ export async function POST(request: NextRequest) {
     body_text?: string;
     pdf_base64?: string;
     pdf_filename?: string;
+    /** Email obchodáka (Reply-To + BCC copy do jeho inboxu) */
+    agent_email?: string;
+    /** Meno obchodáka — vloží sa do From display name */
+    agent_name?: string;
   };
   try {
     body = await request.json();
@@ -103,14 +129,68 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const fromAddress =
-    process.env.QUOTE_EMAIL_FROM ?? "EPOXIDOVO <onboarding@resend.dev>";
+  // Validácia emailov + sanitácia hlavičiek (anti header-injection)
+  if (!EMAIL_RE.test(body.to_email)) {
+    return NextResponse.json(
+      { ok: false, error: "invalid_to_email" },
+      { status: 400 },
+    );
+  }
+  // Length-limit prevencia DoS/spam
+  if (body.subject.length > 200 || body.body_text.length > 20000) {
+    return NextResponse.json(
+      { ok: false, error: "too_long" },
+      { status: 400 },
+    );
+  }
+
+  // OWNERSHIP: ak je lead_id, over že patrí tomu kto posiela (alebo admin)
+  if (body.lead_id) {
+    const admin = createAdminClient();
+    const { data: lead } = await admin
+      .from("leads")
+      .select("assigned_to")
+      .eq("id", body.lead_id)
+      .maybeSingle();
+    if (!lead) {
+      return NextResponse.json(
+        { ok: false, error: "lead_not_found" },
+        { status: 404 },
+      );
+    }
+    if (lead.assigned_to !== user.id && user.role !== "admin") {
+      return NextResponse.json(
+        { ok: false, error: "forbidden_not_your_lead" },
+        { status: 403 },
+      );
+    }
+  }
+
+  // Anti-spoofing: agent_email MUSÍ patriť aktuálnemu prihlásenému userovi.
+  // Inak by mohol kdokoľvek nastaviť Reply-To na cudzí email.
+  const safeAgentEmail =
+    body.agent_email && body.agent_email.toLowerCase() === user.email.toLowerCase()
+      ? body.agent_email
+      : user.email;
+  const safeAgentName = sanitizeHeader(body.agent_name || user.name);
+  const safeSubject = sanitizeHeader(body.subject);
+
+  // From: agent meno (sanitized) v display časti; doména z env (verified Resend).
+  const defaultFrom =
+    process.env.QUOTE_EMAIL_FROM ?? "EPOXIDOVO <noreply@najcrm.sk>";
+  const fromAddress = safeAgentName
+    ? defaultFrom.replace(/^[^<]+/, `${safeAgentName} (EPOXIDOVO) `)
+    : defaultFrom;
 
   try {
     const { id: resendId, error } = await sendViaResendApi(resendKey, {
       from: fromAddress,
       to: body.to_email,
-      subject: body.subject,
+      // Reply-To: zákazník klikne Reply → ide priamo obchodákovi (over. email)
+      reply_to: safeAgentEmail,
+      // BCC: obchodák dostane kópiu do svojho Gmail inboxu (vidí to v Sent)
+      bcc: safeAgentEmail,
+      subject: safeSubject,
       text: body.body_text,
       attachments: [
         {

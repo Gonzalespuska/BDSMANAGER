@@ -23,7 +23,7 @@ export type AgentRow = {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "user";
+  role: "admin" | "obchod" | "obhliadky" | "realizacie";
   active: boolean;
   capacity: number;
   active_leads: number;
@@ -75,14 +75,14 @@ export async function getTeamWorkload(): Promise<AgentRow[]> {
       id: u.id,
       email: u.email,
       name: u.name,
-      role: u.role as "admin" | "user",
+      role: u.role as "admin" | "obchod" | "obhliadky" | "realizacie",
       active: u.active,
       capacity: u.capacity ?? 5,
       active_leads: activeMap.get(u.id) ?? 0,
       total_leads: totalMap.get(u.id) ?? 0,
       last_active_at: u.last_active_at,
       inactive_hours,
-      inactive_flag: u.role === "user" && (inactive_hours ?? 999) >= 48,
+      inactive_flag: u.role !== "admin" && (inactive_hours ?? 999) >= 48,
       created_at: u.created_at,
     };
   });
