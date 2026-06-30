@@ -68,6 +68,42 @@ export interface Material {
   variant?: "epoxid" | "polyuretan";
 }
 
+/**
+ * Množstevné zľavy — automatický discount podľa m² zákazky.
+ * Logika: pri 100+ m² má reálne lepšiu unit ekonomiku (transport, setup
+ * sa amortizuje), preto môžeš dať zľavu a stále byť ziskový.
+ *
+ * Tiers sú hardcoded zatiaľ — v budúcnosti admin UI na /admin/settings.
+ *
+ * Aplikujú sa NA SUBTOTAL (pred Špeciálnou zľavou). Nie na hidden
+ * surcharge ani dopravu.
+ */
+export interface VolumeDiscountTier {
+  min_m2: number;
+  discount_pct: number;
+  label: string;
+}
+
+export const VOLUME_DISCOUNT_TIERS: VolumeDiscountTier[] = [
+  { min_m2: 0, discount_pct: 0, label: "Štandardná cena" },
+  { min_m2: 100, discount_pct: 3, label: "Množstevná zľava 3% (od 100 m²)" },
+  { min_m2: 300, discount_pct: 6, label: "Množstevná zľava 6% (od 300 m²)" },
+  { min_m2: 500, discount_pct: 10, label: "Množstevná zľava 10% (od 500 m²)" },
+  { min_m2: 1000, discount_pct: 15, label: "Množstevná zľava 15% (od 1000 m²)" },
+];
+
+/**
+ * Vráti aktuálny tier pre danú plochu. Berie najvyšší tier ktorý m²
+ * presahuje. Pri 250 m² → 100 m² tier (3%). Pri 500 m² → 500 m² tier (10%).
+ */
+export function getVolumeDiscountTier(m2: number): VolumeDiscountTier {
+  let active = VOLUME_DISCOUNT_TIERS[0];
+  for (const tier of VOLUME_DISCOUNT_TIERS) {
+    if (m2 >= tier.min_m2) active = tier;
+  }
+  return active;
+}
+
 /** Akuzatív skloneného podstatného mena pre vetu "na ... podlahu":
  *    na jednofarebnú podlahu / na chipsovú / na mramorovú / na metalickú
  */

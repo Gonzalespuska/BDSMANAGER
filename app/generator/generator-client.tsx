@@ -30,6 +30,7 @@ import {
   FLOOR_TYPE_META,
   formatEur,
   getMaterialsByFloorType,
+  getVolumeDiscountTier,
   MATERIALS,
   type FloorType,
   type Material,
@@ -253,7 +254,21 @@ export function GeneratorClient({
 
   // Subtotal = súčet predajných cien všetkých povolených riadkov.
   // Sadzby v Material sú UŽ FINÁLNE — calcLine vracia rovno predajnú cenu.
-  const subtotal = calcs.reduce((s, c) => s + (c.calc?.total ?? 0), 0);
+  const subtotalRaw = calcs.reduce((s, c) => s + (c.calc?.total ?? 0), 0);
+
+  // ─── Množstevná zľava (automatický volume discount podľa m²) ──────────
+  // Pri 100/300/500/1000+ m² dostane zákazník automaticky 3/6/10/15% zľavu
+  // (tiery sú v lib/data/materials.ts). Aplikuje sa na subtotal predtým
+  // než sa pridá margin alebo špeciálna zľava.
+  const effectiveM2 = (() => {
+    const firstReq = materials.find((m) => !m.optional);
+    if (!firstReq) return 0;
+    return parseFloat(lines[firstReq.id]?.m2 ?? "") || 0;
+  })();
+  const volumeTier = getVolumeDiscountTier(effectiveM2);
+  const volumeDiscountValue = subtotalRaw * (volumeTier.discount_pct / 100);
+  const subtotal = subtotalRaw - volumeDiscountValue;
+
   const marginPercent = parseFloat(margin) || 0;
   const marginValue = subtotal * (marginPercent / 100);
 
@@ -734,6 +749,11 @@ ${signatureLines.join("\n")}`;
               <div>
                 <span className="font-bold">Cena/m²:</span>{" "}
                 {formatEur(total / requiredM2Value)}
+              </div>
+            )}
+            {volumeTier.discount_pct > 0 && (
+              <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-[10px] uppercase tracking-wider">
+                ✓ {volumeTier.label} (−{formatEur(volumeDiscountValue)})
               </div>
             )}
           </div>
