@@ -110,6 +110,7 @@ export function GeneratorClient({
   // explicitne potvrdí kam ide robiť. Pôvodnú hodnotu z leadu ponúkneme ako
   // klikateľný suggestion chip pod inputom.
   const [lokalita, setLokalita] = React.useState<string>("");
+  const [manualKm, setManualKm] = React.useState<string>("");
   const leadSuggestedLokalita = leadContext?.lokalita ?? "";
   // Email zákazníka — prefilled z leadu, ale editovateľný (môžeš ho meniť
   // alebo zadať manuálne keď generátor otvoríš bez leadu).
@@ -273,7 +274,17 @@ export function GeneratorClient({
   const marginValue = subtotal * (marginPercent / 100);
 
   // ─── Doprava + dĺžka realizácie ──────────────────────────────────────
-  const kmOneWay = getCityDistanceKm(lokalita);
+  const cityKm = getCityDistanceKm(lokalita);
+  const manualKmValue = parseFloat(manualKm) || 0;
+  // Hierarchia: 1) zoznam miest → 2) manual override ak obchodník zadal,
+  // a ak mesto nie je v zozname → manual je hlavný zdroj.
+  const kmOneWay =
+    cityKm != null && manualKmValue === 0
+      ? cityKm
+      : manualKmValue > 0
+        ? manualKmValue
+        : null;
+  const showManualKmInput = lokalita.trim().length > 0 && cityKm == null;
   const transport = kmOneWay != null ? calcTransport(kmOneWay) : null;
   // m² pre dni počítame z prvého povinného (úprava povrchu)
   const requiredM2Value = (() => {
@@ -667,6 +678,29 @@ ${signatureLines.join("\n")}`;
               className="mt-1"
             />
           </div>
+          {showManualKmInput && (
+            <div className="shrink-0">
+              <Label
+                htmlFor="manual-km"
+                className="text-[10px] uppercase tracking-wider font-bold text-amber-700"
+              >
+                Mesto nie je v zozname — zadaj km
+              </Label>
+              <div className="mt-1 inline-flex items-center gap-1">
+                <Input
+                  id="manual-km"
+                  type="number"
+                  min={0}
+                  max={500}
+                  value={manualKm}
+                  onChange={(e) => setManualKm(e.target.value)}
+                  placeholder="napr. 180"
+                  className="h-9 w-24 text-sm text-right font-bold tabular-nums"
+                />
+                <span className="text-xs font-bold text-muted-foreground">km</span>
+              </div>
+            </div>
+          )}
           <div className="text-right shrink-0">
             <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
               Doprava
