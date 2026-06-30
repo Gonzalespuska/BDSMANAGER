@@ -3,18 +3,63 @@ import {
   ArrowRight,
   Calculator,
   Calendar as CalendarIcon,
+  ClipboardList,
+  Hammer,
   Phone,
   ShieldCheck,
   Users as UsersIcon,
 } from "lucide-react";
 
 import type { AppUser } from "@/lib/auth";
+import { dashboardPathForRole, navTabsForRole, type NavTabId } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/lib/notifications";
 
 import { NavPillClient } from "./nav-pill-client";
 import { ProfileMenu } from "./profile-menu";
 import { NotificationsBell } from "./notifications-bell";
+
+/** Definícia každej navigačnej dlaždice — href, label, ikona. */
+const NAV_TAB_DEFS: Record<
+  NavTabId,
+  { href: string; label: string; icon: React.ReactNode }
+> = {
+  agent: {
+    href: "/agent",
+    label: "Leady",
+    icon: <Phone className="w-4 h-4" />,
+  },
+  obhliadky: {
+    href: "/obhliadky",
+    label: "Obhliadky",
+    icon: <ClipboardList className="w-4 h-4" />,
+  },
+  realizacie: {
+    href: "/realizacie",
+    label: "Realizácie",
+    icon: <Hammer className="w-4 h-4" />,
+  },
+  calendar: {
+    href: "/calendar",
+    label: "Kalendár",
+    icon: <CalendarIcon className="w-4 h-4" />,
+  },
+  generator: {
+    href: "/generator",
+    label: "Generátor ponúk",
+    icon: <Calculator className="w-4 h-4" />,
+  },
+  team: {
+    href: "/agent/team",
+    label: "Tím chat",
+    icon: <UsersIcon className="w-4 h-4" />,
+  },
+  admin: {
+    href: "/admin",
+    label: "Admin",
+    icon: <ShieldCheck className="w-4 h-4" />,
+  },
+};
 
 /**
  * Spoločný layout shell pre /admin, /agent a /generator.
@@ -37,6 +82,8 @@ export function AppShell({
 }) {
   const isAdmin = user.role === "admin";
   const isDev = process.env.NODE_ENV !== "production";
+  const visibleTabs = navTabsForRole(user.role);
+  const homeHref = dashboardPathForRole(user.role);
 
   return (
     <div className="flex flex-col bg-muted/30 min-h-screen">
@@ -51,7 +98,7 @@ export function AppShell({
             ~80 px vertical space na 16" obrazovkách. py-3/4 stačí. */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 md:py-4 flex items-center justify-between gap-3">
           <Link
-            href={isAdmin ? "/admin" : "/agent"}
+            href={homeHref}
             className="hover:opacity-80 transition-opacity"
           >
             <div className="text-2xl md:text-3xl font-extrabold tracking-tight leading-none">
@@ -78,28 +125,20 @@ export function AppShell({
           </div>
         </div>
 
-        {/* Secondary nav — pills */}
+        {/* Secondary nav — pills. Set zobrazenených tabov závisí od role:
+            - admin → všetky (Leady, Obhliadky, Realizácie, Kalendár, Generátor, Tím, Admin)
+            - obchod → Leady, Kalendár, Generátor, Tím chat
+            - obhliadky → Obhliadky, Kalendár, Tím chat
+            - realizacie → Realizácie, Kalendár, Tím chat */}
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 pb-3 flex items-center gap-2 flex-wrap">
-          <NavPill href="/agent" icon={<Phone className="w-4 h-4" />}>
-            Leady
-          </NavPill>
-          <NavPill href="/calendar" icon={<CalendarIcon className="w-4 h-4" />}>
-            Kalendár
-          </NavPill>
-          <NavPill
-            href="/generator"
-            icon={<Calculator className="w-4 h-4" />}
-          >
-            Generátor ponúk
-          </NavPill>
-          <NavPill href="/agent/team" icon={<UsersIcon className="w-4 h-4" />}>
-            Tím chat
-          </NavPill>
-          {isAdmin && (
-            <NavPill href="/admin" icon={<ShieldCheck className="w-4 h-4" />}>
-              Admin
-            </NavPill>
-          )}
+          {visibleTabs.map((tabId) => {
+            const def = NAV_TAB_DEFS[tabId];
+            return (
+              <NavPill key={tabId} href={def.href} icon={def.icon}>
+                {def.label}
+              </NavPill>
+            );
+          })}
         </nav>
       </header>
 

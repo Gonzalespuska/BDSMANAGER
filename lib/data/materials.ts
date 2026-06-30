@@ -48,10 +48,18 @@ export interface Material {
   default_enabled?: boolean;
   /**
    * Skrytá pre zákazníka — položka sa nezobrazí v PDF cenovej ponuke, ale jej
-   * suma sa pripočíta k celkovej cene. Používa sa pre "Zložka" (manuálny
-   * príplatok obchodáka, napr. komplikovaný terén / kokot zákazník).
+   * suma sa pripočíta k celkovej cene. Používa sa pre "Skrytú zložku" (manuálny
+   * markup obchodáka, napr. komplikovaný terén / kokot zákazník).
    */
   hidden_in_pdf?: boolean;
+  /**
+   * Vyžaduje custom label od obchodníka pri pridaní (napr. "Doprava 200 km",
+   * "Demontáž starej podlahy"). Použité pre POMENOVANÚ zložku — zobrazí sa
+   * na PDF/FA s týmto názvom (nie s genérickým "Zložka").
+   *
+   * Bez labelu sa položka NEZAPOČÍTA do total — UI vynúti zadanie textu.
+   */
+  requires_label?: boolean;
   /**
    * Variant materiálu — keď jeden typ podlahy má niekoľko alternatívnych
    * materiálov (napr. jednofarebná: epoxid vs polyuretán). Do calcs ide len
@@ -128,15 +136,29 @@ function commonOptional(floor_type: FloorType): Material[] {
       optional: true,
     },
     {
-      // ZLOŽKA — manuálny EUR príplatok ktorý obchodák pridá podľa situácie
-      // (komplikovaný terén, ťažký zákazník, etc.). Skryté v PDF — zákazník
-      // to nevidí ako samostatný riadok, len sumu zarátanú v celkovej cene.
+      // ZLOŽKA — obchodník KLIKNE na názov, premenuje ju (napr. "Doprava 200 km",
+      // "Demontáž starej podlahy") + zadá sumu. Zobrazí sa na PDF/FA ako
+      // samostatný riadok s tým názvom. Bez premenovania sa NEZAPOČÍTA — UI ju
+      // vizuálne odlíši kým obchodník nezadá text.
       id: `${floor_type}-zlozka`,
       floor_type,
       name: "Zložka",
       unit: "surcharge",
       price_per_sqm: 0,
-      unit_label: "€ (manuálne)",
+      unit_label: "€",
+      optional: true,
+      requires_label: true,
+    },
+    {
+      // SKRYTÁ ZLOŽKA — manuálny markup ktorý obchodník pridá podľa situácie
+      // (komplikovaný terén, ťažký zákazník, etc.). NIE JE viditeľná v PDF —
+      // zákazník nevidí samostatný riadok, len sumu zarátanú v celkovej cene.
+      id: `${floor_type}-zlozka-skryta`,
+      floor_type,
+      name: "Skrytá zložka",
+      unit: "surcharge",
+      price_per_sqm: 0,
+      unit_label: "€ (skryté)",
       optional: true,
       hidden_in_pdf: true,
     },
@@ -357,6 +379,7 @@ export function calcLine(
   m: Material,
   m2: number,
   mm: number,
+  customLabel?: string,
 ): QuoteLineCalc {
   let qty = Math.max(0, m2);
   let mmEff = 0;
@@ -381,7 +404,9 @@ export function calcLine(
 
   return {
     material_id: m.id,
-    material_name: m.name,
+    // Pomenovaná zložka → custom label od obchodníka (napr. "Doprava 200 km").
+    // Bez labelu padne na default name materiálu.
+    material_name: customLabel?.trim() || m.name,
     m2: qty,
     mm: mmEff,
     poolable: false,

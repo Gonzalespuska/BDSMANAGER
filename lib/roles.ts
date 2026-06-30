@@ -44,11 +44,52 @@ export const ALLOWED_ROLES: readonly AppUserRole[] = [
 ];
 
 /**
- * Vráti správny dashboard URL pre rolu.
- *   - admin → /admin
- *   - obchod / obhliadky / realizacie → /agent (zdielaný dashboard
- *     s leadmi; obhliadky/realizacie nemajú vlastné view zatiaľ)
+ * Vráti správny dashboard URL pre rolu — každá rola má vlastný hlavný view:
+ *   - admin     → /admin (správa tímu, integrácie, štatistiky)
+ *   - obchod    → /agent (leady, generátor ponúk)
+ *   - obhliadky → /obhliadky (priradené obhliadky, formulár s rozmermi)
+ *   - realizacie → /realizacie (naplánované zákazky, materiálové výdaje)
  */
 export function dashboardPathForRole(role: AppUserRole): string {
-  return role === "admin" ? "/admin" : "/agent";
+  switch (role) {
+    case "admin":
+      return "/admin";
+    case "obchod":
+      return "/agent";
+    case "obhliadky":
+      return "/obhliadky";
+    case "realizacie":
+      return "/realizacie";
+  }
 }
+
+/** Primary nav tabs ktoré rola vidí. Admin vidí všetko. */
+export function navTabsForRole(role: AppUserRole): NavTabId[] {
+  switch (role) {
+    case "admin":
+      return [
+        "agent",
+        "obhliadky",
+        "realizacie",
+        "calendar",
+        "generator",
+        "team",
+        "admin",
+      ];
+    case "obchod":
+      return ["agent", "calendar", "generator", "team"];
+    case "obhliadky":
+      return ["obhliadky", "calendar", "team"];
+    case "realizacie":
+      return ["realizacie", "calendar", "team"];
+  }
+}
+
+export type NavTabId =
+  | "agent"
+  | "obhliadky"
+  | "realizacie"
+  | "calendar"
+  | "generator"
+  | "team"
+  | "admin";

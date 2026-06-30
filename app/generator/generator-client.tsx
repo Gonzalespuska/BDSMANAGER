@@ -49,6 +49,8 @@ interface LineState {
   m2: string;
   mm: string;
   poolable?: boolean;
+  /** Custom label pre pomenovanú zložku (napr. "Doprava 200 km"). */
+  customLabel?: string;
 }
 
 export interface LeadContext {
@@ -241,7 +243,12 @@ export function GeneratorClient({
     if (!ls.enabled) return { m, calc: null };
     const m2 = parseFloat(ls.m2) || 0;
     const mm = parseFloat(ls.mm) || 0;
-    return { m, calc: calcLine(m, m2, mm) };
+    // Pomenovaná zložka bez labelu = ignorujeme (UI vynúti zadať text).
+    // Inak by sa na PDF objavil generický "Pomenovaná zložka" riadok.
+    if (m.requires_label && !(ls.customLabel?.trim())) {
+      return { m, calc: null };
+    }
+    return { m, calc: calcLine(m, m2, mm, ls.customLabel) };
   });
 
   // Subtotal = súčet predajných cien všetkých povolených riadkov.
@@ -1191,8 +1198,44 @@ function LineRow({
                 +
               </span>
             )}
-            {material.name}
-            {material.optional && (
+            {material.requires_label ? (
+              // Inline-editable title — kliknutím sa "Zložka" zmení na input,
+              // obchodník zadá vlastný názov (napr. "Doprava 200 km"). Bez
+              // názvu sa do total nezapočíta (varovanie pod inputom).
+              <span
+                className="inline-flex items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Input
+                  type="text"
+                  value={state.customLabel ?? ""}
+                  onFocus={ensureEnabled}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onChange((prev) => ({ ...prev, customLabel: v }));
+                  }}
+                  placeholder="Pomenovaná zložka"
+                  aria-label="Názov zložky (zobrazí sa na cenovej ponuke)"
+                  className={cn(
+                    "h-8 text-sm font-semibold w-64",
+                    !state.customLabel?.trim() &&
+                      state.enabled &&
+                      "border-amber-300 bg-amber-50/30",
+                  )}
+                />
+                {state.enabled && !state.customLabel?.trim() && (
+                  <span
+                    className="text-[9px] uppercase tracking-wider font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded"
+                    title="Bez názvu sa nepripočíta do ceny — pomenuj zložku"
+                  >
+                    pomenuj
+                  </span>
+                )}
+              </span>
+            ) : (
+              material.name
+            )}
+            {material.optional && !material.requires_label && (
               <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                 voliteľné
               </span>
@@ -1200,9 +1243,14 @@ function LineRow({
           </div>
         </div>
 
-        {/* Zložka — EUR input (manuálne, skrytý v PDF) */}
+        {/* Zložka — len EUR input + badge (label input je INLINE v titulku).
+            - requires_label → modrý "NA FA" badge (viditeľná na PDF s názvom)
+            - hidden_in_pdf  → žltý "SKRYTÉ" badge (markup pre kokotov) */}
         {material.unit === "surcharge" && (
-          <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="inline-flex items-center gap-1.5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <span className="text-sm font-bold text-muted-foreground">€</span>
             <Input
               type="number"
@@ -1222,12 +1270,21 @@ function LineRow({
               }}
               className="h-9 w-24 text-sm text-right font-bold tabular-nums"
             />
-            <span
-              className="text-[9px] uppercase tracking-wider font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded"
-              title="Skryté v cenovej ponuke — len započítané v celkovej cene"
-            >
-              skryté
-            </span>
+            {material.hidden_in_pdf ? (
+              <span
+                className="text-[9px] uppercase tracking-wider font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded"
+                title="Skryté v cenovej ponuke — len započítané v celkovej cene"
+              >
+                skryté
+              </span>
+            ) : (
+              <span
+                className="text-[9px] uppercase tracking-wider font-bold text-sky-700 bg-sky-50 border border-sky-200 px-1 py-0.5 rounded"
+                title="Viditeľné na PDF cenovej ponuke a faktúre s vlastným názvom"
+              >
+                na FA
+              </span>
+            )}
           </div>
         )}
 
