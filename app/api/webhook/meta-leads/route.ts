@@ -110,9 +110,33 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // ─── Validate Meta HMAC signature ────────────────────────────────────
+  // Meta posiela X-Hub-Signature-256: sha256=<hmac>. Bez overenia by ktokoľvek
+  // mohol POSTnúť fake leadgen_id na endpoint a triggernuť Graph API fetch.
+  // Ak META_APP_SECRET nie je nastavený, log warning ale neblokujeme (pretože
+  // verify token + page token sú samé o sebe primárna obrana). V budúcnosti
+  // by sme to mali zmeniť na hard fail.
+  const rawBody = await request.text();
+  const appSecret = process.env.META_APP_SECRET;
+  if (appSecret) {
+    const sigHeader = request.headers.get("x-hub-signature-256") ?? "";
+    const expected = await computeMetaSignature(rawBody, appSecret);
+    if (!constantTimeEqual(sigHeader, `sha256=${expected}`)) {
+      console.warn("[meta-webhook] HMAC signature mismatch");
+      return NextResponse.json(
+        { ok: false, error: "invalid_signature" },
+        { status: 401 },
+      );
+    }
+  } else {
+    console.warn(
+      "[meta-webhook] META_APP_SECRET not set — accepting webhook without HMAC verification (less secure!)",
+    );
+  }
+
   let body: MetaWebhookBody;
   try {
-    body = (await request.json()) as MetaWebhookBody;
+    body = JSON.parse(rawBody) as MetaWebhookBody;
   } catch {
     return NextResponse.json(
       { ok: false, error: "invalid_json" },
@@ -238,6 +262,40 @@ export async function POST(request: NextRequest) {
 /* ────────────────────────────────────────────────────────────────────────
  * Helpers
  * ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * HMAC-SHA256 cez Web Crypto API (edge runtime compatible).
+ * Vracia hex string.
+ */
+async function computeMetaSignature(
+  body: string,
+  secret: string,
+): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(body));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Constant-time compare proti timing attacks.
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
 
 async function fetchLeadFromGraph(
   leadgenId: string,

@@ -26,15 +26,21 @@ export async function revealPhoneAction(
   const now = new Date();
   const nowIso = now.toISOString();
 
-  // Načítaj lead pre SLA vyhodnotenie
+  // Načítaj lead pre SLA vyhodnotenie + ownership check
   const { data: lead, error: leadError } = await supabase
     .from("leads")
-    .select("id, sla_deadline, sla_status, status, phone_revealed_at")
+    .select("id, sla_deadline, sla_status, status, phone_revealed_at, assigned_to")
     .eq("id", leadId)
     .maybeSingle();
 
   if (leadError || !lead) {
     return { ok: false, error: "not_found" };
+  }
+
+  // Defense in depth — RLS by toto malo blokovať, ale explicit check zabráni
+  // privilege escalation ak by sa v budúcnosti switchol na createAdminClient.
+  if (lead.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden" };
   }
 
   // Ak už bol odhalený, nič nemeníme
@@ -110,11 +116,14 @@ export async function recordMissedCallAction(
 
   const { data: lead, error: leadError } = await supabase
     .from("leads")
-    .select("id, call_attempts, status")
+    .select("id, call_attempts, status, assigned_to")
     .eq("id", leadId)
     .maybeSingle();
 
   if (leadError || !lead) return { ok: false, error: "not_found" };
+  if (lead.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden" };
+  }
 
   const newAttempts = lead.call_attempts + 1;
   const reminderHours = MISSED_REMINDER_HOURS[newAttempts] ?? 24;
@@ -244,6 +253,18 @@ export async function updateLeadOutcomeAction(formData: FormData): Promise<
   }
 
   const supabase = await createClient();
+
+  // Ownership check
+  const { data: ownerLead, error: ownerErr } = await supabase
+    .from("leads")
+    .select("assigned_to")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (ownerErr || !ownerLead) return { ok: false, error: "not_found" };
+  if (ownerLead.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden" };
+  }
+
   const nowIso = new Date().toISOString();
 
   const update: Record<string, unknown> = {
@@ -318,6 +339,18 @@ export async function changeStatusInlineAction(
   }
 
   const supabase = await createClient();
+
+  // Ownership check
+  const { data: ownerLead, error: ownerErr } = await supabase
+    .from("leads")
+    .select("assigned_to")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (ownerErr || !ownerLead) return { ok: false, error: "not_found" };
+  if (ownerLead.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden" };
+  }
+
   const nowIso = new Date().toISOString();
 
   const { error } = await supabase
@@ -354,15 +387,18 @@ export async function saveLeadNoteAction(
 
   const supabase = await createClient();
 
-  // Načítame existing data, vložíme agent_note, uložíme späť
+  // Načítame existing data + ownership check
   const { data: existing, error: readError } = await supabase
     .from("leads")
-    .select("data")
+    .select("data, assigned_to")
     .eq("id", leadId)
     .maybeSingle();
 
   if (readError) return { ok: false, error: readError.message };
   if (!existing) return { ok: false, error: "not_found" };
+  if (existing.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden" };
+  }
 
   const currentData = (existing.data ?? {}) as Record<string, unknown>;
   const newData = { ...currentData, agent_note: note.trim() || undefined };

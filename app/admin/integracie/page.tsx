@@ -72,6 +72,10 @@ export default async function IntegrationsPage() {
   const envStatus = {
     META_WEBHOOK_VERIFY_TOKEN: !!process.env.META_WEBHOOK_VERIFY_TOKEN,
     META_PAGE_ACCESS_TOKEN: !!process.env.META_PAGE_ACCESS_TOKEN,
+    // META_APP_SECRET = HMAC verification pre POST leadgen calls.
+    // Bez neho fungujú leady ale endpoint je viacej náchylný na spoofing
+    // (anyone with URL môže POSTnúť fake leadgen_id, my fetchneme Graph API).
+    META_APP_SECRET: !!process.env.META_APP_SECRET,
     RESEND_API_KEY: !!process.env.RESEND_API_KEY,
     SUPABASE_SECRET_KEY: !!process.env.SUPABASE_SECRET_KEY,
   };
@@ -252,6 +256,14 @@ export default async function IntegrationsPage() {
           <li>
             Setup IG Lead Ads: Business Suite → Integrations → Webhooks → IG
             tiež subscribe na <code>leadgen</code>
+          </li>
+          <li>
+            <strong>HMAC signature (recommended):</strong> nastav{" "}
+            <code>META_APP_SECRET</code> env var v Cloudflare Pages → bdsmanagerr
+            → Settings → Environment Variables (Production). Hodnota = App
+            Secret z Meta Developer Dashboard → Settings → Basic → App Secret.
+            Bez tohto secret-u endpoint stále funguje, ale POST je menej chránený
+            proti spoofing (HMAC sig sa neoveruje).
           </li>
         </ol>
       </section>

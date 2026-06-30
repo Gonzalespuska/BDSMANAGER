@@ -39,16 +39,19 @@ export async function sendOtpAction(formData: FormData) {
       .select("id, email, active")
       .ilike("email", email)
       .maybeSingle();
-    if (!appUser) {
-      console.warn("[sendOtp] BLOCKED — email not in whitelist:", email);
+    // Generic "unauthorized" pre OBE failure módy — bránime email enumeration.
+    // (Predtým 'unauthorized' vs 'deactivated' odlišovalo či email existuje —
+    // útočník mohol skenovať doménu.)
+    if (!appUser || !appUser.active) {
+      console.warn(
+        "[sendOtp] BLOCKED — email not in whitelist or deactivated:",
+        email,
+        "(reason:",
+        !appUser ? "not_found" : "deactivated",
+        ")",
+      );
       redirect(
         `/login?error=unauthorized&email=${encodeURIComponent(email)}${testQuery}`,
-      );
-    }
-    if (!appUser.active) {
-      console.warn("[sendOtp] BLOCKED — user deactivated:", email);
-      redirect(
-        `/login?error=deactivated&email=${encodeURIComponent(email)}${testQuery}`,
       );
     }
   } catch (e) {

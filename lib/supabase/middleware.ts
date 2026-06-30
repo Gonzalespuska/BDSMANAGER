@@ -12,7 +12,17 @@ import { NextResponse, type NextRequest } from "next/server";
  * Namiesto toho rolu kontroluje `/admin/layout.tsx` cez `getCurrentAppUser()`
  * a redirectne na /agent ak rola nie je admin.
  */
-const PROTECTED_PREFIXES = ["/admin", "/agent"];
+// Chránené pre všetky role — bez session redirect na /login. Role-based
+// access (admin vs obhliadky vs realizacie) sa rieši v page.tsx guards.
+const PROTECTED_PREFIXES = [
+  "/admin",
+  "/agent",
+  "/obhliadky",
+  "/realizacie",
+  "/calendar",
+  "/workload",
+  "/generator",
+];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

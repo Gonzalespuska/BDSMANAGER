@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     if (updateError) {
       console.error("[reveal-phone] update failed:", updateError);
       return NextResponse.json(
-        { ok: false, error: updateError.message },
+        { ok: false, error: "db_error" },
         { status: 500 },
       );
     }

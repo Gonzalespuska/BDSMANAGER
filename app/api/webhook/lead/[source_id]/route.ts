@@ -5,6 +5,21 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LeadWebhookInputSchema } from "@/lib/schemas/lead";
 
+/**
+ * Constant-time string comparison — chráni proti timing side-channel
+ * attacks pri overovaní webhook secrets. Štandardné `===` skratuje pri
+ * prvom rozdiele a útočník vie merať čas medzi requestmi → unáša bajt
+ * po bajte. Tento helper porovnáva každý znak bez early-exit.
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 // runtime = "edge" disabled — @supabase/supabase-js admin fetch fails in Next edge dev
 
 /**
@@ -74,10 +89,10 @@ export async function POST(
     );
   }
 
-  // 2. Validate webhook secret (ak source ho má)
+  // 2. Validate webhook secret (constant-time compare proti timing attacks)
   if (source.webhook_secret) {
-    const providedSecret = request.headers.get("x-webhook-secret");
-    if (providedSecret !== source.webhook_secret) {
+    const providedSecret = request.headers.get("x-webhook-secret") ?? "";
+    if (!constantTimeEqual(providedSecret, source.webhook_secret)) {
       console.warn("[webhook] secret mismatch for", source_id);
       return NextResponse.json(
         { ok: false, error: "Invalid X-Webhook-Secret header" },

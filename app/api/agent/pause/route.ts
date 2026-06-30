@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("[agent/pause] update failed:", error);
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { ok: false, error: "db_error" },
         { status: 500 },
       );
     }

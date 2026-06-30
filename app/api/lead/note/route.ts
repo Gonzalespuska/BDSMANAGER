@@ -109,8 +109,10 @@ export async function POST(request: NextRequest) {
         .update({ data: newData, last_activity_at: nowIso })
         .eq("id", body.lead_id);
       if (updateError) {
+        // Log full DB error server-side; vrátime generic message bez schema details
+        console.error("[lead/note] DB update failed:", updateError.message);
         return NextResponse.json(
-          { ok: false, error: updateError.message },
+          { ok: false, error: "db_error" },
           { status: 500 },
         );
       }

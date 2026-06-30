@@ -25,9 +25,16 @@ export const LeadWebhookInputSchema = z
       .optional()
       .or(z.literal("")),
     source_campaign: z.string().max(120).optional(),
-    data: z.record(z.unknown()).optional(),
+    // data je voľný JSON pre source-specific polia (plocha, lokalita, atď.).
+    // 8 KB cap zabráni JSON bombingu (útočník nainflatne row do MB cez webhook).
+    data: z
+      .record(z.unknown())
+      .optional()
+      .refine((d) => !d || JSON.stringify(d).length < 8000, {
+        message: "data JSON je príliš veľký (max 8 KB)",
+      }),
     priority: z.enum(["low", "medium", "high"]).optional(),
-    value_estimate: z.number().nonnegative().optional(),
+    value_estimate: z.number().nonnegative().max(1_000_000).optional(),
   })
   .refine((d) => Boolean(d.phone) || Boolean(d.email), {
     message: "Aspoň jeden z phone alebo email musí byť vyplnený",
