@@ -2,7 +2,9 @@ import Link from "next/link";
 import {
   Activity,
   ArrowRight,
+  Eye,
   Layers,
+  Plug,
   Settings,
   TrendingUp,
   UserPlus,
@@ -70,10 +72,22 @@ export default async function AdminDashboard() {
     disabled?: boolean;
   }> = [
     {
+      href: "/admin/prehlad",
+      title: "Prehľad — supervision",
+      desc: "Read-only audit view. Posledné leady, obhliadky aj realizácie na jednom screene. Skontroluj že tím tečie a nikde nezasekol.",
+      icon: Eye,
+    },
+    {
       href: "/admin/agents",
-      title: "Agenti & Workload",
-      desc: "Pridať obchodníkov, sledovať ich dostupnosť a aktivitu. Klik na meno → detail s leadmi, reveal timestamps a permissions.",
+      title: "Tím & Workload",
+      desc: "Pridať obchodníkov / obhliadkárov / realizačný tím, sledovať aktivitu. Klik na meno → detail + permissions.",
       icon: UserPlus,
+    },
+    {
+      href: "/admin/integracie",
+      title: "Integrácie — health",
+      desc: "Lead webhook zdroje (web, Meta, Google) + env vars status. Vidíš tu prečo prípadne 'leady nechodia' a ako to opraviť.",
+      icon: Plug,
     },
     {
       href: "/admin/materials",
