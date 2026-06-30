@@ -39,6 +39,33 @@ export default async function CalendarPage({ searchParams }: Props) {
   const toDate = new Date(year, monthIdx + 1, 0, 23, 59, 59);
 
   const admin = createAdminClient();
+
+  // Role-based callback query — každá rola vidí relevantné udalosti:
+  //   • obchod → svoje callbacky (next_callback_at na vlastných leadoch)
+  //   • obhliadky → leady so statusom 'scheduled' (proxy pre obhliadky, kým
+  //                 sa nedoplní needs_inspection status)
+  //   • realizacie → leady so statusom 'won' (dohodnuté realizácie)
+  //   • admin → všetky callbacky bez filtra
+  const callbackQuery = (() => {
+    const base = admin
+      .from("leads")
+      .select("id, name, phone, next_callback_at, call_attempts, status, assigned_to")
+      .not("next_callback_at", "is", null)
+      .gte("next_callback_at", fromDate.toISOString())
+      .lte("next_callback_at", toDate.toISOString())
+      .order("next_callback_at", { ascending: true });
+    switch (me.role) {
+      case "admin":
+        return base;
+      case "obhliadky":
+        return base.eq("status", "scheduled");
+      case "realizacie":
+        return base.in("status", ["won", "quote_sent"]);
+      default:
+        return base.eq("assigned_to", me.id);
+    }
+  })();
+
   const [{ data: notesRows }, { data: callbackRows }, { data: generalNotes }] =
     await Promise.all([
       admin
@@ -48,14 +75,7 @@ export default async function CalendarPage({ searchParams }: Props) {
         .gte("date", fromDate.toISOString().slice(0, 10))
         .lte("date", toDate.toISOString().slice(0, 10))
         .order("created_at", { ascending: true }),
-      admin
-        .from("leads")
-        .select("id, name, phone, next_callback_at, call_attempts")
-        .eq("assigned_to", me.id)
-        .not("next_callback_at", "is", null)
-        .gte("next_callback_at", fromDate.toISOString())
-        .lte("next_callback_at", toDate.toISOString())
-        .order("next_callback_at", { ascending: true }),
+      callbackQuery,
       admin
         .from("notes")
         .select("id, title, body, pinned, updated_at")
