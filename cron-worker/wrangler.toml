@@ -1,0 +1,14 @@
+name = "bdsmanager-cron"
+main = "src/index.ts"
+compatibility_date = "2026-05-29"
+
+# Cron: každých 5 minút zavolá sync endpoint na app.najcrm.sk
+# Cron syntax: minute hour day-of-month month day-of-week
+# */5 * * * *  = každých 5 minút, každý deň
+[triggers]
+crons = ["*/5 * * * *"]
+
+# CRON_SECRET nastavené cez wrangler secret put (nie tu — bola by v gitu)
+# TARGET_URL fixed:
+[vars]
+TARGET_URL = "https://app.najcrm.sk/api/cron/sync-epoxidovo"
