@@ -83,14 +83,15 @@ export async function POST(request: NextRequest) {
   const sql = neon(epxUrl);
 
   try {
-    // Pull posledných 200 leadov z epoxidovo.sk
-    const rows = (await sql(
-      `SELECT id, "createdAt", name, email, phone, source, "spaceType", service,
-              area, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
-       FROM "Lead"
-       ORDER BY "createdAt" DESC
-       LIMIT 200`,
-    )) as unknown as EpxLead[];
+    // Pull posledných 200 leadov z epoxidovo.sk. Template literal je Neon
+    // odporúčaný spôsob (auto-parametrizovaný).
+    const rows = (await sql`
+      SELECT id, "createdAt", name, email, phone, source, "spaceType", service,
+             area, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
+      FROM "Lead"
+      ORDER BY "createdAt" DESC
+      LIMIT 200
+    `) as unknown as EpxLead[];
 
     const sb = createAdminClient();
 
