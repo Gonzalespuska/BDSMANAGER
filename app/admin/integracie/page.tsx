@@ -12,6 +12,8 @@ import { getCurrentAppUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 
+import { SyncEpoxidovoButton } from "./sync-button";
+
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
@@ -99,6 +101,9 @@ export default async function IntegrationsPage() {
           leadov za 30 dní, integrácia je rozbitá → nasleduj návod nižšie.
         </p>
       </header>
+
+      {/* MANUAL SYNC BUTTON */}
+      <SyncEpoxidovoButton />
 
       {/* ENV STATUS */}
       <section>
