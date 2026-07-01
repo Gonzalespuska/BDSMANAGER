@@ -83,15 +83,17 @@ export async function POST(request: NextRequest) {
   const sql = neon(epxUrl);
 
   try {
-    // Pull posledných 200 leadov z epoxidovo.sk. Template literal je Neon
-    // odporúčaný spôsob (auto-parametrizovaný).
-    const rows = (await sql`
-      SELECT id, "createdAt", name, email, phone, source, "spaceType", service,
+    // Pull posledných 200 leadov z epoxidovo.sk. Explicitne cez sql.query()
+    // — Next.js SWC/Terser môže mangleovať template literal syntax v
+    // production build a Neon parser to nezachytí.
+    const rows = (await sql.query(
+      `SELECT id, "createdAt", name, email, phone, source, "spaceType", service,
              area, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
-      FROM "Lead"
-      ORDER BY "createdAt" DESC
-      LIMIT 200
-    `) as unknown as EpxLead[];
+       FROM "Lead"
+       ORDER BY "createdAt" DESC
+       LIMIT 200`,
+      [],
+    )) as unknown as EpxLead[];
 
     const sb = createAdminClient();
 
