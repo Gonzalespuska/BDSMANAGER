@@ -177,8 +177,14 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error("[cron/sync-epoxidovo] error:", err);
+    // Debug — vraciame message v response len ak DEBUG_CRON=1 env
+    const detail = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { ok: false, error: "sync_failed" },
+      {
+        ok: false,
+        error: "sync_failed",
+        detail: process.env.DEBUG_CRON === "1" ? detail : undefined,
+      },
       { status: 500 },
     );
   }
