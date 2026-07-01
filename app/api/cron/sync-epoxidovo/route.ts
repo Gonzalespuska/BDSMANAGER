@@ -1,0 +1,201 @@
+// Edge runtime — @neondatabase/serverless používa fetch, CF Workers compatible.
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
+
+import { NextResponse, type NextRequest } from "next/server";
+import { neon } from "@neondatabase/serverless";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * POST /api/cron/sync-epoxidovo — periodická sync leadov z epoxidovo.sk
+ *
+ * Pull-uje nové Lead rows z epoxidovo.sk Neon Postgres cez EPX_DATABASE_URL,
+ * pre každý ktorý ešte nie je v bdsmanager (matchujeme cez `data.epx_id`),
+ * insertne do `leads` s auto-assign trigger.
+ *
+ * Auth: header `X-Cron-Secret` musí sedieť s CRON_SECRET env var.
+ * Spúšťa sa cez Cloudflare Cron Triggers alebo externý cron.
+ *
+ * Idempotent — safe re-run. Ak sa lead už insertol, preskočí ho.
+ *
+ * ⚠️ Pre production treba:
+ *   - EPX_DATABASE_URL (Neon connection string epoxidovo.sk)
+ *   - CRON_SECRET (random string, ten istý ako v cron scheduleri)
+ */
+const SOURCE_WEB_ID = "11111111-1111-1111-1111-111111111111";
+
+const SPACE_LABELS: Record<string, string> = {
+  dom: "Dom / byt",
+  garaz: "Garáž",
+  "hala-firma": "Hala / firma",
+  ine: "Iné",
+};
+
+const SERVICE_LABELS: Record<string, string | null> = {
+  jednofarebne: "Jednofarebná",
+  chipsove: "Chipsová",
+  mramorove: "Mramorová",
+  metalicke: "Metalická",
+  nezvolene: null,
+};
+
+interface EpxLead {
+  id: string;
+  createdAt: Date;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  source: string;
+  spaceType: string | null;
+  service: string | null;
+  area: number | null;
+  message: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  referrer: string | null;
+  status: string | null;
+}
+
+export async function POST(request: NextRequest) {
+  // Auth
+  const expected = process.env.CRON_SECRET;
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, error: "CRON_SECRET env not set" },
+      { status: 503 },
+    );
+  }
+  const provided = request.headers.get("x-cron-secret") ?? "";
+  if (!constantTimeEqual(provided, expected)) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+
+  const epxUrl = process.env.EPX_DATABASE_URL;
+  if (!epxUrl) {
+    return NextResponse.json(
+      { ok: false, error: "EPX_DATABASE_URL env not set" },
+      { status: 503 },
+    );
+  }
+
+  // @neondatabase/serverless — HTTP-based Postgres, CF Workers compatible
+  const sql = neon(epxUrl);
+
+  try {
+    // Pull posledných 200 leadov z epoxidovo.sk
+    const rows = (await sql(
+      `SELECT id, "createdAt", name, email, phone, source, "spaceType", service,
+              area, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
+       FROM "Lead"
+       ORDER BY "createdAt" DESC
+       LIMIT 200`,
+    )) as unknown as EpxLead[];
+
+    const sb = createAdminClient();
+
+    // Načítaj existujúce epx_id v CRM aby sme nedublikvali
+    const { data: existing } = await sb
+      .from("leads")
+      .select("data")
+      .not("data->epx_id", "is", null)
+      .limit(500);
+    const existingIds = new Set(
+      (existing ?? [])
+        .map((l) => (l.data as { epx_id?: string })?.epx_id)
+        .filter(Boolean),
+    );
+
+    // Filter iba nové
+    const toInsert = rows
+      .filter((l) => !existingIds.has(l.id))
+      .map((l) => {
+        const areaValid = l.area && l.area > 0 && l.area < 20000 ? l.area : null;
+        return {
+          source_id: SOURCE_WEB_ID,
+          source_type: "web_webhook",
+          source_campaign:
+            l.utmCampaign ||
+            (l.source === "kontakt_message_form"
+              ? "Kontakt (epoxidovo.sk)"
+              : "Cenová ponuka (epoxidovo.sk)"),
+          name: (l.name || "").trim() || "Bez mena",
+          phone: l.phone || null,
+          email: l.email ? l.email.toLowerCase() : null,
+          priority: "medium",
+          status: "new",
+          created_at: new Date(l.createdAt).toISOString(),
+          data: stripUndefined({
+            epx_id: l.id,
+            plocha: areaValid ? String(areaValid) : undefined,
+            priestor: l.spaceType
+              ? SPACE_LABELS[l.spaceType] || l.spaceType
+              : undefined,
+            typ_podlahy: l.service
+              ? SERVICE_LABELS[l.service] || l.service
+              : undefined,
+            message: l.message || undefined,
+            utm_source: l.utmSource || undefined,
+            utm_medium: l.utmMedium || undefined,
+            utm_campaign: l.utmCampaign || undefined,
+            referrer: l.referrer || undefined,
+            _epx_source: l.source,
+            _epx_status: l.status,
+          }),
+        };
+      });
+
+    if (toInsert.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        checked: rows.length,
+        new: 0,
+        message: "Nothing to sync",
+      });
+    }
+
+    const { data: inserted, error } = await sb
+      .from("leads")
+      .insert(toInsert)
+      .select("id, name, created_at");
+
+    if (error) {
+      console.error("[cron/sync-epoxidovo] insert failed:", error);
+      return NextResponse.json(
+        { ok: false, error: "db_insert_failed" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      checked: rows.length,
+      new: inserted?.length ?? 0,
+      leads:
+        inserted?.map((l) => ({ id: l.id, name: l.name, created_at: l.created_at })) ??
+        [],
+    });
+  } catch (err) {
+    console.error("[cron/sync-epoxidovo] error:", err);
+    return NextResponse.json(
+      { ok: false, error: "sync_failed" },
+      { status: 500 },
+    );
+  }
+}
+
+// Alternatívne GET (pre debug / manuálne spúšťanie z browsera, ale stále vyžaduje secret)
+export const GET = POST;
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return result === 0;
+}
+
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined),
+  ) as Partial<T>;
+}
