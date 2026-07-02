@@ -332,19 +332,19 @@ export function GeneratorClient({
       ? Object.values(materialQtys).some((v) => (parseFloat(v) || 0) > 0)
       : requiredM2Value > 0 || subtotalRaw > 0;
 
-  // ─── Minimálna objednávka: 1 000 € (LEN pre operácie, NIE pre dopravu) ─
-  // Doprava sa pridáva navrch — nech zmena lokality viditeľne zmení cenu.
-  // Deterministický noise z hashu vstupov (lokalita IGNOROVANÁ aby sa
-  // top-up nemenil pri zmene mesta).
-  const minOrderTopUp = React.useMemo(() => {
+  // ─── Minimálna objednávka: 1 000 € — deterministický pseudo-noise ────
+  // Target medzi 1001.50 a 1028.50 € (nie zaokrúhlené 1000 aby to nevyzeralo
+  // umelo). Hash z inputov = ten istý input = tá istá suma (idempotentne).
+  // Lokalita IGNOROVANÁ aby zmena mesta nemenila min order (mení iba dopravu).
+  //
+  // PREVAŽUJE aj nad cap-om (napr. Chipsová 55 €/m² max) — biznis pravidlo je
+  // že pod 1000 € neprijímame zákazku. Pri malej ploche (napr. 12 m²) sa cap
+  // 660 € posunie na min order floor.
+  const minOrderFloor = React.useMemo(() => {
     const MIN = 1000;
     if (!hasRealInput) return 0;
-    // Ak obchodník robí len manuálnu CP cez pomenovanú/skrytú zložku
-    // (žiadna klasická m² plocha) → min order pravidlo NEPLATÍ. Cena je
-    // presne to čo obchodník napíše (napr. 750 € Lokálna oprava).
+    // Manuálna CP (iba surcharge, žiadna m² plocha) → min order NEPLATÍ
     if (requiredM2Value <= 0) return 0;
-    if (opsSubtotal <= 0) return 0;
-    if (opsSubtotal >= MIN) return 0;
     const hashStr = `${saleMode}|${floorType ?? ""}|${requiredM2Value}|${Object.entries(
       materialQtys,
     )
@@ -355,17 +355,17 @@ export function GeneratorClient({
       h = (h * 31 + hashStr.charCodeAt(i)) | 0;
     }
     const norm = (Math.abs(h) % 10000) / 10000;
-    // Target medzi 1001.50 a 1028.50 €
-    const target = MIN + 1.5 + norm * 27;
-    return target - opsSubtotal;
-  }, [opsSubtotal, saleMode, floorType, requiredM2Value, materialQtys, hasRealInput]);
+    // Target medzi 1001.50 a 1028.50 € s decimalmi
+    return MIN + 1.5 + norm * 27;
+  }, [saleMode, floorType, requiredM2Value, materialQtys, hasRealInput]);
 
-  const uncappedTotal = opsSubtotal + minOrderTopUp + transportTotal;
-  const cappedTotal = Math.min(uncappedTotal, capTotal);
-  const total = hasRealInput ? cappedTotal : 0;
+  const rawOps = opsSubtotal + transportTotal;
+  const cappedOps = Math.min(rawOps, capTotal);
+  // Total = max(cappedOps, minOrderFloor) — min order prevažuje nad cap
+  const total = hasRealInput ? Math.max(cappedOps, minOrderFloor) : 0;
   // Doprava skutočne účtovaná (po cap-deduce) — pre zobrazenie v lokalita karte
   const effectiveTransport = hasRealInput
-    ? Math.max(0, cappedTotal - opsSubtotal - minOrderTopUp)
+    ? Math.max(0, total - opsSubtotal)
     : 0;
 
   // ─── PDF + Email actions ─────────────────────────────────────────────
