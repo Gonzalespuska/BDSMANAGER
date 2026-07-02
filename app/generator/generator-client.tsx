@@ -483,11 +483,65 @@ V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
 S pozdravom,
 ${signatureLines.join("\n")}`;
 
-      // 1. Auto-download PDF aby si ho mal v Downloads na pripnutie
-      const { downloadBlob } = await import("@/lib/quote/generate-pdf");
-      downloadBlob(blob, filename);
+      // ─── Priamy send cez Resend (backend) — PDF sa auto-priloží ────────
+      // Blob → base64 (bez data: prefix). Resend akceptuje raw base64.
+      const arrayBuffer = await blob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const pdfBase64 = btoa(binary);
 
-      // 2. Audit log + status zmena na CRM (best-effort, fire-and-forget)
+      const sendRes = await fetch("/api/quote/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: leadContext?.id?.startsWith("demo-") ? null : leadContext?.id ?? null,
+          to_email: recipient,
+          to_name: customerName.trim() || "Zákazník",
+          subject,
+          body_text: bodyText,
+          pdf_base64: pdfBase64,
+          pdf_filename: filename,
+          agent_email: input.agent_email,
+          agent_name: input.agent_name,
+        }),
+      });
+
+      const sendJson = (await sendRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (!sendRes.ok || !sendJson.ok) {
+        // Fallback: ak Resend zlyhal, ponúkni stiahnutie PDF ako záložný plán
+        const { downloadBlob } = await import("@/lib/quote/generate-pdf");
+        downloadBlob(blob, filename);
+        alert(
+          `❌ Automatické odoslanie zlyhalo: ${sendJson.error ?? "unknown"}.\n\n` +
+            `PDF som ti stiahol do Downloads — pošli ho manuálne cez Gmail.`,
+        );
+        setBusy(false);
+        return;
+      }
+
+      // ✅ Odoslané cez Resend s PDF prílohou
+      setTimeout(() => {
+        alert(
+          `✅ Cenová ponuka odoslaná zákazníkovi na ${recipient}.\n\n` +
+            `📎 PDF v prílohe.\n` +
+            `📬 Kópia ti prišla do Inboxu (BCC).\n` +
+            `↩️ Ak zákazník odpovie, mail príde priamo tebe.`,
+        );
+        router.push("/agent?tab=kontakt");
+      }, 100);
+      return; // early return — nižšie legacy Gmail flow už nespúšťame
+
+      // eslint-disable-next-line no-unreachable — legacy Gmail compose flow
+      // ponechaný pre reference; ak by Resend permanentne zlyhal, môžeme
+      // ho reaktivovať odstránením 'return' vyššie.
       if (leadContext?.id && !leadContext.id.startsWith("demo-")) {
         fetch("/api/quote/log-prepared", {
           method: "POST",
