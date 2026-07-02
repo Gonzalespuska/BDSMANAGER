@@ -334,6 +334,10 @@ export function GeneratorClient({
   const minOrderTopUp = React.useMemo(() => {
     const MIN = 1000;
     if (!hasRealInput) return 0;
+    // Ak obchodník robí len manuálnu CP cez pomenovanú/skrytú zložku
+    // (žiadna klasická m² plocha) → min order pravidlo NEPLATÍ. Cena je
+    // presne to čo obchodník napíše (napr. 750 € Lokálna oprava).
+    if (requiredM2Value <= 0) return 0;
     if (opsSubtotal <= 0) return 0;
     if (opsSubtotal >= MIN) return 0;
     const hashStr = `${saleMode}|${floorType ?? ""}|${requiredM2Value}|${Object.entries(
