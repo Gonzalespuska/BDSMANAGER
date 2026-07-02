@@ -11,6 +11,8 @@ export type LeadStatus =
   | "interested"
   | "not_interested"
   | "quote_sent"
+  | "needs_inspection"
+  | "in_realization"
   | "won"
   | "lost"
   | "archived";
@@ -107,6 +109,14 @@ export const STATUS_META: Record<
   quote_sent: {
     label: "📋 PONUKA",
     pill: "bg-violet-600 text-white",
+  },
+  needs_inspection: {
+    label: "🔍 NA OBHLIADKU",
+    pill: "bg-violet-500 text-white",
+  },
+  in_realization: {
+    label: "🔨 V REALIZÁCII",
+    pill: "bg-emerald-600 text-white",
   },
   won: {
     label: "🏆 UKONČENÉ",

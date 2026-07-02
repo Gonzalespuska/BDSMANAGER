@@ -752,3 +752,56 @@ export async function markRealizationDoneAction(
   revalidatePath("/realizacie");
   return { ok: true };
 }
+
+/**
+ * Server Action — obhliadkar dokončí obhliadku, uloží výsledok (JSONB)
+ * a lead ide na status 'interested' (pripravené na cenovú ponuku).
+ * Iba priradený obhliadkar alebo admin.
+ */
+export async function completeInspectionAction(
+  leadId: string,
+  result: Record<string, unknown>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+  if (user.role !== "obhliadky" && user.role !== "admin") {
+    return { ok: false, error: "forbidden_wrong_role" };
+  }
+
+  const supabase = await createClient();
+  const { data: lead, error: leadErr } = await supabase
+    .from("leads")
+    .select("inspection_by, status")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (leadErr || !lead) return { ok: false, error: "not_found" };
+  if (lead.inspection_by !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden_not_your_inspection" };
+  }
+
+  // Ak nie je feasible, status → lost. Inak interested (pripravená ponuka).
+  const feasible = (result.feasible ?? true) === true;
+  const nextStatus = feasible ? "interested" : "lost";
+  const nowIso = new Date().toISOString();
+
+  const { error: updErr } = await supabase
+    .from("leads")
+    .update({
+      status: nextStatus,
+      inspection_result: result,
+      last_activity_at: nowIso,
+    })
+    .eq("id", leadId);
+  if (updErr) return { ok: false, error: "db_error" };
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "inspection_completed",
+    data: { feasible, result },
+  });
+
+  revalidatePath("/agent");
+  revalidatePath("/obhliadky");
+  return { ok: true };
+}

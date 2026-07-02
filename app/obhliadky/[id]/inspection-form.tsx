@@ -1,0 +1,257 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Loader2, Send } from "lucide-react";
+
+import { completeInspectionAction } from "@/app/agent/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+interface InspectionResult {
+  measured_m2?: number;
+  substrate_condition?: string;
+  substrate_notes?: string;
+  recommended_service?: string;
+  agent_note?: string;
+  feasible?: boolean;
+  price_estimate?: number;
+}
+
+export function InspectionForm({
+  leadId,
+  existingResult,
+}: {
+  leadId: string;
+  existingResult: Record<string, unknown> | null;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = React.useState(false);
+  const [measuredM2, setMeasuredM2] = React.useState<string>(
+    typeof (existingResult as InspectionResult)?.measured_m2 === "number"
+      ? String((existingResult as InspectionResult).measured_m2)
+      : "",
+  );
+  const [substrateCondition, setSubstrateCondition] = React.useState(
+    (existingResult as InspectionResult)?.substrate_condition ?? "good",
+  );
+  const [substrateNotes, setSubstrateNotes] = React.useState(
+    (existingResult as InspectionResult)?.substrate_notes ?? "",
+  );
+  const [recommendedService, setRecommendedService] = React.useState(
+    (existingResult as InspectionResult)?.recommended_service ?? "",
+  );
+  const [agentNote, setAgentNote] = React.useState(
+    (existingResult as InspectionResult)?.agent_note ?? "",
+  );
+  const [feasible, setFeasible] = React.useState<boolean>(
+    (existingResult as InspectionResult)?.feasible ?? true,
+  );
+
+  async function submit() {
+    const m2Num = parseFloat(measuredM2) || 0;
+    if (m2Num <= 0) {
+      alert("Zadaj skutočnú plochu v m²");
+      return;
+    }
+    if (!agentNote.trim()) {
+      alert("Napíš aspoň krátku poznámku pre obchodníka.");
+      return;
+    }
+
+    setBusy(true);
+    const result: InspectionResult = {
+      measured_m2: m2Num,
+      substrate_condition: substrateCondition,
+      substrate_notes: substrateNotes.trim() || undefined,
+      recommended_service: recommendedService.trim() || undefined,
+      agent_note: agentNote.trim(),
+      feasible,
+    };
+    const res = await completeInspectionAction(leadId, result as unknown as Record<string, unknown>);
+    setBusy(false);
+    if (!res.ok) {
+      alert(`Chyba: ${res.error}`);
+      return;
+    }
+    alert("✅ Obhliadka dokončená. Obchodník bol notifikovaný.");
+    router.push("/obhliadky");
+  }
+
+  return (
+    <section className="rounded-2xl border-2 border-violet-300 bg-violet-50/40 p-5 space-y-4">
+      <header>
+        <h2 className="font-bold inline-flex items-center gap-2">
+          <ClipboardCheck className="w-5 h-5 text-violet-600" aria-hidden />
+          Vyplniť výsledok obhliadky
+        </h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Po odoslaní dostane obchodník notifikáciu a môže poslať cenovú ponuku zákazníkovi.
+        </p>
+      </header>
+
+      {/* Reálne rozmery */}
+      <div>
+        <Label htmlFor="measured-m2" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Skutočná plocha (m²) <span className="text-rose-600">*</span>
+        </Label>
+        <Input
+          id="measured-m2"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.1}
+          value={measuredM2}
+          onChange={(e) => setMeasuredM2(e.target.value)}
+          disabled={busy}
+          placeholder="napr. 47.5"
+          className="mt-1 h-10 text-base font-bold"
+        />
+      </div>
+
+      {/* Stav podkladu */}
+      <div>
+        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Stav podkladu
+        </Label>
+        <div className="mt-1 grid grid-cols-3 gap-2">
+          {[
+            { v: "good", label: "✅ Dobrý", color: "bg-emerald-100 border-emerald-300 text-emerald-800" },
+            { v: "acceptable", label: "🟡 Prijateľný", color: "bg-amber-100 border-amber-300 text-amber-800" },
+            { v: "bad", label: "🔴 Zlý", color: "bg-rose-100 border-rose-300 text-rose-800" },
+          ].map((opt) => (
+            <button
+              key={opt.v}
+              type="button"
+              onClick={() => setSubstrateCondition(opt.v)}
+              disabled={busy}
+              className={`px-3 py-2 rounded-lg border-2 text-sm font-bold transition-all ${
+                substrateCondition === opt.v
+                  ? opt.color
+                  : "bg-background border-input hover:border-muted-foreground/30"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Substrate notes */}
+      <div>
+        <Label htmlFor="substrate-notes" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Detaily o podklade (voliteľné)
+        </Label>
+        <textarea
+          id="substrate-notes"
+          value={substrateNotes}
+          onChange={(e) => setSubstrateNotes(e.target.value)}
+          disabled={busy}
+          placeholder="napr. Praskliny na 3 miestach cca 20 cm, mokrá škvrna pri stene, treba samonivelačku"
+          maxLength={2000}
+          className="mt-1 w-full h-20 rounded-md border border-input bg-background p-2 text-sm resize-none"
+        />
+      </div>
+
+      {/* Recommended service */}
+      <div>
+        <Label htmlFor="recommended-service" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Odporúčaná služba
+        </Label>
+        <Input
+          id="recommended-service"
+          type="text"
+          value={recommendedService}
+          onChange={(e) => setRecommendedService(e.target.value)}
+          disabled={busy}
+          placeholder="napr. Chipsová polyuretánová podlaha"
+          className="mt-1"
+        />
+      </div>
+
+      {/* Feasibility */}
+      <div>
+        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Realizovateľné?
+        </Label>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setFeasible(true)}
+            disabled={busy}
+            className={`px-3 py-2 rounded-lg border-2 text-sm font-bold transition-all ${
+              feasible
+                ? "bg-emerald-100 border-emerald-300 text-emerald-800"
+                : "bg-background border-input"
+            }`}
+          >
+            ✅ Áno, pošli ponuku
+          </button>
+          <button
+            type="button"
+            onClick={() => setFeasible(false)}
+            disabled={busy}
+            className={`px-3 py-2 rounded-lg border-2 text-sm font-bold transition-all ${
+              !feasible
+                ? "bg-rose-100 border-rose-300 text-rose-800"
+                : "bg-background border-input"
+            }`}
+          >
+            ❌ Nie
+          </button>
+        </div>
+      </div>
+
+      {/* Agent note (povinné) */}
+      <div>
+        <Label htmlFor="agent-note" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Odkaz obchodníkovi <span className="text-rose-600">*</span>
+        </Label>
+        <textarea
+          id="agent-note"
+          value={agentNote}
+          onChange={(e) => setAgentNote(e.target.value)}
+          disabled={busy}
+          placeholder="Krátky súhrn — čo videl si, aké máš odporúčanie na cenu, alebo prečo to nie je realizovateľné."
+          maxLength={2000}
+          required
+          className="mt-1 w-full h-24 rounded-md border border-input bg-background p-2 text-sm resize-none"
+        />
+      </div>
+
+      <Button
+        type="button"
+        onClick={submit}
+        disabled={busy}
+        className="w-full bg-violet-600 hover:bg-violet-700"
+      >
+        {busy ? (
+          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" aria-hidden />
+        ) : (
+          <Send className="w-4 h-4 mr-1.5" aria-hidden />
+        )}
+        Odoslať výsledok obchodníkovi
+      </Button>
+    </section>
+  );
+}
+
+function ClipboardCheck(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <rect width="8" height="4" x="8" y="2" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="m9 14 2 2 4-4" />
+    </svg>
+  );
+}

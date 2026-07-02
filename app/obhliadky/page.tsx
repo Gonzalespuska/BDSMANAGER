@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { ClipboardList, MapPin, Calendar, CheckCircle2 } from "lucide-react";
 
 import { getCurrentAppUser } from "@/lib/auth";
@@ -27,19 +28,42 @@ export default async function ObhliadkyDashboard() {
     redirect(dashboardPathForRole(user.role));
   }
 
-  // Načítaj leady ktoré sú na obhliadku — zatiaľ status "scheduled" alebo
-  // "interested" (TODO: pridať explicit "needs_inspection" status do schémy)
+  // Načítaj leady na obhliadku — priorita: needs_inspection (nový status,
+  // vyžaduje DB migration 10). Fallback: scheduled/interested pre admin
+  // ak migration ešte nebola spustená.
   const sb = createAdminClient();
-  const { data: leadsRaw } = await sb
+
+  // needs_inspection filter podľa role — obhliadkar iba svoje, admin všetko
+  const baseQuery = sb
     .from("leads")
     .select("*")
-    .in("status", ["scheduled", "interested"])
-    .order("next_callback_at", { ascending: true })
+    .eq("status", "needs_inspection")
+    .order("inspection_at", { ascending: false })
     .limit(50);
+  const scopedQuery =
+    user.role === "admin" ? baseQuery : baseQuery.eq("inspection_by", user.id);
 
-  const leads = (leadsRaw ?? []) as Lead[];
-  const scheduled = leads.filter((l) => l.status === "scheduled");
+  const { data: leadsRaw, error: needsErr } = await scopedQuery;
+
+  // Fallback pre pre-migration DB — ak needs_inspection status neexistuje
+  // v CHECK constraint, aspoň zobrazíme legacy scheduled leady
+  let fallbackLeads: Lead[] = [];
+  if ((needsErr || (leadsRaw?.length ?? 0) === 0) && user.role === "admin") {
+    const { data } = await sb
+      .from("leads")
+      .select("*")
+      .in("status", ["scheduled", "interested"])
+      .order("last_activity_at", { ascending: false })
+      .limit(20);
+    fallbackLeads = (data ?? []) as Lead[];
+  }
+
+  const leads = ((leadsRaw ?? []) as Lead[]).length > 0
+    ? (leadsRaw as Lead[])
+    : fallbackLeads;
+  const scheduled = leads.filter((l) => l.status === "needs_inspection" || l.status === "scheduled");
   const interested = leads.filter((l) => l.status === "interested");
+  const showLegacyProxy = fallbackLeads.length > 0 && (leadsRaw?.length ?? 0) === 0;
 
   return (
     <div className="space-y-6">
@@ -76,78 +100,68 @@ export default async function ObhliadkyDashboard() {
         />
       </div>
 
-      {/* TODO panel — kým sa nedorobí plný flow */}
-      <div className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/50 p-5 space-y-2">
-        <h2 className="font-bold text-amber-900 inline-flex items-center gap-2">
-          🚧 Vo výstavbe — kostra dashboardu
-        </h2>
-        <p className="text-sm text-amber-800">
-          Plný obhliadkársky workflow ešte nie je dokončený. Plánované:
-        </p>
-        <ul className="text-sm text-amber-800 list-disc ml-5 space-y-1">
-          <li>
-            Vlastný status <code>needs_inspection</code> v DB schéme — obchodník
-            posunie lead na obhliadku jedným klikom
-          </li>
-          <li>
-            Formulár pre obhliadkára: rozmery (m²), typ podlahy, foto upload,
-            poznámky o teréne (zlý prístup, schody, znečistené, etc.)
-          </li>
-          <li>
-            Auto-assign obhliadok najbližšiemu obhliadkárovi (alebo round-robin
-            medzi nimi)
-          </li>
-          <li>
-            Po vyplnení obhliadky → notifikácia obchodníkovi že je pripravená
-            cenová ponuka
-          </li>
-          <li>
-            Kalendár filter: obhliadkar vidí <strong>iba obhliadky</strong>,
-            nie callbacky obchodníka
-          </li>
-        </ul>
-      </div>
+      {/* Pre-migration proxy warning */}
+      {showLegacyProxy && (
+        <div className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/50 p-4 text-sm text-amber-900">
+          🚧 <strong>DB migrácia 10_role_handoff.sql ešte nebola spustená</strong> — zobrazujem legacy proxy (scheduled + interested statusy). Po spustení migrácie sa tu ukážu iba tie, ktoré ti obchodník explicitne posunul cez tlačítko "Poslať na obhliadku".
+        </div>
+      )}
 
-      {/* Provisional lead list */}
+      {/* Lead list — clickable → detail */}
       {leads.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-            Otvorené leady (zatiaľ provizórne — ukáže všetky scheduled/interested)
+            Otvorené obhliadky ({leads.length})
           </h2>
           <ul className="space-y-2">
-            {leads.map((l) => (
-              <li
-                key={l.id}
-                className="rounded-xl border bg-background p-4 flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="font-bold truncate">{l.name}</div>
-                  <div className="text-xs text-muted-foreground inline-flex items-center gap-2 flex-wrap mt-1">
-                    {l.status === "scheduled" && (
-                      <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 font-bold">
-                        📅 NAPLÁNOVANÉ
-                      </span>
-                    )}
-                    {l.status === "interested" && (
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
-                        ✅ ZÁUJEM
-                      </span>
-                    )}
-                    {l.next_callback_at && (
-                      <span>
-                        {new Date(l.next_callback_at).toLocaleString("sk-SK", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  TODO: detail link →
-                </span>
-              </li>
-            ))}
+            {leads.map((l) => {
+              const data = (l.data ?? {}) as Record<string, string>;
+              return (
+                <li key={l.id}>
+                  <Link
+                    href={`/obhliadky/${l.id}`}
+                    className="block rounded-xl border-2 border-violet-200 bg-violet-50/40 p-4 hover:bg-violet-50/70 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <div className="font-bold text-base">{l.name}</div>
+                        <div className="text-xs text-muted-foreground inline-flex items-center gap-2 flex-wrap mt-1">
+                          {data.lokalita && <span>📍 {data.lokalita}</span>}
+                          {data.plocha && <span>~{data.plocha} m²</span>}
+                          {data.typ_podlahy && <span>· {data.typ_podlahy}</span>}
+                          {l.phone && <span>· 📞 {l.phone}</span>}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {l.status === "needs_inspection" && (
+                          <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 text-[10px] font-bold uppercase tracking-wider">
+                            NA OBHLIADKU
+                          </span>
+                        )}
+                        {l.status === "scheduled" && (
+                          <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold uppercase tracking-wider">
+                            📅 NAPLÁNOVANÉ
+                          </span>
+                        )}
+                        {l.status === "interested" && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                            ✅ ZÁUJEM
+                          </span>
+                        )}
+                        {l.next_callback_at && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(l.next_callback_at).toLocaleString("sk-SK", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : (

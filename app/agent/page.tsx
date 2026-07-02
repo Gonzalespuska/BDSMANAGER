@@ -244,6 +244,13 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <LeadsSearch />
+          <a
+            href="/agent/moje-zakazky"
+            className="inline-flex items-center gap-1.5 rounded-full border-2 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800 transition-colors"
+            title="Zákazky ktoré si posunul na obhliadku alebo do realizácie"
+          >
+            👥 Moje zákazky v tíme
+          </a>
           <NewLeadButton />
         </div>
       </header>
