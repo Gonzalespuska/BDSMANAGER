@@ -49,6 +49,7 @@ interface EpxLead {
   spaceType: string | null;
   service: string | null;
   area: number | null;
+  termin: string | null;
   message: string | null;
   utmSource: string | null;
   utmMedium: string | null;
@@ -56,6 +57,14 @@ interface EpxLead {
   referrer: string | null;
   status: string | null;
 }
+
+const TERMIN_LABELS: Record<string, string> = {
+  urgent: "Urgentne (do 1 mesiaca)",
+  "1-3-mesiacov": "1-3 mesiace",
+  "3-6-mesiacov": "3-6 mesiacov",
+  "6-12-mesiacov": "6-12 mesiacov",
+  "zatial-info": "Zatiaľ iba info",
+};
 
 export async function POST(request: NextRequest) {
   // Auth
@@ -88,7 +97,7 @@ export async function POST(request: NextRequest) {
     // production build a Neon parser to nezachytí.
     const rows = (await sql.query(
       `SELECT id, "createdAt", name, email, phone, source, "spaceType", service,
-             area, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
+             area, termin, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
        FROM "Lead"
        ORDER BY "createdAt" DESC
        LIMIT 200`,
@@ -136,6 +145,9 @@ export async function POST(request: NextRequest) {
               : undefined,
             typ_podlahy: l.service
               ? SERVICE_LABELS[l.service] || l.service
+              : undefined,
+            termin: l.termin
+              ? TERMIN_LABELS[l.termin] || l.termin
               : undefined,
             message: l.message || undefined,
             utm_source: l.utmSource || undefined,

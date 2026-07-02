@@ -56,12 +56,14 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
   const isRevealed = Boolean(lead.phone_revealed_at);
 
   const dataFields = lead.data as Record<string, string | number | undefined>;
+  // Termín má vlastný prominentný badge (kedy chce zákazník realizovať) —
+  // pre obchodníka je to kľúčová info: urgentné vs "iba info" má inú prioritu.
+  const terminValue = dataFields.termin as string | undefined;
   const infoBits = [
     dataFields.plocha ? `${dataFields.plocha} m²` : null,
     dataFields.priestor,
     dataFields.typ_podlahy,
     dataFields.lokalita,
-    dataFields.termin,
   ].filter(Boolean) as string[];
 
   async function handleCall() {
@@ -280,6 +282,27 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               <CallbackReminder when={lead.next_callback_at} />
             )}
           </div>
+
+          {/* Termín realizácie — prominentný badge (najdôležitejšia info
+              pre obchodníka: 'Urgentne do mesiaca' vs 'Zatiaľ info' = úplne
+              iná priorita hovoru). */}
+          {terminValue && (
+            <div className="px-5 pt-3">
+              <div
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border-2 text-xs font-bold",
+                  /urgent|urgentne|do 1|do jedn/i.test(terminValue)
+                    ? "bg-rose-50 border-rose-300 text-rose-800"
+                    : /iba info|len info|prieskum/i.test(terminValue)
+                      ? "bg-zinc-50 border-zinc-300 text-zinc-700"
+                      : "bg-amber-50 border-amber-300 text-amber-800",
+                )}
+                title="Kedy chce zákazník realizovať"
+              >
+                📅 Kedy: <span className="font-extrabold">{terminValue}</span>
+              </div>
+            </div>
+          )}
 
           {/* Info bits (custom fields) */}
           {infoBits.length > 0 && (
