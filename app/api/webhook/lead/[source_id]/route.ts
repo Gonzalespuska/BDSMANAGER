@@ -125,6 +125,31 @@ export async function POST(
   }
   const input = parsed.data;
 
+  // 3b. Dedupe check — ak už existuje lead s rovnakým phone+source_id v
+  // posledných 7 dňoch, vráť OK bez insertu. Bráni duplikátom pri Zapier
+  // reruns / retries / historical backfill z Facebook Lead Ads.
+  if (input.phone) {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: existing } = await admin
+      .from("leads")
+      .select("id, name, created_at")
+      .eq("source_id", source.id)
+      .eq("phone", input.phone)
+      .gte("created_at", sevenDaysAgo)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      console.log(
+        `[webhook] DUPLICATE — phone ${input.phone} already exists as lead ${existing[0].id}, skipping insert`,
+      );
+      return NextResponse.json({
+        ok: true,
+        duplicate: true,
+        existing_lead_id: existing[0].id,
+        message: "Lead s rovnakým telefónom už existuje za posledných 7 dní",
+      });
+    }
+  }
+
   // 4. Insert lead (admin client → bypassuje RLS)
   // sla_deadline a created activity sa nastavia v DB triggeroch
   const { data: lead, error: insertError } = await admin
