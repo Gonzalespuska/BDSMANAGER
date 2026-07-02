@@ -146,7 +146,64 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
   if (!appUser || !appUser.active) return null;
 
   void touchLastActive(appUser.id);
-  return appUser as AppUser;
+  return applyViewAsOverride(appUser as AppUser);
+}
+
+/**
+ * View-as impersonation — admin klikne "Zobraziť ako" v hornej lište a
+ * ostatné stránky sa mu javia očami zvolenej role.
+ *
+ * Cookie 'view_as_role' obsahuje jednu z: 'obchod' | 'obhliadky' |
+ * 'realizacie' | 'office'. Iba admin môže mať nastavený view-as override.
+ *
+ * Server-side: iba READ side — v `getCurrentAppUser()` sa role prepíše
+ * ak je user reálne admin a má cookie set. Reálne admin práva zostávajú
+ * v `real_role` metadate (dostupné cez `getRealUserRole()`).
+ */
+async function applyViewAsOverride(user: AppUser): Promise<AppUser> {
+  // View-as je iba pre adminov — nikto iný by ho nemal môcť aktivovať
+  if (user.role !== "admin") return user;
+  try {
+    const { cookies } = await import("next/headers");
+    const viewAsCookie = (await cookies()).get("view_as_role")?.value;
+    const validRoles = ["obchod", "obhliadky", "realizacie", "office"];
+    if (viewAsCookie && validRoles.includes(viewAsCookie)) {
+      // Vrátime rovnaký user objekt ale s prepísanou rolou. `role` musí byť
+      // valid AppUserRole; "office" tam ešte nie je → skip pre teraz.
+      if (viewAsCookie === "office") return user; // office rola neexistuje
+      return {
+        ...user,
+        role: viewAsCookie as AppUser["role"],
+        // Poznač že je to fake role (pre UI badge "View as")
+      } as AppUser;
+    }
+  } catch {
+    // cookies() môže failnúť v niektorých context (RSC bez requestu)
+    return user;
+  }
+  return user;
+}
+
+/**
+ * Vráti reálnu rolu user-a (bez view-as override). Používa sa v miestach kde
+ * treba vedieť či user je fyzicky admin (napr. RoleViewDropdown, "View as"
+ * tlačítko musí zobraziť iba pre admina; ak by sa spolieha na user.role a
+ * admin práve pozerá ako obchod, dropdown by zmizol → dead end).
+ */
+export async function getRealUserRole(): Promise<AppUser["role"] | null> {
+  if (process.env.NODE_ENV !== "production") {
+    // V dev vždy admin — bootstrap admin cez getCurrentAppUser
+    return "admin";
+  }
+  const supabase = await createClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) return null;
+  const { data } = await supabase
+    .from("users")
+    .select("role")
+    .eq("auth_id", authUser.id)
+    .maybeSingle();
+  return (data?.role as AppUser["role"]) ?? null;
 }
 
 // dashboardPathForRole je re-exportované z lib/roles na vrchu súboru.

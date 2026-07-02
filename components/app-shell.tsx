@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import {
   ArrowRight,
   Calculator,
@@ -10,7 +11,7 @@ import {
   Users as UsersIcon,
 } from "lucide-react";
 
-import type { AppUser } from "@/lib/auth";
+import { getRealUserRole, type AppUser } from "@/lib/auth";
 import { dashboardPathForRole, navTabsForRole, type NavTabId } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/lib/notifications";
@@ -67,7 +68,7 @@ const NAV_TAB_DEFS: Record<
  *  - Veľký header s logom + user accountom + action buttons
  *  - Sekundárny nav s linkami (Leady · Generátor · ...)
  */
-export function AppShell({
+export async function AppShell({
   user,
   selfPaused,
   notifications,
@@ -81,8 +82,20 @@ export function AppShell({
   wide?: boolean;
   children: React.ReactNode;
 }) {
+  // Zisti reálnu rolu (bez view-as override) — potrebné pre zobrazenie
+  // dropdown-u aj počas view-as (inak by admin sa mohol "uzavrieť" v obchod
+  // view bez cesty späť).
+  const realRole = await getRealUserRole();
+  const isRealAdmin = realRole === "admin";
+  const viewAsCookie = (await cookies()).get("view_as_role")?.value;
+  const validViewAsRoles = ["obchod", "obhliadky", "realizacie", "office"];
+  const currentViewAs = (validViewAsRoles.includes(viewAsCookie ?? "")
+    ? viewAsCookie
+    : null) as "obchod" | "obhliadky" | "realizacie" | "office" | null;
+
   const isAdmin = user.role === "admin";
   const isDev = process.env.NODE_ENV !== "production";
+  // Nav sa filtruje podľa user.role — ktorá už môže byť view-as override
   const visibleTabs = navTabsForRole(user.role);
   const homeHref = dashboardPathForRole(user.role);
 
@@ -110,7 +123,7 @@ export function AppShell({
           </Link>
 
           <div className="flex items-center gap-1.5 md:gap-3">
-            {isAdmin && <RoleViewDropdown />}
+            {isRealAdmin && <RoleViewDropdown currentViewAs={currentViewAs} />}
             <NotificationsBell initial={notifications} />
             <ProfileMenu user={user} selfPaused={selfPaused} />
           </div>
