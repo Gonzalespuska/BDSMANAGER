@@ -547,3 +547,208 @@ export async function returnLeadAction(
   revalidatePath("/agent");
   return { ok: true };
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ROLE HANDOFF — obchodník posúva zákazku do obhliadky / realizácie
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Server Action — vylistuje aktívnych userov podľa role pre handoff dropdown.
+ * Bez ownership checku (každý prihlásený môže vidieť zoznam kolegov).
+ */
+export async function listUsersByRoleAction(
+  role: "obhliadky" | "realizacie",
+): Promise<
+  { ok: true; users: Array<{ id: string; name: string; email: string }> }
+  | { ok: false; error: string }
+> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, email")
+    .eq("role", role)
+    .eq("active", true)
+    .order("name");
+  if (error) return { ok: false, error: "db_error" };
+  return {
+    ok: true,
+    users: (data ?? []).map((u) => ({
+      id: u.id,
+      name: u.name || u.email,
+      email: u.email,
+    })),
+  };
+}
+
+/**
+ * Server Action — obchodník posunie lead na obhliadku obhliadkárovi.
+ * Nastaví status='needs_inspection', inspection_by=inspectorId, inspection_at=now.
+ * Kontroly: iba obchodník/admin, iba ich vlastný lead.
+ */
+export async function handoverToInspectionAction(
+  leadId: string,
+  inspectorId: string,
+  note?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+  if (user.role !== "obchod" && user.role !== "admin") {
+    return { ok: false, error: "forbidden_wrong_role" };
+  }
+
+  const supabase = await createClient();
+
+  // Ownership check
+  const { data: lead, error: leadErr } = await supabase
+    .from("leads")
+    .select("assigned_to")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (leadErr || !lead) return { ok: false, error: "not_found" };
+  if (lead.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden_not_your_lead" };
+  }
+
+  // Overiť že inspector má rolu obhliadky
+  const { data: inspector } = await supabase
+    .from("users")
+    .select("id, role, active")
+    .eq("id", inspectorId)
+    .maybeSingle();
+  if (!inspector || inspector.role !== "obhliadky" || !inspector.active) {
+    return { ok: false, error: "invalid_inspector" };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updErr } = await supabase
+    .from("leads")
+    .update({
+      status: "needs_inspection",
+      inspection_by: inspectorId,
+      inspection_at: nowIso,
+      last_activity_at: nowIso,
+    })
+    .eq("id", leadId);
+  if (updErr) return { ok: false, error: "db_error" };
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "handed_over_to_inspection",
+    data: { inspector_id: inspectorId, note: note ?? null },
+  });
+
+  revalidatePath("/agent");
+  revalidatePath("/obhliadky");
+  return { ok: true };
+}
+
+/**
+ * Server Action — obchodník posunie dohodnutú zákazku do realizácie.
+ * Status='in_realization', realization_by=teamMemberId, realization_at=now.
+ */
+export async function handoverToRealizationAction(
+  leadId: string,
+  teamMemberId: string,
+  note?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+  if (user.role !== "obchod" && user.role !== "admin") {
+    return { ok: false, error: "forbidden_wrong_role" };
+  }
+
+  const supabase = await createClient();
+  const { data: lead, error: leadErr } = await supabase
+    .from("leads")
+    .select("assigned_to, status")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (leadErr || !lead) return { ok: false, error: "not_found" };
+  if (lead.assigned_to !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden_not_your_lead" };
+  }
+
+  const { data: member } = await supabase
+    .from("users")
+    .select("id, role, active")
+    .eq("id", teamMemberId)
+    .maybeSingle();
+  if (!member || member.role !== "realizacie" || !member.active) {
+    return { ok: false, error: "invalid_team_member" };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updErr } = await supabase
+    .from("leads")
+    .update({
+      status: "in_realization",
+      realization_by: teamMemberId,
+      realization_at: nowIso,
+      last_activity_at: nowIso,
+    })
+    .eq("id", leadId);
+  if (updErr) return { ok: false, error: "db_error" };
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "handed_over_to_realization",
+    data: { realization_by: teamMemberId, note: note ?? null },
+  });
+
+  revalidatePath("/agent");
+  revalidatePath("/realizacie");
+  return { ok: true };
+}
+
+/**
+ * Server Action — realizator označí zákazku ako dokončenú (won).
+ * Status → 'won', realization_completed_at = now.
+ * Iba ten kto realizáciu dostal, alebo admin.
+ */
+export async function markRealizationDoneAction(
+  leadId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+  if (user.role !== "realizacie" && user.role !== "admin") {
+    return { ok: false, error: "forbidden_wrong_role" };
+  }
+
+  const supabase = await createClient();
+  const { data: lead, error: leadErr } = await supabase
+    .from("leads")
+    .select("realization_by, status")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (leadErr || !lead) return { ok: false, error: "not_found" };
+  if (lead.realization_by !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden_not_your_realization" };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updErr } = await supabase
+    .from("leads")
+    .update({
+      status: "won",
+      realization_completed_at: nowIso,
+      last_activity_at: nowIso,
+    })
+    .eq("id", leadId);
+  if (updErr) return { ok: false, error: "db_error" };
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    user_id: user.id,
+    type: "realization_completed",
+    data: null,
+  });
+
+  revalidatePath("/agent");
+  revalidatePath("/realizacie");
+  return { ok: true };
+}

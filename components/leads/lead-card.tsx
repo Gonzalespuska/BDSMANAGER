@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { CallbackReminder } from "./callback-reminder";
+import { HandoffActions } from "./handoff-actions";
 import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
 
@@ -475,6 +476,19 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               </Button>
             )}
           </div>
+
+          {/* Role handoff — obchodník posunie zákazku na obhliadku alebo
+              do realizácie. Zobrazí sa iba v stavoch kde to má zmysel. */}
+          {["phone_revealed", "no_answer", "scheduled", "interested", "quote_sent", "won"].includes(
+            lead.status,
+          ) && (
+            <div className="mt-2 pt-2 border-t border-dashed">
+              <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">
+                Posunúť ďalej v tíme
+              </div>
+              <HandoffActions leadId={lead.id} currentStatus={lead.status} />
+            </div>
+          )}
         </div>
         </div>
       </article>
