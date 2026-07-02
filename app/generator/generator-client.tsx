@@ -306,20 +306,9 @@ export function GeneratorClient({
   const isManualQuote = saleMode === "realizacia" && requiredM2Value <= 0;
   const transportTotal = transport && !isManualQuote ? transport.total_eur : 0;
 
-  // ─── Cenový STROP per m² pre niektoré floor typy ────────────────────
-  // Pre chipsovú nikdy nesmie cena prekročiť 55 €/m² (vrátane dopravy).
-  // Pri prekročení sa zľava aplikuje na dopravu (operácie zostávajú).
-  const MAX_PRICE_PER_SQM_BY_FLOOR: Partial<Record<FloorType, number>> = {
-    chipsova: 55,
-  };
-  const capPerSqm =
-    saleMode === "realizacia" && floorType
-      ? MAX_PRICE_PER_SQM_BY_FLOOR[floorType]
-      : undefined;
-  const capTotal =
-    capPerSqm != null && requiredM2Value > 0
-      ? capPerSqm * requiredM2Value
-      : Infinity;
+  // Cap per m² bol odstránený — cena sa počíta z reálnych sadzieb + dopravy
+  // bez umelého stropu. Ak zákazka vyjde nad "trhovú" cenu, obchodník to
+  // rieši cez špeciálnu zľavu manuálne.
 
   const rawTotal = opsSubtotal + transportTotal;
 
@@ -336,10 +325,7 @@ export function GeneratorClient({
   // Target medzi 1001.50 a 1028.50 € (nie zaokrúhlené 1000 aby to nevyzeralo
   // umelo). Hash z inputov = ten istý input = tá istá suma (idempotentne).
   // Lokalita IGNOROVANÁ aby zmena mesta nemenila min order (mení iba dopravu).
-  //
-  // PREVAŽUJE aj nad cap-om (napr. Chipsová 55 €/m² max) — biznis pravidlo je
-  // že pod 1000 € neprijímame zákazku. Pri malej ploche (napr. 12 m²) sa cap
-  // 660 € posunie na min order floor.
+  // Pod 1000 € neprijímame zákazku — min order floor sa uplatní vždy.
   const minOrderFloor = React.useMemo(() => {
     const MIN = 1000;
     if (!hasRealInput) return 0;
@@ -360,10 +346,9 @@ export function GeneratorClient({
   }, [saleMode, floorType, requiredM2Value, materialQtys, hasRealInput]);
 
   const rawOps = opsSubtotal + transportTotal;
-  const cappedOps = Math.min(rawOps, capTotal);
-  // Total = max(cappedOps, minOrderFloor) — min order prevažuje nad cap
-  const total = hasRealInput ? Math.max(cappedOps, minOrderFloor) : 0;
-  // Doprava skutočne účtovaná (po cap-deduce) — pre zobrazenie v lokalita karte
+  // Total = max(rawOps, minOrderFloor) — min order sa uplatní ak cena pod 1000
+  const total = hasRealInput ? Math.max(rawOps, minOrderFloor) : 0;
+  // Doprava skutočne účtovaná — pre zobrazenie v lokalita karte
   const effectiveTransport = hasRealInput
     ? Math.max(0, total - opsSubtotal)
     : 0;

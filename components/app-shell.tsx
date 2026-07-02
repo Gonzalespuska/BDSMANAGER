@@ -18,6 +18,7 @@ import type { Notification } from "@/lib/notifications";
 import { NavPillClient } from "./nav-pill-client";
 import { ProfileMenu } from "./profile-menu";
 import { NotificationsBell } from "./notifications-bell";
+import { RoleViewDropdown } from "./role-view-dropdown";
 
 /** Definícia každej navigačnej dlaždice — href, label, ikona. */
 const NAV_TAB_DEFS: Record<
@@ -110,15 +111,7 @@ export function AppShell({
           </Link>
 
           <div className="flex items-center gap-2 md:gap-3">
-            {isAdmin && (
-              <Link
-                href="/agent"
-                className="inline-flex items-center gap-1.5 rounded-full border bg-background hover:bg-muted/60 px-4 py-2 text-sm font-semibold text-foreground transition-colors"
-              >
-                Agent view
-                <ArrowRight className="w-4 h-4" aria-hidden />
-              </Link>
-            )}
+            {isAdmin && <RoleViewDropdown />}
 
             <NotificationsBell initial={notifications} />
             <ProfileMenu user={user} selfPaused={selfPaused} />
