@@ -908,14 +908,17 @@ ${signatureLines.join("\n")}`;
           <div>
             <Label
               htmlFor="customer-name"
-              className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground"
+              className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground inline-flex items-center gap-1"
             >
               Meno zákazníka
+              <span className="normal-case tracking-normal font-normal text-muted-foreground/60">
+                — voliteľné pre PDF
+              </span>
             </Label>
             <Input
               id="customer-name"
               type="text"
-              placeholder="napr. Jano Mrkva"
+              placeholder="voliteľné — bez mena bude 'Zákazník'"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               className="h-9 text-sm"
@@ -924,14 +927,17 @@ ${signatureLines.join("\n")}`;
           <div>
             <Label
               htmlFor="customer-email"
-              className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground"
+              className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground inline-flex items-center gap-1"
             >
-              Email zákazníka (pre odoslanie ponuky)
+              Email zákazníka
+              <span className="normal-case tracking-normal font-normal text-muted-foreground/60">
+                — povinný iba pre odoslanie
+              </span>
             </Label>
             <Input
               id="customer-email"
               type="email"
-              placeholder="napr. jano@gmail.com"
+              placeholder="voliteľné ak len sťahuješ PDF"
               value={customerEmail}
               onChange={(e) => setCustomerEmail(e.target.value)}
               className="h-9 text-sm"
@@ -946,6 +952,7 @@ ${signatureLines.join("\n")}`;
             disabled={busy || total <= 0}
             variant="outline"
             className="flex-1 min-w-[140px]"
+            title="Vygeneruje presne to isté PDF čo posielaš emailom. Meno a email sú voliteľné pri sťahovaní."
           >
             <Download className="w-4 h-4 mr-1.5" aria-hidden />
             <FileText className="w-4 h-4 mr-1" aria-hidden />
