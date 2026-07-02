@@ -177,25 +177,33 @@ export function generateQuotePdf(input: PdfQuoteInput): {
   // ─── Quote details ──────────────────────────────────────────────────
   doc.setFontSize(8);
   doc.setTextColor(120);
-  doc.text("ŠPECIFIKÁCIA", left, y);
-  doc.setTextColor(0);
-  doc.setFontSize(13);
-  doc.setFont("Roboto", "bold");
-  y += 6;
-  doc.text(`${input.floor_type_label} podlaha`, left, y);
-  doc.setFont("Roboto", "normal");
-  doc.setFontSize(10);
-  if (input.customer_priestor) {
-    y += 5;
-    doc.setTextColor(80);
-    doc.text(
-      `Priestor: ${normalizePriestor(input.customer_priestor)}`,
-      left,
-      y,
-    );
+  // Manuálna CP (iba surcharge — Lokálna Oprava, atď.) — všetky lines majú
+  // id obsahujúce 'zlozka' → nezobrazuj typ podlahy, je to voľné nacenenie.
+  const isManualQuote =
+    input.lines.length > 0 &&
+    input.lines.every((l) => l.material_id.includes("zlozka"));
+
+  if (!isManualQuote) {
+    doc.text("ŠPECIFIKÁCIA", left, y);
     doc.setTextColor(0);
+    doc.setFontSize(13);
+    doc.setFont("Roboto", "bold");
+    y += 6;
+    doc.text(`${input.floor_type_label} podlaha`, left, y);
+    doc.setFont("Roboto", "normal");
+    doc.setFontSize(10);
+    if (input.customer_priestor) {
+      y += 5;
+      doc.setTextColor(80);
+      doc.text(
+        `Priestor: ${normalizePriestor(input.customer_priestor)}`,
+        left,
+        y,
+      );
+      doc.setTextColor(0);
+    }
+    y += 10;
   }
-  y += 10;
 
   // ─── Rozsah prác — operácie ako 1× kusy bez cien ────────────────────
   doc.setFontSize(8);
@@ -226,7 +234,10 @@ export function generateQuotePdf(input: PdfQuoteInput): {
     doc.text("1×", left + 2, y);
     doc.setFont("Roboto", "normal");
     doc.text(line.material_name, left + 30, y);
-    if (line.m2 > 0) {
+    // Pri surcharge (zložka) je line.m2 vlastne EUR suma, nie štvorcové metre —
+    // NEZOBRAZUJ ju s "m²". Klasické area/level materials si zobrazí (X m²).
+    const isSurcharge = line.material_id.includes("zlozka");
+    if (line.m2 > 0 && !isSurcharge) {
       doc.setFontSize(8);
       doc.setTextColor(140);
       doc.text(`(${line.m2} m²)`, right - 2, y, { align: "right" });

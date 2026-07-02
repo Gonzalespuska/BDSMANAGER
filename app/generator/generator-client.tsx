@@ -299,7 +299,12 @@ export function GeneratorClient({
   // Operácie subtotal — BEZ dopravy. Na túto časť aplikujeme min order.
   const opsSubtotal =
     saleMode === "material" ? materialOnlySubtotal : subtotal + marginValue;
-  const transportTotal = transport ? transport.total_eur : 0;
+  // Doprava sa NEPRIPOČÍTAVA k manuálnej CP (iba surcharge, žiadna klasická
+  // m² plocha) — obchodník robí voľné nacenenie ktoré má byť presne.
+  // Ak obchodník chce pridať dopravu k manual CP, urobí to cez ďalšiu
+  // pomenovanú zložku (napr. "Doprava 200 km" 90 €).
+  const isManualQuote = saleMode === "realizacia" && requiredM2Value <= 0;
+  const transportTotal = transport && !isManualQuote ? transport.total_eur : 0;
 
   // ─── Cenový STROP per m² pre niektoré floor typy ────────────────────
   // Pre chipsovú nikdy nesmie cena prekročiť 55 €/m² (vrátane dopravy).
