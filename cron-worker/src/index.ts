@@ -16,6 +16,7 @@
 export interface Env {
   CRON_SECRET: string;
   TARGET_URL: string;
+  META_TARGET_URL: string;
 }
 
 export default {
@@ -59,22 +60,35 @@ export default {
 async function runSync(
   env: Env,
   scheduledTime: number,
-): Promise<{ ok: boolean; status: number; body: unknown }> {
+): Promise<{ ok: boolean; web: unknown; meta: unknown }> {
   const startedAt = new Date(scheduledTime).toISOString();
-  console.log(`[cron-worker] Triggering sync at ${startedAt}`);
+  console.log(`[cron-worker] Triggering both syncs at ${startedAt}`);
 
-  const res = await fetch(env.TARGET_URL, {
-    method: "POST",
-    headers: {
-      "X-Cron-Secret": env.CRON_SECRET,
-      "Content-Type": "application/json",
-    },
-  });
+  // Web + Meta paralelne aby cron worker rýchlo skončil
+  const [webRes, metaRes] = await Promise.allSettled([
+    fetch(env.TARGET_URL, {
+      method: "POST",
+      headers: { "X-Cron-Secret": env.CRON_SECRET },
+    }),
+    env.META_TARGET_URL
+      ? fetch(env.META_TARGET_URL, {
+          method: "POST",
+          headers: { "X-Cron-Secret": env.CRON_SECRET },
+        })
+      : Promise.resolve(null),
+  ]);
 
-  const body = await res
-    .json()
-    .catch(() => ({ error: "non_json_response" }));
+  async function parseRes(r: PromiseSettledResult<Response | null>) {
+    if (r.status === "rejected") return { error: String(r.reason) };
+    if (!r.value) return { skipped: "no_url" };
+    const body = await r.value.json().catch(() => ({ error: "non_json" }));
+    return { status: r.value.status, body };
+  }
 
-  console.log(`[cron-worker] Sync response ${res.status}:`, JSON.stringify(body));
-  return { ok: res.ok, status: res.status, body };
+  const web = await parseRes(webRes);
+  const meta = await parseRes(metaRes);
+  console.log("[cron-worker] web:", JSON.stringify(web));
+  console.log("[cron-worker] meta:", JSON.stringify(meta));
+
+  return { ok: true, web, meta };
 }
