@@ -8,12 +8,33 @@ const inter = Inter({
   display: "swap",
 });
 
+export const viewport = {
+  themeColor: "#0ea5e9",
+  // Mobile: nezoomuj pri fokusu inputu (font-size >= 16px v tailwind
+  // zabezpečený v globals.css). maximumScale=1 zamedzí iOS pinch-zoom
+  // ktorý by rozbil sticky layouty.
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: "cover" as const,
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://app.najcrm.sk"),
   title: "Epoxidovo Manager · CRM",
   description:
     "Epoxidovo CRM — leady, generátor ponúk, kalendár pripomienok.",
   robots: { index: false, follow: false },
+  applicationName: "Epoxidovo CRM",
+  appleWebApp: {
+    capable: true,
+    title: "Epoxidovo CRM",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: true, // tel: linky funkčné na mobile
+  },
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     shortcut: "/icon.svg",

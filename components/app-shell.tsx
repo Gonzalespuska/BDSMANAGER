@@ -95,35 +95,30 @@ export function AppShell({
       )}
 
       <header className="border-b bg-background sticky top-0 z-10">
-        {/* Header padding kompaktnejšie na notebookoch — predtým py-5/6 žralo
-            ~80 px vertical space na 16" obrazovkách. py-3/4 stačí. */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 md:py-4 flex items-center justify-between gap-3">
+        {/* Header — kompaktnejší na mobile (menšia logika + hidden CRM subtitle). */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 md:py-4 flex items-center justify-between gap-2 md:gap-3">
           <Link
             href={homeHref}
-            className="hover:opacity-80 transition-opacity"
+            className="hover:opacity-80 transition-opacity min-w-0"
           >
-            <div className="text-2xl md:text-3xl font-extrabold tracking-tight leading-none">
+            <div className="text-lg md:text-3xl font-extrabold tracking-tight leading-none whitespace-nowrap">
               Epoxidovo<span className="text-sky-500"> Manager</span>
             </div>
-            <div className="mt-1 text-[11px] md:text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="hidden md:block mt-1 text-[11px] md:text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               CRM
             </div>
           </Link>
 
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-1.5 md:gap-3">
             {isAdmin && <RoleViewDropdown />}
-
             <NotificationsBell initial={notifications} />
             <ProfileMenu user={user} selfPaused={selfPaused} />
           </div>
         </div>
 
-        {/* Secondary nav — pills. Set zobrazenených tabov závisí od role:
-            - admin → všetky (Leady, Obhliadky, Realizácie, Kalendár, Generátor, Tím, Admin)
-            - obchod → Leady, Kalendár, Generátor, Tím chat
-            - obhliadky → Obhliadky, Kalendár, Tím chat
-            - realizacie → Realizácie, Kalendár, Tím chat */}
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 pb-3 flex items-center gap-2 flex-wrap">
+        {/* Secondary nav — horizontal scroll na mobile (žiadny wrap = žiadny
+            zaberaný vertikálny priestor pod bar-om). Na desktop wrap ako predtým. */}
+        <nav className="max-w-7xl mx-auto px-3 sm:px-6 pb-2 md:pb-3 flex items-center gap-1.5 md:gap-2 md:flex-wrap overflow-x-auto scrollbar-hide -mx-1 md:mx-0 px-1 md:px-6">
           {visibleTabs.map((tabId) => {
             const def = NAV_TAB_DEFS[tabId];
             return (
