@@ -320,10 +320,12 @@ export function GeneratorClient({
 
   // Má user reálny vstup? Bez rozmeru (m²) v realizácii alebo bez balení
   // v material móde → ponuka nie je validná, nepočítame výslednú cenu.
+  // ALE: ak je aspoň jedna zložka (surcharge) enabled s > 0 €, tiež OK —
+  // obchodník môže robiť PDF iba na "Lokálnu opravu" bez úpravy povrchu.
   const hasRealInput =
     saleMode === "material"
       ? Object.values(materialQtys).some((v) => (parseFloat(v) || 0) > 0)
-      : requiredM2Value > 0;
+      : requiredM2Value > 0 || subtotalRaw > 0;
 
   // ─── Minimálna objednávka: 1 000 € (LEN pre operácie, NIE pre dopravu) ─
   // Doprava sa pridáva navrch — nech zmena lokality viditeľne zmení cenu.
