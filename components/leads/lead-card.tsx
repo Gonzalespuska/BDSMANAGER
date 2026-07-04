@@ -59,6 +59,16 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
   // Termín má vlastný prominentný badge (kedy chce zákazník realizovať) —
   // pre obchodníka je to kľúčová info: urgentné vs "iba info" má inú prioritu.
   const terminValue = dataFields.termin as string | undefined;
+  // Predošlá CP — ak lead ma odoslanú CP, môžeme ju znovu otvoriť + preposlať.
+  const lastQuote = (lead.data as Record<string, unknown>).last_quote as
+    | {
+        version?: number;
+        sent_at?: string;
+        sent_to?: string;
+        snapshot?: { total?: number };
+      }
+    | undefined;
+  const hasSavedQuote = !!lastQuote?.sent_at;
   const infoBits = [
     dataFields.plocha ? `${dataFields.plocha} m²` : null,
     dataFields.priestor,
@@ -499,6 +509,34 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               </Button>
             )}
           </div>
+
+          {/* UPRAVIŤ + POSLAŤ ZNOVA — ak lead má uloženú CP z minulosti.
+              Otvorí generátor pre-fillnutý pôvodným stavom → obchodník upraví
+              (napr. m² z 16 na 20) a klikne "Preposlať upravenú ponuku". */}
+          {hasSavedQuote && (
+            <div className="mt-2">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="w-full h-10 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold"
+                title={
+                  lastQuote?.sent_at
+                    ? `Pôvodná CP poslaná ${new Date(lastQuote.sent_at).toLocaleString("sk-SK")} ${lastQuote.sent_to ? `na ${lastQuote.sent_to}` : ""}`
+                    : undefined
+                }
+              >
+                <Link href={`/generator?lead=${lead.id}&resend=1`}>
+                  ✏️ Upraviť CP a poslať znova
+                  {lastQuote?.version && lastQuote.version > 1 && (
+                    <span className="ml-1.5 text-[10px] font-normal opacity-70">
+                      (v{lastQuote.version})
+                    </span>
+                  )}
+                </Link>
+              </Button>
+            </div>
+          )}
 
           {/* Role handoff — obchodník posunie zákazku na obhliadku alebo
               do realizácie. Zobrazí sa iba v stavoch kde to má zmysel. */}

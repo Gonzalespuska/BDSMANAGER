@@ -65,19 +65,64 @@ export interface LeadContext {
   priestor: string | null;
 }
 
+/** Snapshot generátorového stavu — ukladá sa do lead.data.last_quote
+ * pri odoslaní CP. Používa sa na "Upraviť CP a poslať znova" flow. */
+export interface SavedQuoteState {
+  version?: number;
+  sent_at?: string;
+  sent_to?: string;
+  subject?: string;
+  agent_id?: string;
+  state: {
+    floorType: FloorType | null;
+    saleMode: "realizacia" | "material";
+    lines: Record<string, LineState>;
+    lokalita: string;
+    manualKm: string;
+    customerName: string;
+    customerEmail: string;
+    jednofarebnaVariant: "epoxid" | "polyuretan";
+    materialQtys: Record<string, string>;
+    discountEnabled: boolean;
+    discountAmount: string;
+    discountLabel: string;
+  };
+  snapshot?: {
+    total: number;
+    subtotal: number;
+  };
+}
+
 export function GeneratorClient({
   leadContext,
   agentInfo,
+  savedQuote,
 }: {
   leadContext?: LeadContext | null;
   agentInfo?: { name: string; email: string; phone?: string | null };
+  /** Ak lead už má odoslanú CP a otvárame ju cez ?resend=1 — pre-fillneme state. */
+  savedQuote?: SavedQuoteState | null;
 }) {
   const router = useRouter();
+  const isResend = !!savedQuote;
   const [floorType, setFloorType] = React.useState<FloorType | null>(
-    leadContext?.floor_type ?? null,
+    savedQuote?.state.floorType ?? leadContext?.floor_type ?? null,
   );
   const initialM2 = leadContext?.m2 ?? "";
   const [lines, setLines] = React.useState<Record<string, LineState>>(() => {
+    // Ak máme saved quote → hydrátujeme z neho, ale zabezpečíme že všetky
+    // materiály z aktuálneho MATERIALS mapy majú entry (schéma sa mohla zmeniť).
+    if (savedQuote?.state.lines) {
+      const init: Record<string, LineState> = {};
+      for (const m of MATERIALS) {
+        init[m.id] = savedQuote.state.lines[m.id] ?? {
+          enabled: false,
+          m2: "",
+          mm: m.unit === "level" ? String(m.default_mm ?? m.min_mm ?? 4) : "0",
+        };
+      }
+      return init;
+    }
     const init: Record<string, LineState> = {};
     for (const m of MATERIALS) {
       const isAreaUnit = m.unit === "area" || m.unit === "level";
@@ -109,37 +154,45 @@ export function GeneratorClient({
   // Necháme prázdne aj keď lead má lokalitu vo formulári — agent si po telefonáte
   // explicitne potvrdí kam ide robiť. Pôvodnú hodnotu z leadu ponúkneme ako
   // klikateľný suggestion chip pod inputom.
-  const [lokalita, setLokalita] = React.useState<string>("");
-  const [manualKm, setManualKm] = React.useState<string>("");
+  const [lokalita, setLokalita] = React.useState<string>(
+    savedQuote?.state.lokalita ?? "",
+  );
+  const [manualKm, setManualKm] = React.useState<string>(
+    savedQuote?.state.manualKm ?? "",
+  );
   const leadSuggestedLokalita = leadContext?.lokalita ?? "";
   // Email zákazníka — prefilled z leadu, ale editovateľný (môžeš ho meniť
   // alebo zadať manuálne keď generátor otvoríš bez leadu).
   const [customerEmail, setCustomerEmail] = React.useState<string>(
-    leadContext?.email ?? "",
+    savedQuote?.state.customerEmail ?? leadContext?.email ?? "",
   );
   // Meno zákazníka — rovnaké, prefilled ale editovateľné
   const [customerName, setCustomerName] = React.useState<string>(
-    leadContext?.name ?? "",
+    savedQuote?.state.customerName ?? leadContext?.name ?? "",
   );
   // Voliteľná zľava — opt-in (klikneš na sekciu aby si ju aktivoval, ako optional op)
-  const [discountEnabled, setDiscountEnabled] = React.useState<boolean>(false);
-  const [discountAmount, setDiscountAmount] = React.useState<string>("");
+  const [discountEnabled, setDiscountEnabled] = React.useState<boolean>(
+    savedQuote?.state.discountEnabled ?? false,
+  );
+  const [discountAmount, setDiscountAmount] = React.useState<string>(
+    savedQuote?.state.discountAmount ?? "",
+  );
   const [discountLabel, setDiscountLabel] = React.useState<string>(
-    "Špeciálna zľava pre vás",
+    savedQuote?.state.discountLabel ?? "Špeciálna zľava pre vás",
   );
 
   // Mode: realizácia podlahy vs iba predaj materiálu + doprava
   const [saleMode, setSaleMode] = React.useState<"realizacia" | "material">(
-    "realizacia",
+    savedQuote?.state.saleMode ?? "realizacia",
   );
   // Pre jednofarebnú: voľba medzi Polyuretán (default) a Epoxid farebným náterom
   const [jednofarebnaVariant, setJednofarebnaVariant] = React.useState<
     "epoxid" | "polyuretan"
-  >("polyuretan");
+  >(savedQuote?.state.jednofarebnaVariant ?? "polyuretan");
   // Pre material mode: count balení / kg per produkt (id -> qty string)
   const [materialQtys, setMaterialQtys] = React.useState<
     Record<string, string>
-  >({});
+  >(savedQuote?.state.materialQtys ?? {});
 
   // Subtotal pre material mode — pre každý produkt:
   //   ks balenia × cena/balenie  ALEBO  kg × cena/kg
@@ -478,6 +531,31 @@ ${signatureLines.join("\n")}`;
       }
       const pdfBase64 = btoa(binary);
 
+      // Snapshot generátorového stavu — uloží sa do lead.data.last_quote,
+      // aby obchodník mohol CP neskôr upraviť a poslať znova.
+      const quoteStateSnapshot: SavedQuoteState = {
+        version: (savedQuote?.version ?? 0) + 1,
+        sent_at: new Date().toISOString(),
+        sent_to: recipient,
+        subject,
+        agent_id: undefined,
+        state: {
+          floorType,
+          saleMode,
+          lines,
+          lokalita,
+          manualKm,
+          customerName,
+          customerEmail,
+          jednofarebnaVariant,
+          materialQtys,
+          discountEnabled,
+          discountAmount,
+          discountLabel,
+        },
+        snapshot: { total, subtotal },
+      };
+
       const sendRes = await fetch("/api/quote/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -491,6 +569,7 @@ ${signatureLines.join("\n")}`;
           pdf_filename: filename,
           agent_email: input.agent_email,
           agent_name: input.agent_name,
+          quote_state: quoteStateSnapshot,
         }),
       });
 
@@ -522,53 +601,7 @@ ${signatureLines.join("\n")}`;
         );
         router.push("/agent?tab=kontakt");
       }, 100);
-      return; // early return — nižšie legacy Gmail flow už nespúšťame
-
-      // eslint-disable-next-line no-unreachable — legacy Gmail compose flow
-      // ponechaný pre reference; ak by Resend permanentne zlyhal, môžeme
-      // ho reaktivovať odstránením 'return' vyššie.
-      if (leadContext?.id && !leadContext.id.startsWith("demo-")) {
-        fetch("/api/quote/log-prepared", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lead_id: leadContext.id,
-            to_email: recipient,
-            subject,
-          }),
-        }).catch(() => {});
-      }
-
-      // 3. Otvor Gmail compose v novom tabe s prefilled údajmi.
-      // `/u/0/` = explicitne primárne logged-in Gmail konto. Ak má obchodník
-      // v browseri len jedno konto (workspace obchod@epoxidovo.sk), pickne sa
-      // ono. Ak má viacero kont, pickne sa to, ktoré je v Gmaili nastavené
-      // ako default — to si user nastaví v Gmaili 1× a hotovo.
-      // `authuser=0` poistka pre niektoré case-y kde u/0/ samé nestačí.
-      const gmailUrl =
-        "https://mail.google.com/mail/u/0/?authuser=0&view=cm&fs=1&tf=1" +
-        `&to=${encodeURIComponent(recipient)}` +
-        `&su=${encodeURIComponent(subject)}` +
-        `&body=${encodeURIComponent(bodyText)}`;
-      const win = window.open(gmailUrl, "_blank", "noopener,noreferrer");
-      if (!win) {
-        alert(
-          "Browser zablokoval otvorenie novej karty. Povol popup pre app.najcrm.sk a skús znova.",
-        );
-        return;
-      }
-
-      // 4. Vizuálna nápoveda
-      setTimeout(() => {
-        alert(
-          `✅ Gmail otvorený s prefilled obsahom.\n\n` +
-            `📎 PDF stiahnuté: ${filename}\n` +
-            `   → Drag-drop ho do Gmail compose okna (alebo klikni paperclip)\n` +
-            `   → Klikni Odoslať\n\n` +
-            `Email pôjde z tvojho Gmail účtu (workspace).`,
-        );
-        router.push("/agent?tab=kontakt");
-      }, 600);
+      return; // send flow ends here — legacy Gmail compose flow bol odstránený
     } catch (e) {
       alert(`Email chyba: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
@@ -578,6 +611,26 @@ ${signatureLines.join("\n")}`;
 
   return (
     <div className="flex flex-col gap-2 md:gap-2.5">
+      {/* RESEND banner — zákazník zmenil rozmery / špec, obchodák upraví
+          pôvodnú CP a pošle znova. */}
+      {isResend && (
+        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 flex items-center gap-3 flex-wrap">
+          <div className="w-9 h-9 rounded-full bg-amber-200 text-amber-900 inline-flex items-center justify-center shrink-0 text-lg">
+            ✏️
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm text-amber-900">
+              Upravuješ predošlú CP (verzia {savedQuote?.version ?? 1})
+            </div>
+            <div className="text-[11px] text-amber-800/80">
+              Pôvodná poslaná {savedQuote?.sent_at ? new Date(savedQuote.sent_at).toLocaleString("sk-SK", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+              {savedQuote?.sent_to ? ` na ${savedQuote.sent_to}` : ""}
+              {savedQuote?.snapshot?.total ? ` · pôvodný total ${formatEur(savedQuote.snapshot.total)}` : ""}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Compact header s lead chip + title + mode toggle v jednom riadku.
           Šetrí ~200px vertikálneho miesta na notebookoch. */}
       <div className="flex items-center justify-between gap-2 md:gap-4 flex-wrap">
@@ -1020,7 +1073,7 @@ ${signatureLines.join("\n")}`;
             className="flex-1 min-w-[200px] bg-emerald-600 hover:bg-emerald-700"
           >
             <Mail className="w-4 h-4 mr-1.5" aria-hidden />
-            Pošli email s ponukou
+            {isResend ? "Preposlať upravenú ponuku" : "Pošli email s ponukou"}
           </Button>
         </div>
       </div>

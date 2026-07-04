@@ -112,6 +112,12 @@ export async function POST(request: NextRequest) {
     agent_email?: string;
     /** Meno obchodáka — vloží sa do From display name */
     agent_name?: string;
+    /**
+     * Snapshot generátorového stavu — uloží sa do lead.data.last_quote,
+     * aby obchodník mohol CP neskôr upraviť a poslať znova.
+     * Klient poskytuje ľubovoľný JSON blob (validujeme len že je objekt).
+     */
+    quote_state?: Record<string, unknown>;
   };
   try {
     body = await request.json();
@@ -228,18 +234,34 @@ export async function POST(request: NextRequest) {
 
         // Update status: quote_sent → posunie lead z Kontakt do Otvorené tabu.
         // Nedotýkame sa už-finálnych stavov (won/lost/archived).
+        // Zároveň uložíme snapshot generátorového stavu do data.last_quote
+        // aby obchodník mohol CP neskôr upraviť a poslať znova.
         const { data: leadRow } = await admin
           .from("leads")
-          .select("status")
+          .select("status, data")
           .eq("id", body.lead_id)
           .maybeSingle();
         if (
           leadRow &&
           !["won", "lost", "archived"].includes(leadRow.status)
         ) {
+          const existingData =
+            (leadRow.data as Record<string, unknown> | null) ?? {};
+          const nextData: Record<string, unknown> = { ...existingData };
+          if (
+            body.quote_state &&
+            typeof body.quote_state === "object" &&
+            !Array.isArray(body.quote_state)
+          ) {
+            nextData.last_quote = body.quote_state;
+          }
           await admin
             .from("leads")
-            .update({ status: "quote_sent", last_activity_at: nowIso })
+            .update({
+              status: "quote_sent",
+              last_activity_at: nowIso,
+              data: nextData,
+            })
             .eq("id", body.lead_id);
         }
       } catch (e) {

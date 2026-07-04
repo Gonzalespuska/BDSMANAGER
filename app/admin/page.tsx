@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Activity,
   ArrowRight,
+  BarChart3,
   Eye,
   Layers,
   Plug,
@@ -76,6 +77,12 @@ export default async function AdminDashboard() {
       title: "Prehľad — supervision",
       desc: "Read-only audit view. Posledné leady, obhliadky aj realizácie na jednom screene. Skontroluj že tím tečie a nikde nezasekol.",
       icon: Eye,
+    },
+    {
+      href: "/admin/leads-analytika",
+      title: "Analytika leadov",
+      desc: "Odkiaľ prichádzajú leady (web / Meta / Google), tabuľka posledných 500, mesačné porovnanie so zmenou v %.",
+      icon: BarChart3,
     },
     {
       href: "/admin/agents",

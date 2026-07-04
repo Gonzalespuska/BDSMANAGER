@@ -3,7 +3,11 @@ import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { FloorType } from "@/lib/data/materials";
 
-import { GeneratorClient, type LeadContext } from "./generator-client";
+import {
+  GeneratorClient,
+  type LeadContext,
+  type SavedQuoteState,
+} from "./generator-client";
 
 // runtime = "edge" disabled — admin client fetch fails in dev edge runtime
 
@@ -12,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 interface PageProps {
-  searchParams: Promise<{ lead?: string; demo?: string }>;
+  searchParams: Promise<{ lead?: string; demo?: string; resend?: string }>;
 }
 
 /**
@@ -117,6 +121,7 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
   }
 
   // ─── Real lead from DB ───────────────────────────────────────────────
+  let savedQuote: SavedQuoteState | null = null;
   if (params.lead) {
     try {
       const supabase = createAdminClient();
@@ -127,7 +132,7 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
         .maybeSingle();
 
       if (lead) {
-        const data = (lead.data ?? {}) as Record<string, string | number>;
+        const data = (lead.data ?? {}) as Record<string, unknown>;
         const m2 =
           typeof data.plocha === "string" || typeof data.plocha === "number"
             ? String(data.plocha)
@@ -144,11 +149,27 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
           lokalita: typeof data.lokalita === "string" ? data.lokalita : null,
           priestor: typeof data.priestor === "string" ? data.priestor : null,
         };
+
+        // Ak lead má uloženú predchádzajúcu CP a klient prišiel s ?resend=1,
+        // hydrátujeme generátor z last_quote.
+        if (
+          params.resend === "1" &&
+          data.last_quote &&
+          typeof data.last_quote === "object"
+        ) {
+          savedQuote = data.last_quote as SavedQuoteState;
+        }
       }
     } catch (e) {
       console.error("[generator] lead fetch failed:", e);
     }
   }
 
-  return <GeneratorClient leadContext={leadContext} agentInfo={agentInfo} />;
+  return (
+    <GeneratorClient
+      leadContext={leadContext}
+      agentInfo={agentInfo}
+      savedQuote={savedQuote}
+    />
+  );
 }

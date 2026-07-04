@@ -40,6 +40,7 @@ import {
   activateAgentAction,
   createAgentAction,
   deactivateAgentAction,
+  deleteAgentAction,
   sendInviteAction,
   updateAgentAction,
 } from "./actions";
@@ -93,6 +94,7 @@ export function AgentsTable({ initial }: { initial: AgentListRow[] }) {
               <th className="text-left px-3 py-2">Obchodník</th>
               <th className="text-left px-3 py-2">Zaťaženosť</th>
               <th className="text-right px-3 py-2">Leady</th>
+              <th className="text-right px-3 py-2">Akcie</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -101,7 +103,7 @@ export function AgentsTable({ initial }: { initial: AgentListRow[] }) {
             ))}
             {agents.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center text-muted-foreground py-8 text-sm">
+                <td colSpan={4} className="text-center text-muted-foreground py-8 text-sm">
                   Žiadni agenti — pridaj prvého cez tlačidlo hore vpravo.
                 </td>
               </tr>
@@ -169,6 +171,25 @@ function AgentRow({
     } else {
       setInviteSent(true);
       setTimeout(() => setInviteSent(false), 3000);
+    }
+  }
+
+  async function handleDeleteAccess() {
+    const ok = window.confirm(
+      `Naozaj odobrať prístup pre ${agent.name || agent.email}?\n\n` +
+        `• Užívateľa sa nedá znovu prihlásiť.\n` +
+        `• Jeho leady sa unassignnú (zostanú v CRM, len bez agenta).\n` +
+        `• Túto akciu nemožno vrátiť.`,
+    );
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    const res = await deleteAgentAction(agent.id);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error);
+    } else {
+      onChanged();
     }
   }
 
@@ -256,11 +277,37 @@ function AgentRow({
           <span className="font-bold">{agent.active_leads}</span>
           <span className="text-muted-foreground"> / {agent.total_leads}</span>
         </td>
+
+        {/* Akcie — Edit + Delete access */}
+        <td className="px-3 py-2 text-right">
+          <div className="inline-flex items-center gap-1">
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-8 px-2"
+              title="Editovať meno, tel., rolu, permissions"
+            >
+              <Link href={`/admin/agents/${agent.id}`}>
+                <span className="text-xs font-bold">Upraviť</span>
+              </Link>
+            </Button>
+            <button
+              type="button"
+              onClick={handleDeleteAccess}
+              disabled={busy}
+              title="Odobrať access k softvéru (trvalé)"
+              className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-rose-50 hover:border-rose-300 text-rose-600 disabled:opacity-50"
+            >
+              <X className="w-3.5 h-3.5" aria-hidden />
+            </button>
+          </div>
+        </td>
       </tr>
 
       {error && (
         <tr>
-          <td colSpan={7} className="px-3 py-2 bg-muted/30">
+          <td colSpan={4} className="px-3 py-2 bg-muted/30">
             <div className="inline-flex items-center gap-2 text-xs text-destructive">
               <AlertCircle className="w-3.5 h-3.5" aria-hidden />
               {error}
