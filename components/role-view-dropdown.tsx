@@ -9,30 +9,27 @@ import {
   Headphones,
   X,
   Shield,
+  Loader2,
 } from "lucide-react";
-
-import {
-  setViewAsRoleAction,
-  clearViewAsRoleAction,
-} from "@/app/view-as-actions";
 
 /**
  * RoleViewDropdown — admin klikom prepne "Zobraziť ako" na inú rolu.
  *
- * Voľby: Obchod / Realizácie / Obhliadky / Office. Po klikoch:
- *   1. Server action setne cookie 'view_as_role'
- *   2. Redirect na dashboard tej role
- *   3. Všetky stránky vidia usera ako danú rolu (nav, badge, guards)
- *
- * Ak je view-as aktívny, dropdown má "🔒 View as: Obchod" label + "X Zrušiť"
- * tlačítko ktoré vypne view-as a vráti admin.
+ * Client-side flow (spoľahlivejšie ako server actions v CF Pages edge):
+ *   1. Klik → POST /api/view-as { role }
+ *   2. Server setne cookie
+ *   3. window.location.href = response.redirect (hard navigation → server
+ *      RSC re-render s novou rolou)
  */
+type ViewAsRole = "obchod" | "obhliadky" | "realizacie" | "office";
+
 export function RoleViewDropdown({
   currentViewAs,
 }: {
-  currentViewAs?: "obchod" | "obhliadky" | "realizacie" | "office" | null;
+  currentViewAs?: ViewAsRole | null;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
   const ref = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -46,10 +43,33 @@ export function RoleViewDropdown({
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
+  async function switchTo(role: ViewAsRole | "clear") {
+    setBusy(role);
+    try {
+      const res = await fetch("/api/view-as", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        redirect?: string;
+        error?: string;
+      };
+      if (!json.ok || !json.redirect) {
+        alert(`Chyba: ${json.error ?? "unknown"}`);
+        setBusy(null);
+        return;
+      }
+      // Hard navigation aby server RSC dostal nový cookie a re-renderol shell
+      window.location.href = json.redirect;
+    } catch (e) {
+      alert(`Chyba pripojenia: ${e instanceof Error ? e.message : "unknown"}`);
+      setBusy(null);
+    }
+  }
+
   const isViewingAs = !!currentViewAs;
-  const label = isViewingAs
-    ? `Zobrazujem ako: ${ROLE_LABELS[currentViewAs!]}`
-    : "Zobraziť ako";
 
   return (
     <div className="relative" ref={ref}>
@@ -62,7 +82,9 @@ export function RoleViewDropdown({
             : "bg-background hover:bg-muted/60 text-foreground"
         }`}
       >
-        <span className="hidden md:inline">{label}</span>
+        <span className="hidden md:inline">
+          {isViewingAs ? `Ako: ${ROLE_LABELS[currentViewAs!]}` : "Zobraziť ako"}
+        </span>
         <span className="md:hidden">
           {isViewingAs ? ROLE_LABELS[currentViewAs!] : "View"}
         </span>
@@ -88,73 +110,77 @@ export function RoleViewDropdown({
 
           {isViewingAs && (
             <>
-              <form
-                action={clearViewAsRoleAction}
-                className="block"
+              <button
+                type="button"
+                onClick={() => switchTo("clear")}
+                disabled={!!busy}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-amber-50 border border-amber-200 bg-amber-50/50 disabled:opacity-50"
               >
-                <button
-                  type="submit"
-                  onClick={() => setOpen(false)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-amber-50 border border-amber-200 bg-amber-50/50"
-                >
-                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 inline-flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 inline-flex items-center justify-center shrink-0">
+                  {busy === "clear" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                  ) : (
                     <X className="w-4 h-4" aria-hidden />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="font-bold text-sm inline-flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5" aria-hidden />
+                    Späť na Admin
                   </div>
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="font-bold text-sm inline-flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5" aria-hidden />
-                      Späť na Admin
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      Vypnúť View as ({ROLE_LABELS[currentViewAs!]})
-                    </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Vypnúť View as ({ROLE_LABELS[currentViewAs!]})
                   </div>
-                </button>
-              </form>
+                </div>
+              </button>
               <div className="my-1 border-t" />
             </>
           )}
 
           <RoleButton
             role="obchod"
-            currentViewAs={currentViewAs}
+            current={currentViewAs}
+            busy={busy}
+            onClick={switchTo}
             icon={<Phone className="w-4 h-4" />}
             iconBg="bg-sky-100 text-sky-700"
             hover="hover:bg-sky-50"
             title="Obchod"
             desc="Leady, callbacky, cenové ponuky"
-            onSelect={() => setOpen(false)}
           />
           <RoleButton
             role="realizacie"
-            currentViewAs={currentViewAs}
+            current={currentViewAs}
+            busy={busy}
+            onClick={switchTo}
             icon={<Hammer className="w-4 h-4" />}
             iconBg="bg-emerald-100 text-emerald-700"
             hover="hover:bg-emerald-50"
             title="Realizácie"
             desc="Zákazky, foto/video z priebehu"
-            onSelect={() => setOpen(false)}
           />
           <RoleButton
             role="obhliadky"
-            currentViewAs={currentViewAs}
+            current={currentViewAs}
+            busy={busy}
+            onClick={switchTo}
             icon={<ClipboardList className="w-4 h-4" />}
             iconBg="bg-violet-100 text-violet-700"
             hover="hover:bg-violet-50"
             title="Obhliadky"
             desc="Formulár, rozmery, foto z miesta"
-            onSelect={() => setOpen(false)}
           />
           <RoleButton
             role="office"
-            currentViewAs={currentViewAs}
+            current={currentViewAs}
+            busy={busy}
+            onClick={switchTo}
             icon={<Headphones className="w-4 h-4" />}
             iconBg="bg-amber-100 text-amber-700"
             hover="hover:bg-amber-50"
             title="Office"
             desc="Voice-to-task, poznámky, todo"
             badge="vo výstavbe"
-            onSelect={() => setOpen(false)}
           />
         </div>
       )}
@@ -171,56 +197,61 @@ const ROLE_LABELS: Record<string, string> = {
 
 function RoleButton({
   role,
-  currentViewAs,
+  current,
+  busy,
+  onClick,
   icon,
   iconBg,
   hover,
   title,
   desc,
   badge,
-  onSelect,
 }: {
-  role: "obchod" | "obhliadky" | "realizacie" | "office";
-  currentViewAs?: string | null;
+  role: ViewAsRole;
+  current?: string | null;
+  busy: string | null;
+  onClick: (role: ViewAsRole) => void;
   icon: React.ReactNode;
   iconBg: string;
   hover: string;
   title: string;
   desc: string;
   badge?: string;
-  onSelect: () => void;
 }) {
-  const isCurrent = currentViewAs === role;
+  const isCurrent = current === role;
+  const isBusy = busy === role;
   return (
-    <form action={setViewAsRoleAction.bind(null, role)} className="block">
-      <button
-        type="submit"
-        onClick={onSelect}
-        disabled={isCurrent}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${hover} disabled:opacity-50 disabled:cursor-not-allowed`}
+    <button
+      type="button"
+      onClick={() => !isCurrent && !isBusy && onClick(role)}
+      disabled={isCurrent || !!busy}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${hover} disabled:opacity-50 disabled:cursor-not-allowed`}
+    >
+      <div
+        className={`w-8 h-8 rounded-full ${iconBg} inline-flex items-center justify-center shrink-0`}
       >
-        <div
-          className={`w-8 h-8 rounded-full ${iconBg} inline-flex items-center justify-center shrink-0`}
-        >
-          {icon}
+        {isBusy ? (
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+        ) : (
+          icon
+        )}
+      </div>
+      <div className="flex-1 min-w-0 text-left">
+        <div className="font-bold text-sm inline-flex items-center gap-1.5">
+          {title}
+          {isCurrent && (
+            <span className="text-[9px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-800 px-1 py-0.5 rounded">
+              aktívne
+            </span>
+          )}
+          {badge && !isCurrent && (
+            <span className="text-[9px] uppercase tracking-wider font-bold bg-amber-200 text-amber-800 px-1 py-0.5 rounded">
+              {badge}
+            </span>
+          )}
         </div>
-        <div className="flex-1 min-w-0 text-left">
-          <div className="font-bold text-sm inline-flex items-center gap-1.5">
-            {title}
-            {isCurrent && (
-              <span className="text-[9px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-800 px-1 py-0.5 rounded">
-                aktívne
-              </span>
-            )}
-            {badge && !isCurrent && (
-              <span className="text-[9px] uppercase tracking-wider font-bold bg-amber-200 text-amber-800 px-1 py-0.5 rounded">
-                {badge}
-              </span>
-            )}
-          </div>
-          <div className="text-[11px] text-muted-foreground">{desc}</div>
-        </div>
-      </button>
-    </form>
+        <div className="text-[11px] text-muted-foreground">{desc}</div>
+      </div>
+    </button>
   );
 }
