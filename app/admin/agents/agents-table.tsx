@@ -225,21 +225,31 @@ function AgentRow({
         </td>
 
         <td className="px-3 py-2">
-          {agent.role !== "admin" ? (
-            agent.capacity > 0 ? (
+          {(() => {
+            // Label podľa role — každá rola dostáva niečo iné cez handoff
+            const roleWhat =
+              agent.role === "obchod"
+                ? "leady"
+                : agent.role === "obhliadky"
+                  ? "obhliadky"
+                  : agent.role === "realizacie"
+                    ? "realizácie"
+                    : null; // admin dostane "—"
+            if (!roleWhat) {
+              return <span className="text-muted-foreground text-xs">—</span>;
+            }
+            return agent.capacity > 0 ? (
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Dostáva leady
+                Dostáva {roleWhat}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-700 text-[11px] font-bold">
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
-                Nedostáva leady
+                Nedostáva {roleWhat}
               </span>
-            )
-          ) : (
-            <span className="text-muted-foreground text-xs">—</span>
-          )}
+            );
+          })()}
         </td>
 
         <td className="px-3 py-2 text-right tabular-nums text-xs">
