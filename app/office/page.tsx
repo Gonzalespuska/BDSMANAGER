@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Headphones, Mic, ListChecks, StickyNote } from "lucide-react";
 
 import { getCurrentAppUser } from "@/lib/auth";
+import { RemindersSection } from "@/components/office/reminders-section";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -36,6 +37,9 @@ export default async function OfficeDashboard() {
           Workspace pre office manažérku — task systém, poznámky, voice-to-task.
         </p>
       </header>
+
+      {/* Pripomienky (kalendár) — funkčná sekcia. */}
+      <RemindersSection />
 
       <div className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/50 p-6 space-y-4">
         <h2 className="font-bold text-amber-900 inline-flex items-center gap-2 text-lg">

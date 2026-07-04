@@ -3,6 +3,7 @@ export const runtime = "edge";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentAppUser } from "@/lib/auth";
 
 /**
  * GET /api/dev/seed-leads-for-agent?email=<agent-email>&count=10
@@ -80,11 +81,15 @@ function randomEmail(name: string): string {
 }
 
 export async function GET(request: Request) {
+  // Prod: iba admin, dev: ktokoľvek. Chránime pred spam-seedingom v prod.
   if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { ok: false, error: "Disabled in production" },
-      { status: 403 },
-    );
+    const me = await getCurrentAppUser();
+    if (!me || me.role !== "admin") {
+      return NextResponse.json(
+        { ok: false, error: "Iba admin môže seedovať v produkcii" },
+        { status: 403 },
+      );
+    }
   }
 
   const { searchParams } = new URL(request.url);

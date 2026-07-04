@@ -69,6 +69,9 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
       }
     | undefined;
   const hasSavedQuote = !!lastQuote?.sent_at;
+  // Fallback pre STARÉ quote_sent leady (bez last_quote) — button sa
+  // zobrazí aj tak, len otvorí prázdny generátor namiesto pre-fillu.
+  const showEditCpButton = hasSavedQuote || lead.status === "quote_sent";
   const infoBits = [
     dataFields.plocha ? `${dataFields.plocha} m²` : null,
     dataFields.priestor,
@@ -510,10 +513,11 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             )}
           </div>
 
-          {/* UPRAVIŤ + POSLAŤ ZNOVA — ak lead má uloženú CP z minulosti.
-              Otvorí generátor pre-fillnutý pôvodným stavom → obchodník upraví
-              (napr. m² z 16 na 20) a klikne "Preposlať upravenú ponuku". */}
-          {hasSavedQuote && (
+          {/* UPRAVIŤ + POSLAŤ ZNOVA — ak lead je v stave "quote_sent"
+              (CP už bola poslaná). Ak má uloženú CP v data.last_quote,
+              generátor sa pre-fillne pôvodným stavom; inak sa otvorí prázdny
+              a obchodník urobí novú CP. */}
+          {showEditCpButton && (
             <div className="mt-2">
               <Button
                 asChild
@@ -521,13 +525,22 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 size="sm"
                 className="w-full h-10 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold"
                 title={
-                  lastQuote?.sent_at
+                  hasSavedQuote && lastQuote?.sent_at
                     ? `Pôvodná CP poslaná ${new Date(lastQuote.sent_at).toLocaleString("sk-SK")} ${lastQuote.sent_to ? `na ${lastQuote.sent_to}` : ""}`
-                    : undefined
+                    : "Otvoriť generátor a poslať novú CP"
                 }
               >
-                <Link href={`/generator?lead=${lead.id}&resend=1`}>
-                  ✏️ Upraviť CP a poslať znova
+                <Link
+                  href={
+                    hasSavedQuote
+                      ? `/generator?lead=${lead.id}&resend=1`
+                      : `/generator?lead=${lead.id}`
+                  }
+                >
+                  ✏️{" "}
+                  {hasSavedQuote
+                    ? "Upraviť CP a poslať znova"
+                    : "Poslať novú CP"}
                   {lastQuote?.version && lastQuote.version > 1 && (
                     <span className="ml-1.5 text-[10px] font-normal opacity-70">
                       (v{lastQuote.version})

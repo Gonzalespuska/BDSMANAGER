@@ -413,26 +413,17 @@ const TOPSTONE: Product[] = [
   {
     id: "ba-ep11-metalic-20",
     brand: "betonace",
-    name: "EP11 Metalic BA",
-    desc: "Metalické pigmenty pre 3D metalickú podlahu",
+    name: "EP11 Metalic BA (Topstone)",
+    // Rovnaká metalická báza sa používa pre metalickú aj mramorovú podlahu —
+    // podľa faktúry od Betonace. Pre mramor sa navrch aplikujú farebné pole
+    // v inom RAL odtieni, ale samotná báza je tá istá.
+    desc: "Metalická báza pre metalickú aj mramorovú podlahu (top stupeň)",
     package_size_kg: 20,
     cost_per_package: 662,
     cost_per_kg: 33.0,
     sell_by: "package",
     role: "main",
-    floor_types: ["metalicka"],
-  },
-  {
-    id: "ba-ep02-rals-25",
-    brand: "topstone",
-    name: "EP02 farebný RAL",
-    desc: "Topstone — báza pod mramorovú podlahu (farebné pole)",
-    package_size_kg: 25,
-    cost_per_package: 369,
-    cost_per_kg: 14.8,
-    sell_by: "package",
-    role: "main",
-    floor_types: ["mramorova"],
+    floor_types: ["metalicka", "mramorova"],
   },
   // ═══ VRCHNÝ LAK ══════════════════════════════════════════════════════
   {
