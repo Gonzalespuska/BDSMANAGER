@@ -624,59 +624,89 @@ export async function handoverToInspectionAction(
   inspectorId: string,
   note?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const user = await getCurrentAppUser();
-  if (!user) return { ok: false, error: "unauthorized" };
-  if (user.role !== "obchod" && user.role !== "admin") {
-    return { ok: false, error: "forbidden_wrong_role" };
+  try {
+    const user = await getCurrentAppUser();
+    if (!user) return { ok: false, error: "unauthorized" };
+    if (user.role !== "obchod" && user.role !== "admin") {
+      return { ok: false, error: "forbidden_wrong_role" };
+    }
+
+    const supabase = await createClient();
+
+    // Ownership check
+    const { data: lead, error: leadErr } = await supabase
+      .from("leads")
+      .select("assigned_to")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (leadErr) {
+      console.error("[handoverToInspection] leadErr:", leadErr);
+      return { ok: false, error: `db: ${leadErr.message}` };
+    }
+    if (!lead) return { ok: false, error: "not_found" };
+    if (lead.assigned_to !== user.id && user.role !== "admin") {
+      return { ok: false, error: "forbidden_not_your_lead" };
+    }
+
+    // Overiť že inspector má rolu obhliadky
+    const { data: inspector, error: inspErr } = await supabase
+      .from("users")
+      .select("id, role")
+      .eq("id", inspectorId)
+      .maybeSingle();
+    if (inspErr) {
+      console.error("[handoverToInspection] inspErr:", inspErr);
+      return { ok: false, error: `db: ${inspErr.message}` };
+    }
+    if (!inspector) return { ok: false, error: "inspector_not_found" };
+    if (inspector.role !== "obhliadky") {
+      return {
+        ok: false,
+        error: `invalid_inspector_role: ${inspector.role}`,
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const { error: updErr } = await supabase
+      .from("leads")
+      .update({
+        status: "needs_inspection",
+        inspection_by: inspectorId,
+        inspection_at: nowIso,
+        last_activity_at: nowIso,
+      })
+      .eq("id", leadId);
+    if (updErr) {
+      console.error("[handoverToInspection] updErr:", updErr);
+      return { ok: false, error: `db_update: ${updErr.message}` };
+    }
+
+    const { error: actErr } = await supabase.from("lead_activities").insert({
+      lead_id: leadId,
+      user_id: user.id,
+      type: "handed_over_to_inspection",
+      data: { inspector_id: inspectorId, note: note ?? null },
+    });
+    if (actErr) {
+      // Nie fatal — hlavne že update prešiel
+      console.error("[handoverToInspection] activity insert failed:", actErr);
+    }
+
+    // revalidatePath môže hodiť v edge runtime — try/catch okolo
+    try {
+      revalidatePath("/agent");
+      revalidatePath("/obhliadky");
+    } catch (e) {
+      console.error("[handoverToInspection] revalidatePath failed:", e);
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error("[handoverToInspection] EXCEPTION:", e);
+    return {
+      ok: false,
+      error: `server_exception: ${e instanceof Error ? e.message : "unknown"}`,
+    };
   }
-
-  const supabase = await createClient();
-
-  // Ownership check
-  const { data: lead, error: leadErr } = await supabase
-    .from("leads")
-    .select("assigned_to")
-    .eq("id", leadId)
-    .maybeSingle();
-  if (leadErr || !lead) return { ok: false, error: "not_found" };
-  if (lead.assigned_to !== user.id && user.role !== "admin") {
-    return { ok: false, error: "forbidden_not_your_lead" };
-  }
-
-  // Overiť že inspector má rolu obhliadky
-  const { data: inspector } = await supabase
-    .from("users")
-    .select("id, role, active")
-    .eq("id", inspectorId)
-    .maybeSingle();
-  // Bez active check — flag nemusi byt u vsetkych obhliadkarov nastaveny
-  // (napr. novo-vytvoreni cez seed alebo pred zavedenim active kolumny).
-  if (!inspector || inspector.role !== "obhliadky") {
-    return { ok: false, error: "invalid_inspector" };
-  }
-
-  const nowIso = new Date().toISOString();
-  const { error: updErr } = await supabase
-    .from("leads")
-    .update({
-      status: "needs_inspection",
-      inspection_by: inspectorId,
-      inspection_at: nowIso,
-      last_activity_at: nowIso,
-    })
-    .eq("id", leadId);
-  if (updErr) return { ok: false, error: "db_error" };
-
-  await supabase.from("lead_activities").insert({
-    lead_id: leadId,
-    user_id: user.id,
-    type: "handed_over_to_inspection",
-    data: { inspector_id: inspectorId, note: note ?? null },
-  });
-
-  revalidatePath("/agent");
-  revalidatePath("/obhliadky");
-  return { ok: true };
 }
 
 /**
@@ -688,55 +718,84 @@ export async function handoverToRealizationAction(
   teamMemberId: string,
   note?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const user = await getCurrentAppUser();
-  if (!user) return { ok: false, error: "unauthorized" };
-  if (user.role !== "obchod" && user.role !== "admin") {
-    return { ok: false, error: "forbidden_wrong_role" };
+  try {
+    const user = await getCurrentAppUser();
+    if (!user) return { ok: false, error: "unauthorized" };
+    if (user.role !== "obchod" && user.role !== "admin") {
+      return { ok: false, error: "forbidden_wrong_role" };
+    }
+
+    const supabase = await createClient();
+    const { data: lead, error: leadErr } = await supabase
+      .from("leads")
+      .select("assigned_to, status")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (leadErr) {
+      console.error("[handoverToRealization] leadErr:", leadErr);
+      return { ok: false, error: `db: ${leadErr.message}` };
+    }
+    if (!lead) return { ok: false, error: "not_found" };
+    if (lead.assigned_to !== user.id && user.role !== "admin") {
+      return { ok: false, error: "forbidden_not_your_lead" };
+    }
+
+    const { data: member, error: memErr } = await supabase
+      .from("users")
+      .select("id, role")
+      .eq("id", teamMemberId)
+      .maybeSingle();
+    if (memErr) {
+      console.error("[handoverToRealization] memErr:", memErr);
+      return { ok: false, error: `db: ${memErr.message}` };
+    }
+    if (!member) return { ok: false, error: "member_not_found" };
+    if (member.role !== "realizacie") {
+      return {
+        ok: false,
+        error: `invalid_team_member_role: ${member.role}`,
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const { error: updErr } = await supabase
+      .from("leads")
+      .update({
+        status: "in_realization",
+        realization_by: teamMemberId,
+        realization_at: nowIso,
+        last_activity_at: nowIso,
+      })
+      .eq("id", leadId);
+    if (updErr) {
+      console.error("[handoverToRealization] updErr:", updErr);
+      return { ok: false, error: `db_update: ${updErr.message}` };
+    }
+
+    const { error: actErr } = await supabase.from("lead_activities").insert({
+      lead_id: leadId,
+      user_id: user.id,
+      type: "handed_over_to_realization",
+      data: { realization_by: teamMemberId, note: note ?? null },
+    });
+    if (actErr) {
+      console.error("[handoverToRealization] activity insert failed:", actErr);
+    }
+
+    try {
+      revalidatePath("/agent");
+      revalidatePath("/realizacie");
+    } catch (e) {
+      console.error("[handoverToRealization] revalidatePath failed:", e);
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error("[handoverToRealization] EXCEPTION:", e);
+    return {
+      ok: false,
+      error: `server_exception: ${e instanceof Error ? e.message : "unknown"}`,
+    };
   }
-
-  const supabase = await createClient();
-  const { data: lead, error: leadErr } = await supabase
-    .from("leads")
-    .select("assigned_to, status")
-    .eq("id", leadId)
-    .maybeSingle();
-  if (leadErr || !lead) return { ok: false, error: "not_found" };
-  if (lead.assigned_to !== user.id && user.role !== "admin") {
-    return { ok: false, error: "forbidden_not_your_lead" };
-  }
-
-  const { data: member } = await supabase
-    .from("users")
-    .select("id, role, active")
-    .eq("id", teamMemberId)
-    .maybeSingle();
-  // Bez active check — viď handoverToInspectionAction.
-  if (!member || member.role !== "realizacie") {
-    return { ok: false, error: "invalid_team_member" };
-  }
-
-  const nowIso = new Date().toISOString();
-  const { error: updErr } = await supabase
-    .from("leads")
-    .update({
-      status: "in_realization",
-      realization_by: teamMemberId,
-      realization_at: nowIso,
-      last_activity_at: nowIso,
-    })
-    .eq("id", leadId);
-  if (updErr) return { ok: false, error: "db_error" };
-
-  await supabase.from("lead_activities").insert({
-    lead_id: leadId,
-    user_id: user.id,
-    type: "handed_over_to_realization",
-    data: { realization_by: teamMemberId, note: note ?? null },
-  });
-
-  revalidatePath("/agent");
-  revalidatePath("/realizacie");
-  return { ok: true };
 }
 
 /**

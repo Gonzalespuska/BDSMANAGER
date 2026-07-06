@@ -768,6 +768,12 @@ function DayModal({
             );
       console.log("[submitAssign] result:", res);
       setAssignBusy(false);
+      if (!res) {
+        setAssignError(
+          "Server action vrátila undefined — pravdepodobne exception na serveri. Pozri Cloudflare Pages runtime logs.",
+        );
+        return;
+      }
       if (!res.ok) {
         setAssignError(
           res.error === "db_error"
