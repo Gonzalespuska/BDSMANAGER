@@ -324,6 +324,54 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             )}
           </div>
 
+          {/* OBHLIADKA — priradenie s termínom + obhliadkárom (needs_inspection). */}
+          {lead.inspection_at && (
+            <div className="px-5 pt-3">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border-2 border-violet-300 bg-violet-50 text-xs font-bold text-violet-900">
+                🔍 Obhliadka:{" "}
+                <span className="font-extrabold tabular-nums">
+                  {new Date(lead.inspection_at).toLocaleString("sk-SK", {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                {lead.inspection_by_name && (
+                  <>
+                    <span className="opacity-60">·</span>
+                    <span>{lead.inspection_by_name}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* REALIZÁCIA — priradenie s termínom + realizátorom. */}
+          {lead.realization_at && (
+            <div className="px-5 pt-3">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border-2 border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-900">
+                🔨 Realizácia:{" "}
+                <span className="font-extrabold tabular-nums">
+                  {new Date(lead.realization_at).toLocaleString("sk-SK", {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                {lead.realization_by_name && (
+                  <>
+                    <span className="opacity-60">·</span>
+                    <span>{lead.realization_by_name}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Termín realizácie — prominentný badge (najdôležitejšia info
               pre obchodníka: 'Urgentne do mesiaca' vs 'Zatiaľ info' = úplne
               iná priorita hovoru). */}

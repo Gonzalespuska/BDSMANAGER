@@ -66,6 +66,17 @@ export interface Lead {
   created_at: string;
   sla_deadline: string | null;
   sla_status: SlaStatus;
+  /** Termín obhliadky (kedy má obhliadkár ísť). */
+  inspection_at?: string | null;
+  /** Priradený obhliadkár. */
+  inspection_by?: string | null;
+  /** Meno obhliadkára — enriched na serveri. */
+  inspection_by_name?: string | null;
+  /** Termín realizácie. */
+  realization_at?: string | null;
+  /** Priradený realizátor. */
+  realization_by?: string | null;
+  realization_by_name?: string | null;
 }
 
 /** Display label pre source_type — používa LeadCard + Lead list */

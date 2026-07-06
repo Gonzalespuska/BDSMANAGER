@@ -22,7 +22,11 @@ const TABS = [
   { id: "kontakt", label: "📞 Kontakt" },
   { id: "nedovolany", label: "🟡 Nezdvíhali" },
   { id: "otvorene", label: "✅ CP" },
+  // "Na obhliadke" = needs_inspection A termín je v BUDÚCNOSTI
   { id: "obhliadnute", label: "🔍 Na obhliadke" },
+  // "Obhliadnuté" = needs_inspection A termín PREŠIEL, alebo status=inspected
+  // (dátum obhliadky uplynul → automaticky sem)
+  { id: "obhliadnute_hotove", label: "✔️ Obhliadnuté" },
   { id: "archivovane", label: "📦 Archivované" },
   { id: "ukoncene", label: "🏆 Ukončené" },
 ] as const;
@@ -147,10 +151,29 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       }
 
       case "obhliadnute": {
-        // Leady po obhliadke (status=inspected). Automaticky sem prídu keď
-        // uplynul termín obhliadky (cron worker prehodí quote_sent →
-        // inspected). Zostávajú tu kým agent nezvolí ukončiť alebo archivovať.
-        let q = supabase.from("leads").select("*").in("status", ["inspected", "needs_inspection"]);
+        // "Na obhliadke" = obhliadka BUDÚCA (inspection_at > now alebo NULL).
+        // Termín ešte nenastal — obhliadkár tam ešte len ide.
+        const nowIso = new Date().toISOString();
+        let q = supabase
+          .from("leads")
+          .select("*")
+          .eq("status", "needs_inspection")
+          .or(`inspection_at.gt.${nowIso},inspection_at.is.null`);
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        return q.order("inspection_at", { ascending: true, nullsFirst: false }).limit(200);
+      }
+
+      case "obhliadnute_hotove": {
+        // "Obhliadnuté" = obhliadka MINULÁ. Auto-transition:
+        //   • needs_inspection s inspection_at <= now (dátum prešiel)
+        //   • ALEBO status=inspected (explicitne označené obhliadkárom)
+        const nowIso = new Date().toISOString();
+        let q = supabase
+          .from("leads")
+          .select("*")
+          .or(
+            `and(status.eq.needs_inspection,inspection_at.lte.${nowIso}),status.eq.inspected`,
+          );
         if (!isAdmin) q = q.eq("assigned_to", user.id);
         return q.order("last_activity_at", { ascending: false }).limit(200);
       }
@@ -183,6 +206,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     nedovolanyCountRes,
     otvoreneCountRes,
     obhliadnuteCountRes,
+    obhliadnuteHotoveCountRes,
     ukonceneCountRes,
     archivovaneCountRes,
   ] = await Promise.all([
@@ -219,11 +243,26 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       if (!isAdmin) q = q.eq("assigned_to", user.id);
       return q;
     })(),
+    // "Na obhliadke" count — needs_inspection s termínom v budúcnosti
     (() => {
+      const nowIso = new Date().toISOString();
       let q = supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
-        .in("status", ["inspected", "needs_inspection"]);
+        .eq("status", "needs_inspection")
+        .or(`inspection_at.gt.${nowIso},inspection_at.is.null`);
+      if (!isAdmin) q = q.eq("assigned_to", user.id);
+      return q;
+    })(),
+    // "Obhliadnuté" count — termín prešiel, alebo status=inspected
+    (() => {
+      const nowIso = new Date().toISOString();
+      let q = supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .or(
+          `and(status.eq.needs_inspection,inspection_at.lte.${nowIso}),status.eq.inspected`,
+        );
       if (!isAdmin) q = q.eq("assigned_to", user.id);
       return q;
     })(),
@@ -248,19 +287,23 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
   const rawLeads = (leadsRes.data ?? []) as Lead[];
 
   // Enrich leads with assigned_user_name — 1 join query, in-memory map.
-  const assignedIds = Array.from(
+  const relatedIds = Array.from(
     new Set(
       rawLeads
-        .map((l) => l.assigned_to)
+        .flatMap((l) => [
+          l.assigned_to,
+          l.inspection_by,
+          l.realization_by,
+        ])
         .filter((id): id is string => Boolean(id)),
     ),
   );
   const nameMap = new Map<string, string>();
-  if (assignedIds.length > 0) {
+  if (relatedIds.length > 0) {
     const { data: usersData } = await supabase
       .from("users")
       .select("id, name")
-      .in("id", assignedIds);
+      .in("id", relatedIds);
     for (const u of usersData ?? []) {
       if (u.id && typeof u.name === "string") nameMap.set(u.id, u.name);
     }
@@ -268,6 +311,8 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
   const leads: Lead[] = rawLeads.map((l) => ({
     ...l,
     assigned_user_name: l.assigned_to ? (nameMap.get(l.assigned_to) ?? null) : null,
+    inspection_by_name: l.inspection_by ? (nameMap.get(l.inspection_by) ?? null) : null,
+    realization_by_name: l.realization_by ? (nameMap.get(l.realization_by) ?? null) : null,
   }));
   const counts: Record<TabId, number | undefined> = {
     novy: novyCountRes.count ?? undefined,
@@ -275,6 +320,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     nedovolany: nedovolanyCountRes.count ?? undefined,
     otvorene: otvoreneCountRes.count ?? undefined,
     obhliadnute: obhliadnuteCountRes.count ?? undefined,
+    obhliadnute_hotove: obhliadnuteHotoveCountRes.count ?? undefined,
     ukoncene: ukonceneCountRes.count ?? undefined,
     archivovane: archivovaneCountRes.count ?? undefined,
   };
@@ -365,7 +411,8 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
             {!searchMode && tab === "kontakt" && "Žiadny aktívny kontakt. Po volaní zdvihla → klikni 'Kontakt' a lead bude tu."}
             {!searchMode && tab === "nedovolany" && "Žiadne nezdvíhajú. Po 3. neúspechu sa pridá tlačidlo 'Archivovať' s SMS+Email follow-up."}
             {!searchMode && tab === "otvorene" && "Žiadna poslaná cenová ponuka. Po odoslaní CP z generátora sa lead presunie sem."}
-            {!searchMode && tab === "obhliadnute" && "Žiadne leady na obhliadke. Keď obchodák posunie lead na obhliadku, objaví sa tu. Po dokončení obhliadky ho posunieš na Ukončené alebo Archivované."}
+            {!searchMode && tab === "obhliadnute" && "Žiadne leady na obhliadke. Priradenie z kalendára s termínom v BUDÚCNOSTI sa zobrazí tu. Po prejdení termínu sa automaticky presunie do Obhliadnuté."}
+            {!searchMode && tab === "obhliadnute_hotove" && "Žiadne obhliadnuté leady. Sem sa automaticky presunú leady, ktorých obhliadka bola naplánovaná a jej termín uplynul."}
             {!searchMode && tab === "ukoncene" && "Žiadne ukončené dealy. Po podpise / dodaní označ lead ako 'Ukončené'."}
             {!searchMode && tab === "archivovane" && "Žiadne archivované leady. Po neúspešnom kontakte / 3× nezdvihol sa lead presunie sem."}
           </p>
