@@ -66,7 +66,14 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
   //   1) DEV_AS_EMAIL env (manuálny override pre konkrétny test)
   //   2) Prvý active=true admin v DB (aby admin sekcia hneď fungovala)
   //   3) peter@epoxidovo.sk (obchodník — pôvodný default)
-  if (process.env.NODE_ENV !== "production") {
+  // DEFENSE IN DEPTH: dev bypass sa aktivuje IBA ak:
+  //   1. NODE_ENV !== "production" (Next.js standard)
+  //   2. ALLOW_DEV_AUTH_BYPASS=1 env var je explicitne nastavený
+  // Ak sa NODE_ENV pokazí (build misconfig), 2. guard nás chráni.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ALLOW_DEV_AUTH_BYPASS === "1"
+  ) {
     try {
       const admin = createAdminClient();
       const preferEmail = (process.env.DEV_AS_EMAIL ?? "").trim().toLowerCase();
@@ -166,11 +173,16 @@ async function applyViewAsOverride(user: AppUser): Promise<AppUser> {
   try {
     const { cookies } = await import("next/headers");
     const viewAsCookie = (await cookies()).get("view_as_role")?.value;
-    const validRoles = ["obchod", "obhliadky", "realizacie", "office"];
+    const validRoles = [
+      "obchod",
+      "obhliadky",
+      "realizacie",
+      "office",
+      "skolenie",
+    ];
     if (viewAsCookie && validRoles.includes(viewAsCookie)) {
-      // Vrátime rovnaký user objekt ale s prepísanou rolou. `role` musí byť
-      // valid AppUserRole; "office" tam ešte nie je → skip pre teraz.
-      if (viewAsCookie === "office") return user; // office rola neexistuje
+      // Vrátime rovnaký user objekt ale s prepísanou rolou.
+      // Aj "office" už je v AppUserRole (view-as simulácia, nie DB rola).
       return {
         ...user,
         role: viewAsCookie as AppUser["role"],

@@ -4,6 +4,7 @@ import { ArrowLeft, Calculator, Clock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
+import { formatPhoneSK } from "@/lib/phone-format";
 import { SOURCE_TYPE_LABELS, STATUS_META, timeAgo } from "@/lib/types/lead";
 import type { Lead } from "@/lib/types/lead";
 
@@ -159,9 +160,9 @@ export default async function LeadDetailPage({ params }: PageProps) {
                   <div>
                     <a
                       href={`tel:${lead.phone}`}
-                      className="text-lg font-bold text-emerald-700 hover:underline"
+                      className="text-lg font-bold text-emerald-700 hover:underline tabular-nums"
                     >
-                      {lead.phone}
+                      {formatPhoneSK(lead.phone)}
                     </a>
                   </div>
                 </div>

@@ -161,10 +161,46 @@ export default async function RealizacieDashboard() {
             </div>
             <ul className="space-y-2">
               {legacyActive.map((l) => (
-                <li key={l.id} className="rounded-xl border bg-background p-4">
-                  <div className="font-bold">{l.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    Status: {l.status} · Assigned: {l.assigned_to ?? "—"}
+                <li key={l.id} className="rounded-xl border bg-background p-4 flex items-center justify-between gap-3">
+                  <Link
+                    href={`/realizacie/${l.id}`}
+                    className="flex-1 min-w-0 group"
+                  >
+                    <div className="font-bold group-hover:text-sky-700 group-hover:underline decoration-dotted">
+                      {l.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Status: {l.status} · Assigned: {l.assigned_to ?? "—"}
+                    </div>
+                  </Link>
+                  <div className="flex gap-2 shrink-0 flex-wrap">
+                    <Link
+                      href={`/realizacie/${l.id}`}
+                      className="inline-flex items-center gap-1 rounded-lg border-2 border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 px-2.5 py-1.5 text-xs font-bold transition-colors"
+                    >
+                      → Otvoriť
+                    </Link>
+                    <Link
+                      href={`/realizacie/${l.id}/plan?view=postup`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 text-xs font-bold transition-colors shadow"
+                      title="Postupový plán — odškrtávanie krokov na stavbe"
+                    >
+                      🔨 Postup
+                    </Link>
+                    <Link
+                      href={`/realizacie/${l.id}/plan?view=sklad`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-orange-600 hover:bg-orange-700 text-white px-2.5 py-1.5 text-xs font-bold transition-colors shadow"
+                      title="Zoznam materiálu zo skladu — čo brať na zákazku"
+                    >
+                      📦 Sklad
+                    </Link>
+                    <Link
+                      href={`/realizacie/${l.id}/plan?view=zodpovednost`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 text-xs font-bold transition-colors shadow"
+                      title="Zodpovednosť — kto podpísal čo (obchodák, obhliadkár, realizator, skladník)"
+                    >
+                      ✍️ Zodpovednosť
+                    </Link>
                   </div>
                 </li>
               ))}

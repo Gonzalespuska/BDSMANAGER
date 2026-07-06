@@ -253,7 +253,14 @@ export async function POST(request: NextRequest) {
             typeof body.quote_state === "object" &&
             !Array.isArray(body.quote_state)
           ) {
-            nextData.last_quote = body.quote_state;
+            // Uložíme aj PDF base64 + subject + to_email pre resend flow
+            nextData.last_quote = {
+              ...body.quote_state,
+              pdf_base64: body.pdf_base64,
+              pdf_filename: body.pdf_filename ?? "ponuka.pdf",
+              to_email: body.to_email,
+              subject: body.subject,
+            };
           }
           await admin
             .from("leads")

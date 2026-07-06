@@ -45,6 +45,8 @@ export async function POST(request: NextRequest) {
     new_status?: string;
     won_value?: number;
     note?: string;
+    /** Voliteľne pre missed_call — obchodák si vyberie kedy pripomenieme (1/3/6h). */
+    reminder_hours?: number;
   };
   try {
     body = await request.json();
@@ -140,7 +142,14 @@ export async function POST(request: NextRequest) {
           );
         }
         const attempts = (lead.call_attempts ?? 0) + 1;
-        const hoursAhead = NEXT_CALLBACK_HOURS[attempts] ?? null;
+        // Custom reminder z UI dropdown-u (1/3/6h) má prednosť, inak default heuristika
+        const customHours =
+          typeof body.reminder_hours === "number" &&
+          body.reminder_hours > 0 &&
+          body.reminder_hours <= 168
+            ? body.reminder_hours
+            : null;
+        const hoursAhead = customHours ?? NEXT_CALLBACK_HOURS[attempts] ?? null;
         const nextCallback = hoursAhead
           ? new Date(Date.now() + hoursAhead * 3600 * 1000).toISOString()
           : null;
@@ -162,12 +171,21 @@ export async function POST(request: NextRequest) {
             lead_id: body.lead_id,
             user_id: user.id,
             type: "call_missed",
-            data: { attempts },
+            data: {
+              attempts,
+              reminder_in_hours: hoursAhead,
+              reminder_at: nextCallback,
+              chosen_by_user: !!customHours,
+            },
           })
           .then(() => {})
           .catch(() => {});
 
-        return NextResponse.json({ ok: true, attempts });
+        return NextResponse.json({
+          ok: true,
+          attempts,
+          reminder_in_hours: hoursAhead,
+        });
       }
 
       case "archive": {

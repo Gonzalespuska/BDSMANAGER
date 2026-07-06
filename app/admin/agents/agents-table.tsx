@@ -34,6 +34,8 @@ const ROLE_AVATAR_CLASSES: Record<AppUserRole, string> = {
   obchod: "bg-sky-100 text-sky-800",
   obhliadky: "bg-violet-100 text-violet-800",
   realizacie: "bg-emerald-100 text-emerald-800",
+  office: "bg-amber-100 text-amber-800",
+  skolenie: "bg-rose-100 text-rose-800",
 };
 
 import {
@@ -372,8 +374,8 @@ function AddAgentModal({
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [role, setRole] = React.useState<
-    "admin" | "obchod" | "obhliadky" | "realizacie"
-  >("obchod");
+    "admin" | "obchod" | "obhliadky" | "realizacie" | "skolenie"
+  >("skolenie");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -459,6 +461,7 @@ function AddAgentModal({
               <div className="grid grid-cols-2 gap-2">
                 {(
                   [
+                    { id: "skolenie", label: "🎓 Školenie (default)", color: "rose" },
                     { id: "obchod", label: "Obchod", color: "sky" },
                     { id: "obhliadky", label: "Obhliadky", color: "violet" },
                     { id: "realizacie", label: "Realizácie", color: "emerald" },
@@ -480,7 +483,9 @@ function AddAgentModal({
                               ? "border-violet-500 bg-violet-50 text-violet-900"
                               : r.color === "emerald"
                                 ? "border-emerald-500 bg-emerald-50 text-emerald-900"
-                                : "border-amber-500 bg-amber-50 text-amber-900"
+                                : r.color === "rose"
+                                  ? "border-rose-500 bg-rose-50 text-rose-900"
+                                  : "border-amber-500 bg-amber-50 text-amber-900"
                           : "border-zinc-200 bg-background hover:bg-muted/40 text-muted-foreground")
                       }
                     >
@@ -490,7 +495,10 @@ function AddAgentModal({
                 })}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                <strong>Obchod</strong> = volajú leady; <strong>Obhliadky</strong> = chodia obhliadnuť realizáciu; <strong>Realizácie</strong> = robia podlahy.
+                <strong>🎓 Školenie</strong> = default pre nováčikov, iba
+                onboarding materiály; <strong>Obchod</strong> = volajú leady;{" "}
+                <strong>Obhliadky</strong> = chodia obhliadnuť realizáciu;{" "}
+                <strong>Realizácie</strong> = robia podlahy.
               </p>
             </div>
 

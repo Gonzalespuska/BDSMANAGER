@@ -26,7 +26,7 @@ export async function createAgentAction(input: {
   name: string;
   email: string;
   phone: string;
-  role: "admin" | "obchod" | "obhliadky" | "realizacie";
+  role: "admin" | "obchod" | "obhliadky" | "realizacie" | "skolenie";
   capacity: number;
 }): Promise<ActionResult<{ id: string; magic_link?: string }>> {
   const me = await requireAdmin();
@@ -128,10 +128,12 @@ export async function updateAgentAction(
   id: string,
   patch: {
     name?: string;
-    role?: "admin" | "obchod" | "obhliadky" | "realizacie";
+    role?: "admin" | "obchod" | "obhliadky" | "realizacie" | "skolenie";
     capacity?: number;
     active?: boolean;
     phone?: string | null;
+    home_city?: string | null;
+    payout_percent?: number | null;
   },
 ): Promise<ActionResult> {
   const me = await requireAdmin();
@@ -160,6 +162,20 @@ export async function updateAgentAction(
   if (patch.phone !== undefined) {
     update.phone = patch.phone ? patch.phone.trim() : null;
   }
+  if (patch.home_city !== undefined) {
+    update.home_city = patch.home_city ? patch.home_city.trim() : null;
+  }
+  if (patch.payout_percent !== undefined) {
+    if (patch.payout_percent === null) {
+      update.payout_percent = 0;
+    } else {
+      const p = Math.max(0, Math.min(100, patch.payout_percent));
+      if (!Number.isFinite(p)) {
+        return { ok: false, error: "Neplatný payout percent" };
+      }
+      update.payout_percent = p;
+    }
+  }
   if (Object.keys(update).length === 0) {
     return { ok: false, error: "Nič na update" };
   }
@@ -180,8 +196,23 @@ export async function updateAgentAction(
   }
 
   const sb = createAdminClient();
+
+  // Detekuj či ide o pauznutie (capacity 0) alebo deaktiváciu — v tom prípade
+  // preraď netknuté leady tohto usera k aktívnym obchodákom
+  const willPause =
+    (patch.capacity !== undefined && patch.capacity === 0) ||
+    patch.active === false;
+
   const { error } = await sb.from("users").update(update).eq("id", id);
   if (error) return { ok: false, error: error.message };
+
+  if (willPause) {
+    try {
+      await reassignUntouchedLeads(id);
+    } catch (e) {
+      console.warn("[updateAgent] reassign failed:", e);
+    }
+  }
 
   revalidatePath("/admin/agents");
   revalidatePath("/admin");
@@ -296,5 +327,62 @@ export async function sendInviteAction(
       ok: false,
       error: e instanceof Error ? e.message : "Neznáma chyba",
     };
+  }
+}
+
+/**
+ * reassignUntouchedLeads — pri pauznutí / deaktivácii obchodáka presuň jeho
+ * NETKNUTÉ leady (phone_revealed_at IS NULL, status='new') k ostatným
+ * aktívnym obchodákom (round-robin distribúcia).
+ */
+async function reassignUntouchedLeads(pausedUserId: string): Promise<void> {
+  const sb = createAdminClient();
+  const { data: untouched } = await sb
+    .from("leads")
+    .select("id")
+    .eq("assigned_to", pausedUserId)
+    .is("phone_revealed_at", null)
+    .eq("status", "new");
+  const ids = (untouched ?? []).map((l) => l.id as string);
+  if (ids.length === 0) return;
+
+  const { data: activeAgents } = await sb
+    .from("users")
+    .select("id, name")
+    .eq("role", "obchod")
+    .eq("active", true)
+    .gt("capacity", 0)
+    .neq("id", pausedUserId);
+  if (!activeAgents || activeAgents.length === 0) return;
+
+  const buckets = new Map<string, string[]>();
+  for (const a of activeAgents) buckets.set(a.id, []);
+  ids.forEach((leadId, i) => {
+    const agentId = activeAgents[i % activeAgents.length].id;
+    buckets.get(agentId)!.push(leadId);
+  });
+
+  for (const [agentId, leadIds] of buckets.entries()) {
+    if (leadIds.length === 0) continue;
+    await sb.from("leads").update({ assigned_to: agentId }).in("id", leadIds);
+  }
+
+  // Audit log activity — každý presunutý lead
+  const activityRows = Array.from(buckets.entries())
+    .filter(([, ids]) => ids.length > 0)
+    .flatMap(([toAgentId, leadIds]) =>
+      leadIds.map((leadId) => ({
+        lead_id: leadId,
+        user_id: pausedUserId,
+        type: "status_changed",
+        data: {
+          reason: "auto_reassign_on_pause",
+          from_user: pausedUserId,
+          to_user: toAgentId,
+        },
+      })),
+    );
+  if (activityRows.length > 0) {
+    await sb.from("lead_activities").insert(activityRows);
   }
 }

@@ -3,6 +3,7 @@ export const runtime = "edge";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { assertDevOnly } from "@/lib/dev-guard";
 
 /**
  * GET /api/dev/set-admin?email=<email>&name=<name>
@@ -14,9 +15,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   3. Vráti info — admin si potom klikne na /api/dev/login?email=...
  */
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === "production") {
-    return new NextResponse("Disabled in production", { status: 403 });
-  }
+  const blocked = assertDevOnly(request);
+  if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);
   const email = (searchParams.get("email") ?? "").trim().toLowerCase();

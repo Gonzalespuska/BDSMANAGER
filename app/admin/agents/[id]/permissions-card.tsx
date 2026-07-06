@@ -37,7 +37,7 @@ export function PermissionsCard({
   name,
 }: {
   agentId: string;
-  role: "admin" | "obchod" | "obhliadky" | "realizacie";
+  role: "admin" | "obchod" | "obhliadky" | "realizacie" | "office" | "skolenie";
   active: boolean;
   name: string;
 }) {

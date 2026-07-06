@@ -2,10 +2,13 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import {
   ArrowRight,
+  Bell,
   Calculator,
   Calendar as CalendarIcon,
   ClipboardList,
+  GraduationCap,
   Hammer,
+  Headphones,
   Phone,
   ShieldCheck,
   Users as UsersIcon,
@@ -41,6 +44,16 @@ const NAV_TAB_DEFS: Record<
     label: "Realizácie",
     icon: <Hammer className="w-4 h-4" />,
   },
+  office: {
+    href: "/office",
+    label: "Office",
+    icon: <Headphones className="w-4 h-4" />,
+  },
+  skolenie: {
+    href: "/skolenie",
+    label: "Školenie",
+    icon: <GraduationCap className="w-4 h-4" />,
+  },
   calendar: {
     href: "/calendar",
     label: "Kalendár",
@@ -55,6 +68,11 @@ const NAV_TAB_DEFS: Record<
     href: "/agent/team",
     label: "Tím chat",
     icon: <UsersIcon className="w-4 h-4" />,
+  },
+  notifikacie: {
+    href: "/notifikacie",
+    label: "Notifikácie",
+    icon: <Bell className="w-4 h-4" />,
   },
   admin: {
     href: "/admin",
@@ -87,6 +105,21 @@ export async function AppShell({
   // view bez cesty späť).
   const realRole = await getRealUserRole();
   const isRealAdmin = realRole === "admin";
+
+  // Fetch avatar_url z DB (best effort — nespadne ak stĺpec neexistuje)
+  let avatarUrl: string | null = null;
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const sb = createAdminClient();
+    const { data } = await sb
+      .from("users")
+      .select("avatar_url")
+      .eq("id", user.id)
+      .maybeSingle();
+    avatarUrl = (data?.avatar_url as string | null) ?? null;
+  } catch {
+    /* SQL 20 nebola spustená → avatar_url stĺpec neexistuje, ignoruj */
+  }
   const viewAsCookie = (await cookies()).get("view_as_role")?.value;
   const validViewAsRoles = ["obchod", "obhliadky", "realizacie", "office"];
   const currentViewAs = (validViewAsRoles.includes(viewAsCookie ?? "")
@@ -124,18 +157,52 @@ export async function AppShell({
 
           <div className="flex items-center gap-1.5 md:gap-3">
             {isRealAdmin && <RoleViewDropdown currentViewAs={currentViewAs} />}
-            <NotificationsBell initial={notifications} />
-            <ProfileMenu user={user} selfPaused={selfPaused} />
+            {/* Realizator nemá notifikácie — pracuje na stavbe, netreba mu je. */}
+            {user.role !== "realizacie" && (
+              <NotificationsBell initial={notifications} />
+            )}
+            <ProfileMenu
+              user={user}
+              realRole={realRole ?? user.role}
+              selfPaused={selfPaused}
+              avatarUrl={avatarUrl}
+            />
           </div>
         </div>
 
-        {/* Secondary nav — horizontal scroll na mobile (žiadny wrap = žiadny
-            zaberaný vertikálny priestor pod bar-om). Na desktop wrap ako predtým. */}
-        <nav className="max-w-7xl mx-auto px-3 sm:px-6 pb-2 md:pb-3 flex items-center gap-1.5 md:gap-2 md:flex-wrap overflow-x-auto scrollbar-hide -mx-1 md:mx-0 px-1 md:px-6">
+        {/* Secondary nav — na mobile horizontal scroll (jedna línia),
+            od md+ sa tab-y môžu zabaliť do druhého riadku aby Admin nezmizol
+            za pravou hranou. Admin má rose tint. */}
+        <nav className="max-w-7xl mx-auto pb-2 md:pb-3 flex items-center gap-1.5 md:gap-2 md:flex-wrap overflow-x-auto md:overflow-visible scrollbar-hide px-3 sm:px-6 pr-6">
           {visibleTabs.map((tabId) => {
             const def = NAV_TAB_DEFS[tabId];
+            // „In building" — VŠETCI (aj admin) vidia iba blanknuté disabled
+            // políčko. Nedá sa klikať, žiadny hover state, žiadny link.
+            const inBuilding =
+              tabId === "team" || tabId === "notifikacie";
+            if (inBuilding) {
+              return (
+                <span
+                  key={tabId}
+                  aria-disabled="true"
+                  title="V príprave"
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 md:px-4 py-2 text-sm font-semibold whitespace-nowrap shrink-0 border-2 border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed select-none pointer-events-none opacity-70"
+                >
+                  {def.icon}
+                  {def.label}
+                  <span className="text-[9px] uppercase tracking-wider font-bold bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded ml-1">
+                    🚧 in build
+                  </span>
+                </span>
+              );
+            }
             return (
-              <NavPill key={tabId} href={def.href} icon={def.icon}>
+              <NavPill
+                key={tabId}
+                href={def.href}
+                icon={def.icon}
+                tint={tabId === "admin" ? "rose" : "sky"}
+              >
                 {def.label}
               </NavPill>
             );
@@ -160,11 +227,12 @@ export async function AppShell({
 }
 
 // NavPill je client component aby vedel current pathname
-// → aktívna stránka je farebne odlíšená (sky-500 background)
+// → aktívna stránka je farebne odlíšená (sky-500 background, admin=rose)
 function NavPill(props: {
   href: string;
   icon: React.ReactNode;
   children: React.ReactNode;
+  tint?: "sky" | "rose";
 }) {
   return <NavPillClient {...props} />;
 }

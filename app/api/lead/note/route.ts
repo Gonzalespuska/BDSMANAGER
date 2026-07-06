@@ -21,7 +21,12 @@ import { getCurrentAppUser } from "@/lib/auth";
  * Body: { lead_id: string, note: string }
  */
 export async function POST(request: NextRequest) {
-  let body: { lead_id?: string; note?: string };
+  let body: {
+    lead_id?: string;
+    note?: string;
+    /** ISO datetime — obchodák si nastaví pripomienku. Ak set, uloží office_reminder. */
+    reminder_at?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
@@ -125,10 +130,38 @@ export async function POST(request: NextRequest) {
         lead_id: body.lead_id,
         user_id: user.id,
         type: "note_added",
-        data: { note: note || null, source: "inline" },
+        data: {
+          note: note || null,
+          source: "inline",
+          reminder_at: body.reminder_at ?? null,
+        },
       })
       .then(() => {})
       .catch((e) => console.warn("[note] audit log failed:", e));
+
+    // Pripomienka — ak obchodák zvolil čas, uložíme do office_reminders.
+    // Cieľ pripomienky = lead.assigned_to (obchodák ktorý vlastní lead).
+    // Ak nemá vlastníka, padne na user.id (autora poznámky).
+    if (body.reminder_at && note) {
+      const rDate = new Date(body.reminder_at);
+      if (!isNaN(rDate.getTime()) && rDate.getTime() > Date.now() - 60_000) {
+        const targetUserId = ownerCheck.assigned_to ?? user.id;
+        admin
+          .from("office_reminders")
+          .insert({
+            user_id: targetUserId,
+            lead_id: body.lead_id,
+            note: note,
+            remind_at: rDate.toISOString(),
+            remind_date: rDate.toISOString().slice(0, 10),
+            note_kind: "lead_note",
+          })
+          .then((r) => {
+            if (r.error) console.warn("[note] reminder save failed:", r.error.message);
+          })
+          .catch((e) => console.warn("[note] reminder save exception:", e));
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e) {

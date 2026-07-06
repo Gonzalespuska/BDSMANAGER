@@ -210,6 +210,10 @@ export async function POST(request: NextRequest) {
         const sourceMeta =
           SOURCE_BY_PLATFORM[platform] ?? SOURCE_BY_PLATFORM.facebook;
 
+        // Normalizuj Meta form field-y na štandardné kľúče (priestor, plocha, ...)
+        // aby ich lead card mohla zobraziť rovnako ako web leady
+        const normalized = normalizeMetaFields(fields);
+
         const { error: insertError } = await admin.from("leads").insert({
           source_id: sourceMeta.id,
           source_type: platform === "instagram" ? "instagram" : "facebook",
@@ -220,7 +224,12 @@ export async function POST(request: NextRequest) {
           priority: "medium",
           status: "new",
           data: {
+            // Normalizované štandardné kľúče majú prednosť
+            ...normalized,
+            // Raw fields pre debug / originálne meta hodnoty
             ...fields,
+            // A prepíš znovu normalizované na koniec — nesmú byť overriden
+            ...normalized,
             meta_leadgen_id: leadgen_id,
             meta_form_id: form_id,
             meta_ad_id: ad_id,
@@ -333,6 +342,75 @@ function pick(
     if (v && v.trim()) return v.trim();
   }
   return undefined;
+}
+
+/**
+ * Meta lead form field names sú často naformátované s emoji / underscore
+ * (napr. "👉_typ_priestoru", "📐_30_–_60_m²"). Táto funkcia:
+ *   1. Pattern-matchne kľúč a extrahuje surovú hodnotu
+ *   2. Očistí emoji/underscore, prevedie na štandardný string
+ *   3. Vráti štandardné kľúče: plocha, priestor, lokalita, typ_podlahy, termin
+ */
+function normalizeMetaFields(fields: Record<string, string>): {
+  plocha?: string;
+  priestor?: string;
+  lokalita?: string;
+  typ_podlahy?: string;
+  termin?: string;
+} {
+  const out: {
+    plocha?: string;
+    priestor?: string;
+    lokalita?: string;
+    typ_podlahy?: string;
+    termin?: string;
+  } = {};
+
+  // Helper — odstráni emoji + underscore + trim
+  const clean = (s: string): string =>
+    s
+      .replace(/[👉🏠📐🔧🎨💰📅⚡🎯🔍🏢🏭🚗🛠️]/gu, "")
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // Helper — vytiahne prvé číslo z reťazca (pre plochu)
+  const extractNumber = (s: string): string | undefined => {
+    // "30 – 60 m²" → priemer 45. "300 m²" → 300. "45m2" → 45.
+    const range = s.match(/(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)/);
+    if (range) {
+      const a = parseFloat(range[1].replace(",", "."));
+      const b = parseFloat(range[2].replace(",", "."));
+      return String(Math.round((a + b) / 2));
+    }
+    const single = s.match(/(\d+(?:[.,]\d+)?)/);
+    return single ? single[1].replace(",", ".") : undefined;
+  };
+
+  for (const [rawKey, rawVal] of Object.entries(fields)) {
+    if (!rawVal || !rawVal.trim()) continue;
+    const key = clean(rawKey).toLowerCase();
+    const val = clean(rawVal);
+
+    if (!out.plocha && (key.includes("rozloh") || key.includes("plocha") || key.includes("m²") || key.includes("m2"))) {
+      const n = extractNumber(rawVal) ?? extractNumber(val);
+      if (n) out.plocha = n;
+    }
+    if (!out.priestor && (key.includes("priestor") || key.includes("typ priestoru") || key.includes("kde"))) {
+      out.priestor = val;
+    }
+    if (!out.lokalita && (key.includes("lokalita") || key.includes("mesto") || key.includes("kraj") || key.includes("city"))) {
+      out.lokalita = val;
+    }
+    if (!out.typ_podlahy && (key.includes("typ podlahy") || key.includes("povrch") || key.includes("material"))) {
+      out.typ_podlahy = val;
+    }
+    if (!out.termin && (key.includes("termin") || key.includes("kedy") || key.includes("do koľkých"))) {
+      out.termin = val;
+    }
+  }
+
+  return out;
 }
 
 /* ────────────────────────────────────────────────────────────────────────

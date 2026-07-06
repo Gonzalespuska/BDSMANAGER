@@ -222,14 +222,118 @@ export function GeneratorClient({
     }
   }
 
+  // ─── Dynamické pomenované zložky ───────────────────────────────────
+  // Extra "Zložka" riadky nad rámec built-in. Keď obchodák naplní poslednú,
+  // pridá sa nová prázdna. Keď stratí focus s prázdnou → zmizne.
+  // Guard proti infinite loop-u: useMemo pre materials + effect ktorý
+  // sleduje IBA lines[lastId].customLabel/m2 (nie celý materials array).
+  const [extraSurchargeIds, setExtraSurchargeIds] = React.useState<string[]>([]);
+
+  const makeExtraSurcharge = React.useCallback(
+    (id: string, ft: FloorType): Material => ({
+      id,
+      floor_type: ft,
+      name: "Zložka",
+      unit: "surcharge",
+      price_per_sqm: 0,
+      unit_label: "€",
+      optional: true,
+      requires_label: true,
+    }),
+    [],
+  );
+
   // Materials pre vybraný floor type. Pri jednofarebnej filtrujem aktívny
   // variant (epoxid alebo polyuretán), ostatné variants sa nepočítajú.
-  const materials = floorType
-    ? getMaterialsByFloorType(floorType).filter((m) => {
-        if (!m.variant) return true;
-        return m.variant === jednofarebnaVariant;
-      })
-    : [];
+  // useMemo aby sa referencia nezmenila na každom rendere → effect nižšie
+  // nebude infinite loop.
+  const materials = React.useMemo(() => {
+    if (!floorType) return [];
+    const base = getMaterialsByFloorType(floorType).filter((m) => {
+      if (!m.variant) return true;
+      return m.variant === jednofarebnaVariant;
+    });
+    const extras = extraSurchargeIds.map((id) =>
+      makeExtraSurcharge(id, floorType),
+    );
+    return [...base, ...extras];
+  }, [floorType, jednofarebnaVariant, extraSurchargeIds, makeExtraSurcharge]);
+
+  // Ensure lines má entry pre každý extra ID
+  React.useEffect(() => {
+    if (extraSurchargeIds.length === 0) return;
+    setLines((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of extraSurchargeIds) {
+        if (!next[id]) {
+          next[id] = { enabled: false, m2: "", mm: "0", customLabel: "" };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [extraSurchargeIds]);
+
+  // AUTO-GROW: keď posledná surcharge (built-in alebo extra) má content,
+  // pridaj novú prázdnu. Sledujeme IBA obsah poslednej — nie celý materials
+  // array. Idempotent (opakované volanie nič nezmení).
+  const lastSurchargeInfo = React.useMemo(() => {
+    if (!floorType) return { id: null, hasContent: false };
+    const surcharges = materials.filter(
+      (m) => m.unit === "surcharge" && m.requires_label,
+    );
+    if (surcharges.length === 0) return { id: null, hasContent: false };
+    const last = surcharges[surcharges.length - 1];
+    const line = lines[last.id];
+    const hasContent =
+      !!line?.customLabel?.trim() ||
+      (parseFloat(line?.m2 ?? "") || 0) > 0;
+    return { id: last.id, hasContent };
+  }, [materials, lines, floorType]);
+
+  React.useEffect(() => {
+    if (!floorType) return;
+    if (!lastSurchargeInfo.id) return;
+    if (!lastSurchargeInfo.hasContent) return;
+    // Pridaj novú prázdnu extra — funkčný setter, nič ak sa nič nemení
+    setExtraSurchargeIds((prev) => {
+      const newId = `${floorType}-zlozka-extra-${
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+      }`;
+      return [...prev, newId];
+    });
+    // Guard: dependencies iba na id + hasContent (dve booleanish hodnoty).
+    // Keď sa pridá extra, lastSurchargeInfo.id sa zmení a hasContent bude
+    // false (nová prázdna) → efect nič neurobí → žiadny infinite loop.
+  }, [lastSurchargeInfo.id, lastSurchargeInfo.hasContent, floorType]);
+
+  // BLUR CLEANUP — helper ktorý zavoláme z LineRow-u keď stratí focus.
+  const removeEmptyExtraSurcharge = React.useCallback(
+    (id: string) => {
+      // setTimeout aby sme dali React čas dokončiť focus transition.
+      setTimeout(() => {
+        setExtraSurchargeIds((prev) => {
+          if (!prev.includes(id)) return prev;
+          // Odstrániť iba ak NIE JE posledná (poslednú necháme ako hint).
+          const idx = prev.indexOf(id);
+          if (idx === prev.length - 1) return prev;
+          // A iba ak je stále prázdna.
+          const line = lines[id];
+          const isEmpty =
+            !line?.customLabel?.trim() &&
+            !((parseFloat(line?.m2 ?? "") || 0) > 0);
+          if (!isEmpty) return prev;
+          return prev.filter((x) => x !== id);
+        });
+      }, 250);
+    },
+    [lines],
+  );
+  // Silence unused warning ak sa handler ešte nepoužíva v LineRow.
+  void removeEmptyExtraSurcharge;
 
   // Synchronizácia m² medzi všetkými operáciami danej podlahy. Iteruje
   // cez všetky materiály daného floor_type (vrátane neaktívnych variantov
@@ -374,11 +478,18 @@ export function GeneratorClient({
       ? Object.values(materialQtys).some((v) => (parseFloat(v) || 0) > 0)
       : requiredM2Value > 0 || subtotalRaw > 0;
 
-  // ─── Minimálna objednávka: 1 000 € — deterministický pseudo-noise ────
-  // Target medzi 1001.50 a 1028.50 € (nie zaokrúhlené 1000 aby to nevyzeralo
-  // umelo). Hash z inputov = ten istý input = tá istá suma (idempotentne).
-  // Lokalita IGNOROVANÁ aby zmena mesta nemenila min order (mení iba dopravu).
-  // Pod 1000 € neprijímame zákazku — min order floor sa uplatní vždy.
+  // ─── Skrytá zložka — obchodák si dá manuálny markup na finálnu cenu ──
+  // Skrytá zložka má PRIORITU nad min-order noise. Ak obchodák chce round-up
+  // (napr. z 1019.92 pridať 8c na 1020), pripočíta sa na vrchol total-u,
+  // nie do noise-range-u kde by ju systém prepísal.
+  const hiddenSurchargeTotal = calcs
+    .filter((c) => c.m.hidden_in_pdf && lines[c.m.id]?.enabled && c.calc)
+    .reduce((s, c) => s + (c.calc?.total ?? 0), 0);
+
+  // ─── Minimálna objednávka: pseudo-noise 1001.50–1028.50 € ─────────────
+  // Neopiliteľne vyzerá krajšie ako guľatých 1000. Deterministické z hash-u
+  // (rovnaký input = rovnaká hodnota). Aplikuje sa iba na časť BEZ skrytej
+  // zložky. Skrytá zložka sa pridá na vrchol → obchodák dostane presnú cenu.
   const minOrderFloor = React.useMemo(() => {
     const MIN = 1000;
     if (!hasRealInput) return 0;
@@ -394,16 +505,26 @@ export function GeneratorClient({
       h = (h * 31 + hashStr.charCodeAt(i)) | 0;
     }
     const norm = (Math.abs(h) % 10000) / 10000;
-    // Target medzi 1001.50 a 1028.50 € s decimalmi
     return MIN + 1.5 + norm * 27;
   }, [saleMode, floorType, requiredM2Value, materialQtys, hasRealInput]);
 
   const rawOps = opsSubtotal + transportTotal;
-  // Total = max(rawOps, minOrderFloor) — min order sa uplatní ak cena pod 1000
-  const total = hasRealInput ? Math.max(rawOps, minOrderFloor) : 0;
-  // Doprava skutočne účtovaná — pre zobrazenie v lokalita karte
+  // Priorita:
+  //   1. Skrytá zložka VŽDY vyhráva — pripočíta sa na finálny total navrch
+  //   2. Min-order noise (1001.50–1028.50 €) sa aplikuje IBA na base
+  //      (rawOps bez skrytej zložky)
+  // Príklad: rawOps bez skrytej = 950, noise = 1019.92, skrytá = 0.08
+  //   → base = max(950 - hidden, noise) = 1019.92
+  //   → total = 1019.92 + 0.08 = 1020.00 ✓
+  const rawOpsWithoutHidden = rawOps - hiddenSurchargeTotal;
+  const baseWithMinOrder = hasRealInput
+    ? Math.max(rawOpsWithoutHidden, minOrderFloor)
+    : 0;
+  const total = hasRealInput ? baseWithMinOrder + hiddenSurchargeTotal : 0;
+  // Doprava skutočne účtovaná — real transport + prípadný min-order top-up
+  // (hidden surcharge sa NEnasčítava sem — má vlastný display).
   const effectiveTransport = hasRealInput
-    ? Math.max(0, total - opsSubtotal)
+    ? Math.max(0, baseWithMinOrder - (opsSubtotal - hiddenSurchargeTotal))
     : 0;
 
   // ─── PDF + Email actions ─────────────────────────────────────────────
@@ -514,7 +635,9 @@ export function GeneratorClient({
       ].filter(Boolean);
       const bodyText = `Dobrý deň prajeme,
 
-Na základe nášho telefonátu Vám v prílohe posielam cenovú ponuku na ${accusative} podlahu.
+Na základe nášho telefonátu Vám v prílohe posielam ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu.
+
+Upozorňujeme, že ide o orientačné ceny — presná cenová ponuka bude vyčíslená až po obhliadke. V závislosti od stavu podkladu sa cena môže líšiť o niekoľko percent (viac alebo menej).
 
 V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
 
@@ -809,8 +932,19 @@ ${signatureLines.join("\n")}`;
               Doprava
             </div>
             <div className="text-lg font-extrabold text-sky-700 tabular-nums">
-              {transport ? formatEur(effectiveTransport) : "—"}
+              {transport ? formatEur(transport.total_eur) : "—"}
             </div>
+            {transport && effectiveTransport > transport.total_eur + 0.5 && (
+              <div
+                className="text-[9px] text-amber-800 font-semibold mt-0.5 max-w-[140px]"
+                title="Rozdiel doplní min. objednávku 1 000 € (fakturačné povinnosť). Doprava samotná = km × sadzba."
+              >
+                + doplnenie do min. zákazky:{" "}
+                <span className="tabular-nums">
+                  {formatEur(effectiveTransport - transport.total_eur)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -23,13 +23,29 @@ export async function addCalendarNoteAction(
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin
+  // Prvý pokus so stĺpcom `kind` (existuje po migrácii 07_calendar_events_extend).
+  let { data, error } = await admin
     .from("calendar_notes")
     .insert({ user_id: user.id, date, body: trimmed, kind: "note" })
     .select("id")
     .single();
 
-  if (error || !data) return { ok: false, error: error?.message ?? "failed" };
+  // Fallback pre DB bez migrácie 07 — nemá stĺpec kind. Skús bez neho.
+  if (error && /column .*kind.* does not exist/i.test(error.message)) {
+    const retry = await admin
+      .from("calendar_notes")
+      .insert({ user_id: user.id, date, body: trimmed })
+      .select("id")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error || !data) {
+    const msg = error?.message ?? "failed";
+    console.error("[addCalendarNoteAction]", msg);
+    return { ok: false, error: msg };
+  }
 
   revalidatePath("/calendar");
   return { ok: true, id: data.id };

@@ -8,7 +8,7 @@ import {
   Plug,
 } from "lucide-react";
 
-import { getCurrentAppUser } from "@/lib/auth";
+import { getCurrentAppUser, getRealUserRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +32,8 @@ export const dynamic = "force-dynamic";
 export default async function IntegrationsPage() {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/agent");
+  const realRole = await getRealUserRole();
+  if (realRole !== "admin") redirect("/agent");
 
   const sb = createAdminClient();
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.najcrm.sk";

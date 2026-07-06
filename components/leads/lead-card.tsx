@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   Calculator,
@@ -18,6 +19,7 @@ import { CallbackReminder } from "./callback-reminder";
 import { HandoffActions } from "./handoff-actions";
 import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
+import { MissedCallDropdown } from "./missed-call-dropdown";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +29,7 @@ import {
   timeAgo,
 } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
+import { formatPhoneSK } from "@/lib/phone-format";
 import {
   archiveLeadAction,
   changeStatusInlineAction,
@@ -46,9 +49,14 @@ import {
  * Po hovore agent klikne výsledok (✅ záujem / ❌ nezáujem / 📵 nedvíha / 📅 callback)
  */
 export function LeadCard({ lead: initialLead }: { lead: Lead }) {
+  const router = useRouter();
   const [lead, setLead] = React.useState(initialLead);
   const [busy, setBusy] = React.useState(false);
   const [modalOpen, setModalOpen] = React.useState(false);
+  // Keď akcia (Kontakt / Nedvíha / Archív) presunie lead do iného tabu,
+  // najprv skryjeme kartu (fade-out), a router.refresh() ju vráti do
+  // správneho tabu. Bez toho by na moment blikla nová stavovka.
+  const [leaving, setLeaving] = React.useState(false);
 
   const statusMeta = STATUS_META[lead.status];
   const sourceLabel =
@@ -69,9 +77,15 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
       }
     | undefined;
   const hasSavedQuote = !!lastQuote?.sent_at;
-  // Fallback pre STARÉ quote_sent leady (bez last_quote) — button sa
-  // zobrazí aj tak, len otvorí prázdny generátor namiesto pre-fillu.
-  const showEditCpButton = hasSavedQuote || lead.status === "quote_sent";
+  // Button "Upraviť CP" sa zobrazí pre všetky leady v CP tabe
+  // (interested + quote_sent) alebo ak už majú saved quote.
+  //   • hasSavedQuote → pre-fillne generátor pôvodným stavom (edit)
+  //   • quote_sent bez saved → otvorí prázdny gen. (napr. staré leady)
+  //   • interested → otvorí prázdny gen. na vytvorenie novej CP
+  const showEditCpButton =
+    hasSavedQuote ||
+    lead.status === "quote_sent" ||
+    lead.status === "interested";
   const infoBits = [
     dataFields.plocha ? `${dataFields.plocha} m²` : null,
     dataFields.priestor,
@@ -132,21 +146,19 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
     }
   }
 
-  async function handleMissedCall() {
-    // Optimistic — okamžite zmeň UI, fetch ide na pozadí
-    const prev = lead;
-    setLead({
-      ...lead,
-      call_attempts: lead.call_attempts + 1,
-      status: "no_answer",
-    });
-    const result = await callLeadAction("missed_call");
+  async function handleMissedCall(reminderHours?: number) {
+    // Skry kartu okamžite — nechceme mihot novej stavovky pred presunom
+    setLeaving(true);
+    const result = await callLeadAction(
+      "missed_call",
+      reminderHours ? { reminder_hours: reminderHours } : undefined,
+    );
     if (!result.ok) {
-      setLead(prev);
+      setLeaving(false);
       alert(`Chyba: ${result.error}`);
-    } else if (typeof result.data.attempts === "number") {
-      // Server potvrdil presný attempts count
-      setLead((cur) => ({ ...cur, call_attempts: result.data.attempts as number }));
+    } else {
+      // Server-state refresh → lead sa objaví v Nezdvíhali tab-u
+      router.refresh();
     }
   }
 
@@ -159,25 +171,28 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
       )
     )
       return;
-    const prev = lead;
-    setLead({ ...lead, status: "archived" });
+    setLeaving(true);
     const result = await callLeadAction("archive");
     if (!result.ok) {
-      setLead(prev);
+      setLeaving(false);
       alert(`Chyba: ${result.error}`);
+    } else {
+      router.refresh();
     }
   }
 
   /**
    * "Kontakt" — agent volal a zákazník zdvihol.
+   * Karta zmizne z Nové tab-u, objaví sa v Kontakt tab-e po refreshi.
    */
   async function handleContact() {
-    const prev = lead;
-    setLead({ ...lead, status: "phone_revealed" });
+    setLeaving(true);
     const result = await callLeadAction("contact");
     if (!result.ok) {
-      setLead(prev);
+      setLeaving(false);
       alert(`Chyba: ${result.error}`);
+    } else {
+      router.refresh();
     }
   }
 
@@ -207,6 +222,19 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             : lead.status === "won"
               ? "bg-green-600"
               : "bg-zinc-400";
+
+  // Ak sme aktuálne presúvaní do iného tabu, ukáž iba tenký spinner
+  // placeholder — nechceme aby na moment blikla nová stavovka.
+  if (leaving) {
+    return (
+      <article className="relative rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/40 p-4 opacity-70 transition-opacity">
+        <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-semibold italic">
+          <span className="inline-block w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+          Presúvam…
+        </div>
+      </article>
+    );
+  }
 
   return (
     <>
@@ -261,10 +289,10 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             {isRevealed && lead.phone ? (
               <a
                 href={`tel:${lead.phone}`}
-                className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight"
+                className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight tabular-nums"
               >
                 <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
-                {lead.phone}
+                {formatPhoneSK(lead.phone)}
               </a>
             ) : null}
             {!lead.phone && (
@@ -378,30 +406,33 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
                 Kontakt
               </Button>
-              <Button
-                type="button"
-                onClick={handleMissedCall}
-                disabled={busy}
-                className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-11"
-              >
-                <PhoneOff className="w-4 h-4 mr-1.5" aria-hidden />
-                Nedvíha
-              </Button>
+              <MissedCallDropdown
+                busy={busy}
+                onPick={(hrs) => handleMissedCall(hrs)}
+              />
             </div>
           )}
 
           {/* Kontakt tab — veľký Ponuka button (priamy presmer na generátor) */}
           {lead.status === "phone_revealed" && (
-            <div className="mb-2">
+            <div className="mb-2 flex gap-2">
               <Button
                 asChild
-                className="w-full h-12 bg-sky-600 hover:bg-sky-700 text-white font-bold text-base shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
+                className="flex-1 h-12 bg-sky-600 hover:bg-sky-700 text-white font-bold text-base shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
               >
                 <Link href={`/generator?lead=${lead.id}`}>
                   <Calculator className="w-5 h-5 mr-2" aria-hidden />
                   Poslať cenovú ponuku
                 </Link>
               </Button>
+              {lead.email && (
+                <QuickEmailButton
+                  leadId={lead.id}
+                  email={lead.email}
+                  leadName={lead.name}
+                  hasSavedQuote={hasSavedQuote}
+                />
+              )}
             </div>
           )}
 
@@ -434,15 +465,34 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
           {/* Hlavná akcia row.
               - Pri NOVOM leade: iba Email + Odhaliť číslo (žiadna Ponuka —
                 najprv treba zavolať a zistiť čo zákazník chce).
-              - Po odhalení / v ďalších stavoch: + Ponuka button. */}
+              - V CP tabe (interested/quote_sent): iba Email + Zavolať,
+                „Ponuka" button preč — pod ním je „Upraviť CP" (duplikát
+                by len mátol obchodníka).
+              - V ostatných (no_answer, ...): + Ponuka button.
+
+              Na desktope „Zavolať" (tel: link) prakticky nič nerobí —
+              tak ho tam skryjeme (md:hidden). Grid na desktope potom
+              zredukujeme o 1 stĺpec keď je Zavolať skrytý (revealed
+              alebo bez čísla). „Odhaliť číslo" ostáva na PC — to je
+              samostatná akcia (obchodák si číslo zobrazí a potom volá
+              z iného zariadenia). */}
           <div
             className={cn(
               "grid gap-2",
-              // 2 cols keď nie je malý Ponuka button (new + phone_revealed),
-              // 3 cols v ostatných stavoch (no_answer, interested, quote_sent…)
-              lead.status === "new" || lead.status === "phone_revealed"
-                ? "grid-cols-2"
-                : "grid-cols-3",
+              // 2 cols keď nie je malý Ponuka button (new + phone_revealed
+              // + CP tab, kde je pod akciami "Upraviť CP" button).
+              // 3 cols v ostatných stavoch (no_answer, ...).
+              lead.status === "new" ||
+                lead.status === "phone_revealed" ||
+                showEditCpButton
+                ? // mobile: 2, desktop: 2 alebo 1 keď Zavolať skryté
+                  isRevealed || !lead.phone
+                  ? "grid-cols-2 md:grid-cols-1"
+                  : "grid-cols-2"
+                : // mobile: 3, desktop: 3 alebo 2 keď Zavolať skryté
+                  isRevealed || !lead.phone
+                  ? "grid-cols-3 md:grid-cols-2"
+                  : "grid-cols-3",
             )}
           >
             {emailHref ? (
@@ -466,11 +516,13 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             {lead.phone ? (
               isRevealed ? (
                 // Po odhalení: priamy tel: link (user gesture → browser
-                // dovolí dial bez warningu)
+                // dovolí dial bez warningu). Na desktope skryté —
+                // tel: link na PC otvorí FaceTime / dialer čo obchodák
+                // typicky nechce.
                 <Button
                   asChild
                   size="sm"
-                  className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
+                  className="md:hidden h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
                 >
                   <a href={`tel:${lead.phone}`} title="Vytočiť">
                     <Phone className="w-4 h-4 mr-1.5" aria-hidden />
@@ -478,7 +530,10 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                   </a>
                 </Button>
               ) : (
-                // Pred odhalením: reveal action, žiadny dial
+                // Pred odhalením: reveal action, žiadny dial.
+                // OSTÁVA na desktope aj mobile — je to samostatná akcia
+                // (odhalí + zaloguje phone_revealed_at, obchodák potom
+                // volá z iného zariadenia).
                 <Button
                   type="button"
                   onClick={handleCall}
@@ -491,43 +546,46 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 </Button>
               )
             ) : (
-              <Button variant="outline" size="sm" className="h-10" disabled>
+              // Bez telefónu — disabled Zavolať. Na desktope zbytočný, skryť.
+              <Button variant="outline" size="sm" className="md:hidden h-10" disabled>
                 <Phone className="w-4 h-4 mr-1.5" aria-hidden />
                 Zavolať
               </Button>
             )}
-            {/* Malý Ponuka button — len v stavoch kde nie je veľký CTA hore
-                (no_answer/interested/quote_sent). V "new" žiadny (najprv volaj),
-                v "phone_revealed" je big "Poslať cenovú ponuku" CTA (nedupluj). */}
-            {lead.status !== "new" && lead.status !== "phone_revealed" && (
-              <Button
-                asChild
-                size="sm"
-                className="h-10 bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
-              >
-                <Link href={`/generator?lead=${lead.id}`}>
-                  <Calculator className="w-4 h-4 mr-1.5" aria-hidden />
-                  Ponuka
-                </Link>
-              </Button>
-            )}
+            {/* Malý Ponuka button — len v stavoch mimo CP tabu.
+                V "new" žiadny (najprv volaj), v "phone_revealed" je big
+                "Poslať cenovú ponuku" CTA (nedupluj), v CP tabe je
+                pod týmto blokom "Upraviť CP" (nedupluj rovnakú akciu). */}
+            {lead.status !== "new" &&
+              lead.status !== "phone_revealed" &&
+              !showEditCpButton && (
+                <Button
+                  asChild
+                  size="sm"
+                  className="h-10 bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
+                >
+                  <Link href={`/generator?lead=${lead.id}`}>
+                    <Calculator className="w-4 h-4 mr-1.5" aria-hidden />
+                    Ponuka
+                  </Link>
+                </Button>
+              )}
           </div>
 
-          {/* UPRAVIŤ + POSLAŤ ZNOVA — ak lead je v stave "quote_sent"
-              (CP už bola poslaná). Ak má uloženú CP v data.last_quote,
-              generátor sa pre-fillne pôvodným stavom; inak sa otvorí prázdny
-              a obchodník urobí novú CP. */}
+          {/* UPRAVIŤ CP — v CP tabe (interested/quote_sent) alebo keď má
+              lead uloženú CP. Otvorí generátor s POŽADOVANÝMI SAMÝMI číslami
+              ako pri pôvodnom odoslaní (pre-fill z data.last_quote). Ak nič
+              uložené nie je (staré leady zo starých CP flows), otvorí prázdny
+              generátor. */}
           {showEditCpButton && (
-            <div className="mt-2">
+            <div className="mt-2 flex gap-2">
               <Button
                 asChild
-                variant="outline"
-                size="sm"
-                className="w-full h-10 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold"
+                className="flex-1 h-12 bg-sky-600 hover:bg-sky-700 text-white font-bold text-base shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
                 title={
                   hasSavedQuote && lastQuote?.sent_at
-                    ? `Pôvodná CP poslaná ${new Date(lastQuote.sent_at).toLocaleString("sk-SK")} ${lastQuote.sent_to ? `na ${lastQuote.sent_to}` : ""}`
-                    : "Otvoriť generátor a poslať novú CP"
+                    ? `Pôvodná CP poslaná ${new Date(lastQuote.sent_at).toLocaleString("sk-SK")}${lastQuote.sent_to ? ` na ${lastQuote.sent_to}` : ""}`
+                    : "Otvoriť generátor s pôvodnými hodnotami"
                 }
               >
                 <Link
@@ -537,17 +595,23 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                       : `/generator?lead=${lead.id}`
                   }
                 >
-                  ✏️{" "}
-                  {hasSavedQuote
-                    ? "Upraviť CP a poslať znova"
-                    : "Poslať novú CP"}
+                  <Calculator className="w-5 h-5 mr-2" aria-hidden />
+                  Upraviť CP
                   {lastQuote?.version && lastQuote.version > 1 && (
-                    <span className="ml-1.5 text-[10px] font-normal opacity-70">
+                    <span className="ml-1.5 text-[11px] font-normal opacity-80">
                       (v{lastQuote.version})
                     </span>
                   )}
                 </Link>
               </Button>
+              {lead.email && (
+                <QuickEmailButton
+                  leadId={lead.id}
+                  email={lead.email}
+                  leadName={lead.name}
+                  hasSavedQuote={hasSavedQuote}
+                />
+              )}
             </div>
           )}
 
@@ -560,7 +624,15 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
               <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">
                 Posunúť ďalej v tíme
               </div>
-              <HandoffActions leadId={lead.id} currentStatus={lead.status} />
+              <HandoffActions
+                leadId={lead.id}
+                currentStatus={lead.status}
+                leadCity={
+                  typeof dataFields.lokalita === "string"
+                    ? dataFields.lokalita
+                    : null
+                }
+              />
             </div>
           )}
         </div>
@@ -654,7 +726,7 @@ function OutcomeModal({
         <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
           <div className="bg-muted rounded-lg p-3 text-xs space-y-1">
             <div>
-              📞 <strong>{lead.phone}</strong>
+              📞 <strong className="tabular-nums">{formatPhoneSK(lead.phone ?? "")}</strong>
               {lead.email && (
                 <>
                   {" · 📧 "}
@@ -826,5 +898,173 @@ function AssignedBanner({ name }: { name: string | null | undefined }) {
       <span className="font-semibold">Kontakt:</span>
       <span>{name ?? "—"}</span>
     </div>
+  );
+}
+
+/**
+ * QuickEmailButton — malé tlačidlo vedľa "Poslať cenovú ponuku" / "Upraviť CP".
+ *
+ * Klik → otvorí inline modal s editovateľným textom (pre-fill default).
+ * Obchodník môže dopísať / upraviť text → klik Odoslať → server pošle email
+ * cez Resend s posledným PDF-om (last_quote) ako prílohou.
+ *
+ * Ak lead ešte nemá vygenerovanú CP (nemá `last_quote`), tlačidlo je disabled
+ * a hovorí "najprv vytvor CP v generátore".
+ */
+function QuickEmailButton({
+  leadId,
+  email,
+  leadName,
+  hasSavedQuote,
+}: {
+  leadId: string;
+  email: string;
+  leadName: string;
+  hasSavedQuote: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [text, setText] = React.useState("");
+
+  const defaultBody = React.useMemo(() => {
+    return `Dobrý deň${leadName ? " " + leadName.split(" ")[0] : ""},
+
+posielam Vám cenovú ponuku ktorú sme spolu prebrali. V prípade otázok ma neváhajte kontaktovať.
+
+---
+S pozdravom,
+Tím EPOXIDOVO.SK
+📞 +421 918 823 124
+✉️ info@epoxidovo.sk
+🌐 epoxidovo.sk`;
+  }, [leadName]);
+
+  React.useEffect(() => {
+    if (open) setText(defaultBody);
+  }, [open, defaultBody]);
+
+  async function sendNow() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/quote/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: leadId,
+          body_text: text,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !json.ok) {
+        alert("Chyba: " + (json.error ?? `HTTP ${res.status}`));
+      } else {
+        setOpen(false);
+        alert("✅ Email s CP odoslaný.");
+      }
+    } catch (e) {
+      alert("Sieťová chyba: " + (e instanceof Error ? e.message : "?"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!hasSavedQuote) {
+    return (
+      <button
+        type="button"
+        disabled
+        title="Najprv vytvor CP v generátore (klik Poslať cenovú ponuku / Upraviť CP)"
+        className="inline-flex items-center justify-center h-12 w-12 rounded-md bg-slate-100 border-2 border-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+      >
+        ✍️
+      </button>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title="Rýchlo poslať CP — s možnosťou upraviť text pred odoslaním"
+        className="inline-flex items-center justify-center h-12 w-12 rounded-md bg-white border-2 border-sky-300 hover:border-sky-500 hover:bg-sky-50 text-sky-700 hover:text-sky-900 transition-colors shadow-sm"
+      >
+        ✍️
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !busy && setOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="px-5 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-lg">✍️ Rýchlo poslať CP</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Príloha:{" "}
+                  <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">
+                    📎 ponuka.pdf
+                  </span>{" "}
+                  · Príjemca:{" "}
+                  <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">
+                    {email}
+                  </span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !busy && setOpen(false)}
+                className="text-slate-400 hover:text-slate-700 text-2xl leading-none"
+                aria-label="Zatvoriť"
+              >
+                ×
+              </button>
+            </header>
+            <div className="p-5 flex-1 overflow-auto">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block">
+                Text emailu (upraviteľný)
+              </label>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={14}
+                autoFocus
+                disabled={busy}
+                className="w-full rounded-lg border-2 bg-background px-3 py-2 text-sm font-mono focus:border-sky-500 focus:outline-none resize-y whitespace-pre"
+              />
+              <p className="text-[10px] text-muted-foreground mt-2 italic">
+                Kurzor začína na vrchu — dopisuj text nad podpisom. PDF sa
+                pripojí automaticky.
+              </p>
+            </div>
+            <footer className="px-5 py-4 border-t bg-slate-50 flex items-center justify-end gap-2 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                className="text-sm font-semibold text-slate-600 hover:text-slate-900 px-4 py-2"
+              >
+                Zrušiť
+              </button>
+              <button
+                type="button"
+                onClick={sendNow}
+                disabled={busy || !text.trim()}
+                className="rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-5 py-2.5 text-sm font-bold transition-colors shadow"
+              >
+                {busy ? "Odosielam…" : "📤 Odoslať CP"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

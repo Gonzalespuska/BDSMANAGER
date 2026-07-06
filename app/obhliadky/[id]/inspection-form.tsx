@@ -17,6 +17,16 @@ interface InspectionResult {
   agent_note?: string;
   feasible?: boolean;
   price_estimate?: number;
+  /** Odtrhový test (adhesion pull-off) v MPa. Prah OK >= 1.5 MPa. */
+  adhesion_mpa?: number;
+  /** Vlhkosť podkladu — priemer z meraní (%) */
+  moisture_pct?: number;
+  /** Maximálna nameraná vlhkosť (%) — najhorší bod */
+  moisture_max_pct?: number;
+  /** Teplota vzduchu (°C) pri obhliadke */
+  air_temperature?: number;
+  /** Relatívna vlhkosť vzduchu (%) pri obhliadke */
+  air_humidity_pct?: number;
 }
 
 export function InspectionForm({
@@ -48,6 +58,45 @@ export function InspectionForm({
   const [feasible, setFeasible] = React.useState<boolean>(
     (existingResult as InspectionResult)?.feasible ?? true,
   );
+  const [adhesionMpa, setAdhesionMpa] = React.useState<string>(
+    typeof (existingResult as InspectionResult)?.adhesion_mpa === "number"
+      ? String((existingResult as InspectionResult).adhesion_mpa)
+      : "",
+  );
+  const [moisturePct, setMoisturePct] = React.useState<string>(
+    typeof (existingResult as InspectionResult)?.moisture_pct === "number"
+      ? String((existingResult as InspectionResult).moisture_pct)
+      : "",
+  );
+  const [moistureMaxPct, setMoistureMaxPct] = React.useState<string>(
+    typeof (existingResult as InspectionResult)?.moisture_max_pct === "number"
+      ? String((existingResult as InspectionResult).moisture_max_pct)
+      : "",
+  );
+  const [airTemp, setAirTemp] = React.useState<string>(
+    typeof (existingResult as InspectionResult)?.air_temperature === "number"
+      ? String((existingResult as InspectionResult).air_temperature)
+      : "",
+  );
+  const [airHumidity, setAirHumidity] = React.useState<string>(
+    typeof (existingResult as InspectionResult)?.air_humidity_pct === "number"
+      ? String((existingResult as InspectionResult).air_humidity_pct)
+      : "",
+  );
+
+  // Auto-verdict — je zákazka realizovateľná?
+  const adhesionN = parseFloat(adhesionMpa) || 0;
+  const moistureN = parseFloat(moisturePct) || 0;
+  const adhesionVerdict =
+    adhesionMpa === ""
+      ? null
+      : adhesionN >= 1.5
+        ? "ok"
+        : adhesionN >= 1.0
+          ? "warn"
+          : "bad";
+  const moistureVerdict =
+    moisturePct === "" ? null : moistureN <= 4 ? "ok" : moistureN <= 5 ? "warn" : "bad";
 
   async function submit() {
     const m2Num = parseFloat(measuredM2) || 0;
@@ -68,6 +117,13 @@ export function InspectionForm({
       recommended_service: recommendedService.trim() || undefined,
       agent_note: agentNote.trim(),
       feasible,
+      adhesion_mpa: adhesionMpa ? parseFloat(adhesionMpa) : undefined,
+      moisture_pct: moisturePct ? parseFloat(moisturePct) : undefined,
+      moisture_max_pct: moistureMaxPct
+        ? parseFloat(moistureMaxPct)
+        : undefined,
+      air_temperature: airTemp ? parseFloat(airTemp) : undefined,
+      air_humidity_pct: airHumidity ? parseFloat(airHumidity) : undefined,
     };
     const res = await completeInspectionAction(leadId, result as unknown as Record<string, unknown>);
     setBusy(false);
@@ -108,6 +164,150 @@ export function InspectionForm({
           placeholder="napr. 47.5"
           className="mt-1 h-10 text-base font-bold"
         />
+      </div>
+
+      {/* ═══ TECHNICKÉ MERANIA ═══ */}
+      <div className="rounded-xl border-2 border-sky-200 bg-sky-50/40 p-4 space-y-3">
+        <div className="text-xs font-extrabold uppercase tracking-widest text-sky-900 inline-flex items-center gap-1.5">
+          🔬 Technické merania
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* Odtrhový test */}
+          <div>
+            <Label htmlFor="adhesion" className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              Odtrhový test (MPa)
+            </Label>
+            <div className="relative mt-1">
+              <Input
+                id="adhesion"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.1}
+                value={adhesionMpa}
+                onChange={(e) => setAdhesionMpa(e.target.value)}
+                disabled={busy}
+                placeholder="1.8"
+                className="h-10 pr-14 text-base font-bold tabular-nums"
+              />
+              {adhesionVerdict && (
+                <span
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                    adhesionVerdict === "ok"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : adhesionVerdict === "warn"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-rose-100 text-rose-800"
+                  }`}
+                >
+                  {adhesionVerdict === "ok" ? "✅ OK" : adhesionVerdict === "warn" ? "⚠️ HRAN" : "❌ ZLE"}
+                </span>
+              )}
+            </div>
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              Prah OK ≥ 1.5 MPa
+            </div>
+          </div>
+
+          {/* Vlhkomer (priemer) */}
+          <div>
+            <Label htmlFor="moisture" className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              Vlhkosť podkladu (%)
+            </Label>
+            <div className="relative mt-1">
+              <Input
+                id="moisture"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.1}
+                value={moisturePct}
+                onChange={(e) => setMoisturePct(e.target.value)}
+                disabled={busy}
+                placeholder="3.2"
+                className="h-10 pr-14 text-base font-bold tabular-nums"
+              />
+              {moistureVerdict && (
+                <span
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                    moistureVerdict === "ok"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : moistureVerdict === "warn"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-rose-100 text-rose-800"
+                  }`}
+                >
+                  {moistureVerdict === "ok" ? "✅ OK" : moistureVerdict === "warn" ? "⚠️ HRAN" : "❌ ZLE"}
+                </span>
+              )}
+            </div>
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              Prah OK ≤ 4 %
+            </div>
+          </div>
+
+          {/* Max vlhkosť */}
+          <div>
+            <Label htmlFor="moisture-max" className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              Max nameraná vlhkosť (%)
+            </Label>
+            <Input
+              id="moisture-max"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={0.1}
+              value={moistureMaxPct}
+              onChange={(e) => setMoistureMaxPct(e.target.value)}
+              disabled={busy}
+              placeholder="4.5"
+              className="mt-1 h-10 text-base tabular-nums"
+            />
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              Najhorší bod
+            </div>
+          </div>
+
+          {/* Teplota */}
+          <div>
+            <Label htmlFor="air-temp" className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              Teplota vzduchu (°C)
+            </Label>
+            <Input
+              id="air-temp"
+              type="number"
+              inputMode="decimal"
+              step={0.5}
+              value={airTemp}
+              onChange={(e) => setAirTemp(e.target.value)}
+              disabled={busy}
+              placeholder="18"
+              className="mt-1 h-10 text-base tabular-nums"
+            />
+          </div>
+
+          {/* Rel. vlhkosť vzduchu */}
+          <div className="col-span-2">
+            <Label htmlFor="air-humidity" className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              Relatívna vlhkosť vzduchu (%)
+            </Label>
+            <Input
+              id="air-humidity"
+              type="number"
+              inputMode="decimal"
+              step={1}
+              value={airHumidity}
+              onChange={(e) => setAirHumidity(e.target.value)}
+              disabled={busy}
+              placeholder="55"
+              className="mt-1 h-10 text-base tabular-nums"
+            />
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              Dôležité pre pot life epoxidu — pri &gt; 75% je aplikácia riziková.
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Stav podkladu */}

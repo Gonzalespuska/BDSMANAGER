@@ -3,6 +3,7 @@ export const runtime = "edge";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { assertDevOnly } from "@/lib/dev-guard";
 
 // runtime = "edge" disabled — @supabase/supabase-js admin fetch fails in Next edge dev
 
@@ -22,12 +23,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * To je OK lebo lokálne ďalší ľudia nemajú prístup.
  */
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { ok: false, error: "Disabled in production" },
-      { status: 403 },
-    );
-  }
+  const blocked = assertDevOnly(request);
+  if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);
   const email = (

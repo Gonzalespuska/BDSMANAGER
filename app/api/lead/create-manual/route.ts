@@ -61,6 +61,44 @@ export async function POST(request: NextRequest) {
 
   try {
     const admin = createAdminClient();
+
+    // KOMU PRIRADIŤ:
+    //   - Normálne obchodák → sám sebe
+    //   - info@epoxidovo.sk (test admin) → NIE sebe, ale nasleduje round-robin
+    //     na aktívnych obchodákov, lebo info@ je iba test/preview a nesmie
+    //     "kradnúť" reálne leady
+    const isTestAdmin =
+      user.role === "admin" && user.email.toLowerCase() === "info@epoxidovo.sk";
+    let assignTo: string = user.id;
+    if (isTestAdmin) {
+      const { data: activeAgents } = await admin
+        .from("users")
+        .select("id")
+        .eq("role", "obchod")
+        .eq("active", true)
+        .gt("capacity", 0)
+        .order("created_at", { ascending: true });
+      if (activeAgents && activeAgents.length > 0) {
+        // Vyber toho ktorý má najmenej otvorených leadov (least-loaded)
+        const ids = activeAgents.map((a) => a.id as string);
+        const { data: counts } = await admin
+          .from("leads")
+          .select("assigned_to")
+          .in("assigned_to", ids)
+          .not("status", "in", "(won,lost,archived)");
+        const perAgent = new Map<string, number>();
+        for (const id of ids) perAgent.set(id, 0);
+        for (const l of counts ?? []) {
+          const a = l.assigned_to as string;
+          perAgent.set(a, (perAgent.get(a) ?? 0) + 1);
+        }
+        const sorted = Array.from(perAgent.entries()).sort(
+          (a, b) => a[1] - b[1],
+        );
+        assignTo = sorted[0][0];
+      }
+    }
+
     const { data: lead, error } = await admin
       .from("leads")
       .insert({
@@ -76,8 +114,7 @@ export async function POST(request: NextRequest) {
         priority: input.priority ?? "medium",
         value_estimate: input.value_estimate ?? null,
         status: "new",
-        // KĽÚČOVÉ: priraď leadu tvorcu, auto-assign trigger to preskočí
-        assigned_to: user.id,
+        assigned_to: assignTo,
       })
       .select("id, name")
       .single();

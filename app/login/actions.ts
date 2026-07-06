@@ -1,9 +1,23 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dashboardPathForRole, type AppUserRole } from "@/lib/auth";
+import { consume } from "@/lib/rate-limit";
+
+// Rate limit: 5 OTP requestov za 15 minút na IP (chráni SMTP kvótu + spam).
+// Verify: 10 pokusov za 5 minút na IP (chráni pred brute-force OTP).
+async function getClientIpFromHeaders(): Promise<string> {
+  const h = await headers();
+  return (
+    h.get("cf-connecting-ip") ||
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    h.get("x-real-ip") ||
+    "unknown"
+  );
+}
 
 /**
  * Server Action — odošle 6-cifr OTP kód na email.
@@ -29,6 +43,17 @@ export async function sendOtpAction(formData: FormData) {
 
   if (!email) {
     redirect("/login?error=missing_email" + testQuery);
+  }
+
+  // ── Rate limit (per IP) ──
+  // 5 requestov / 15 min — bráni SMTP spam + generic abuse
+  const ip = await getClientIpFromHeaders();
+  const rl = consume(`otp-send:${ip}`, 5, 15 * 60 * 1000);
+  if (!rl.allowed) {
+    console.warn("[sendOtp] rate limited IP:", ip, "retry in", rl.retryAfterSec, "s");
+    redirect(
+      `/login?error=rate_limit&seconds=${rl.retryAfterSec}&email=${encodeURIComponent(email)}${testQuery}`,
+    );
   }
 
   // ── Whitelist gate ──
@@ -125,6 +150,18 @@ export async function verifyOtpAction(formData: FormData) {
   if (!email || !token) {
     redirect(
       `/login/verify?email=${encodeURIComponent(email)}&error=missing`,
+    );
+  }
+
+  // ── Rate limit (per IP+email) — brute force OTP protection ──
+  // 10 verify pokusov / 5 min. Kombinácia IP+email lebo attacker by mohol
+  // spamovať cez viac tokenov na jeden email z jednej IP.
+  const ip = await getClientIpFromHeaders();
+  const rl = consume(`otp-verify:${ip}:${email}`, 10, 5 * 60 * 1000);
+  if (!rl.allowed) {
+    console.warn("[verifyOtp] rate limited:", ip, email);
+    redirect(
+      `/login/verify?email=${encodeURIComponent(email)}&error=rate_limit&seconds=${rl.retryAfterSec}`,
     );
   }
 

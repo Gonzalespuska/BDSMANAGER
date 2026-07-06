@@ -17,7 +17,7 @@ import {
 
 interface Props {
   meId: string;
-  meRole: "admin" | "obchod" | "obhliadky" | "realizacie";
+  meRole: "admin" | "obchod" | "obhliadky" | "realizacie" | "office" | "skolenie";
   initialRooms: ChatRoomType[];
   initialMessages: ChatMessage[];
 }

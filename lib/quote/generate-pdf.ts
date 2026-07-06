@@ -127,7 +127,7 @@ export function generateQuotePdf(input: PdfQuoteInput): {
 
   doc.setFontSize(11);
   doc.setFont("Roboto", "bold");
-  doc.text("Cenová ponuka", right, y, { align: "right" });
+  doc.text("Orientačná cenová ponuka", right, y, { align: "right" });
   doc.setFont("Roboto", "normal");
   doc.setFontSize(9);
   doc.setTextColor(120);
@@ -147,6 +147,37 @@ export function generateQuotePdf(input: PdfQuoteInput): {
   doc.setDrawColor(220);
   doc.line(left, y, right, y);
   y += 8;
+
+  // ─── Orientačná ponuka — disclaimer ────────────────────────────────
+  // User explicitne požaduje: "pridaj slovo orientacna na cenovu ponuku,
+  // pri obhliadke sa to doceni ..., v zavislosti od stavu podkladu to
+  // moze byt o niekolko percent viac alebo menej".
+  doc.setFillColor(255, 247, 220); // svetlo-žlté pozadie
+  doc.setDrawColor(230, 190, 100); // amber border
+  const disclaimerHeight = 14;
+  doc.roundedRect(
+    left,
+    y,
+    right - left,
+    disclaimerHeight,
+    2,
+    2,
+    "FD",
+  );
+  doc.setFontSize(8.5);
+  doc.setFont("Roboto", "bold");
+  doc.setTextColor(120, 80, 0);
+  doc.text("Toto je ORIENTAČNÁ cenová ponuka.", left + 3, y + 5.5);
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(90, 60, 0);
+  doc.setFontSize(7.5);
+  doc.text(
+    "Presná cena bude doupresnená až pri obhliadke — v závislosti od stavu podkladu môže byť o niekoľko % viac alebo menej.",
+    left + 3,
+    y + 10.5,
+  );
+  doc.setTextColor(0);
+  y += disclaimerHeight + 8;
 
   // ─── Customer info ──────────────────────────────────────────────────
   doc.setFontSize(8);

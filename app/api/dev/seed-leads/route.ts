@@ -1,6 +1,7 @@
 export const runtime = "edge";
 
 import { NextResponse } from "next/server";
+import { assertDevOnly } from "@/lib/dev-guard";
 
 // runtime = "edge" disabled — @supabase/supabase-js admin fetch fails in Next edge dev
 
@@ -177,13 +178,9 @@ const SAMPLES: SampleLead[] = [
   },
 ];
 
-export async function GET() {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { ok: false, error: "Disabled in production" },
-      { status: 403 },
-    );
-  }
+export async function GET(request: Request) {
+  const blocked = assertDevOnly(request);
+  if (blocked) return blocked;
 
   // V dev móde vždy localhost — NEXT_PUBLIC_APP_URL je production URL
   // ktorý možno ešte nežije (pred deploy).

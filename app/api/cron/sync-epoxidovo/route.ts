@@ -58,12 +58,46 @@ interface EpxLead {
   status: string | null;
 }
 
+/**
+ * Termin mapping — musí ZLADIŤ s tým čo web (epoxidovo.sk) a Meta Lead Form
+ * skutočne posielajú.
+ *
+ * Web dropdown (epoxidovo.sk) posiela hodnoty:
+ *   • "Čo najskôr"
+ *   • "Do 1 mesiaca"
+ *   • "Do 3 mesiacov"
+ *   • "Do 6 mesiacov"
+ *   • "Zatiaľ len zisťujem informácie"
+ *
+ * Meta Lead Ads Form musí mať IDENTICKÝ zoznam (v Meta Ads Manager
+ * pri custom question). Tie isté texty sa použijú v Zapier mappingu.
+ *
+ * Ak by web posielal aj value= atribúty (kľúče typu "co-najskor"),
+ * pridali sme aj fallbacky. Legacy staré leady s inými kľúčmi tiež
+ * mapujeme na najbližší nový termín.
+ */
 const TERMIN_LABELS: Record<string, string> = {
-  urgent: "Urgentne (do 1 mesiaca)",
-  "1-3-mesiacov": "1-3 mesiace",
-  "3-6-mesiacov": "3-6 mesiacov",
-  "6-12-mesiacov": "6-12 mesiacov",
-  "zatial-info": "Zatiaľ iba info",
+  // Priame LABEL z webu / Meta (kanonické texty)
+  "Čo najskôr": "Čo najskôr",
+  "Do 1 mesiaca": "Do 1 mesiaca",
+  "Do 3 mesiacov": "Do 3 mesiacov",
+  "Do 6 mesiacov": "Do 6 mesiacov",
+  "Zatiaľ len zisťujem informácie": "Zatiaľ len zisťujem informácie",
+
+  // Ak by web posielal value= atribúty (defenzívne mapovanie)
+  "co-najskor": "Čo najskôr",
+  "do-1-mesiaca": "Do 1 mesiaca",
+  "do-3-mesiacov": "Do 3 mesiacov",
+  "do-6-mesiacov": "Do 6 mesiacov",
+  "zistujem-info": "Zatiaľ len zisťujem informácie",
+  "zisťujem-info": "Zatiaľ len zisťujem informácie",
+
+  // Legacy hodnoty (staré leady zo starých verzií webu)
+  urgent: "Čo najskôr",
+  "1-3-mesiacov": "Do 3 mesiacov",
+  "3-6-mesiacov": "Do 6 mesiacov",
+  "6-12-mesiacov": "Do 6 mesiacov",
+  "zatial-info": "Zatiaľ len zisťujem informácie",
 };
 
 export async function POST(request: NextRequest) {

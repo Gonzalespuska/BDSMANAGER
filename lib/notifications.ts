@@ -17,7 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export type Notification = {
   id: string;
-  type: "callback_due" | "callback_overdue" | "new_lead";
+  type: "callback_due" | "callback_overdue" | "new_lead" | "admin_task";
   lead_id: string;
   lead_name: string;
   lead_phone: string | null;
@@ -86,10 +86,43 @@ export async function loadNotifications(
     });
   }
 
-  // Zoradíme podľa času (najprv najurgentnejšie = overdue → recent new → due)
+  // 3. Reminder-y z office_reminders — priradené tomuto userovi, NIE dismissed.
+  //    Kritérium:
+  //    - Ak je remind_at (presný čas), pripomienka je viditeľná od remind_at.
+  //    - Ak je len remind_date (deň), viditeľná od 00:00 daného dňa.
+  const nowIsoStr = new Date().toISOString();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const { data: tasks } = await admin
+    .from("office_reminders")
+    .select("id, note, remind_date, remind_at, lead_id, note_kind, created_at")
+    .eq("user_id", userId)
+    .is("dismissed_at", null)
+    .or(`remind_at.lte.${nowIsoStr},and(remind_at.is.null,remind_date.lte.${todayIso})`)
+    .order("remind_at", { ascending: true, nullsFirst: false })
+    .limit(30);
+  for (const t of tasks ?? []) {
+    const isLeadNote = t.note_kind === "lead_note" && t.lead_id;
+    notifs.push({
+      id: `task-${t.id}`,
+      type: "admin_task",
+      lead_id: (t.lead_id as string | null) ?? "",
+      lead_name: (t.note as string).slice(0, 80),
+      lead_phone: null,
+      when_ts: (t.remind_at as string | null) ?? (t.remind_date + "T09:00:00Z"),
+      message: isLeadNote ? "Pripomienka k leadu" : "Úloha od admina",
+    });
+  }
+
+  // Zoradíme podľa času (najprv admin úlohy → overdue → recent new → due)
   notifs.sort((a, b) => {
     const priority = (n: Notification) =>
-      n.type === "callback_overdue" ? 0 : n.type === "new_lead" ? 1 : 2;
+      n.type === "admin_task"
+        ? 0
+        : n.type === "callback_overdue"
+          ? 1
+          : n.type === "new_lead"
+            ? 2
+            : 3;
     if (priority(a) !== priority(b)) return priority(a) - priority(b);
     return new Date(a.when_ts).getTime() - new Date(b.when_ts).getTime();
   });

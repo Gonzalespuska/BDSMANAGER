@@ -15,34 +15,47 @@ const STATUSES: LeadStatus[] = [
   "phone_revealed",
   "no_answer",
   "interested",
+  "inspected",
   "won",
   "archived",
 ];
 
-const STATUS_DOT: Record<LeadStatus, string> = {
-  new: "bg-red-500",
-  phone_revealed: "bg-blue-500",
-  no_answer: "bg-amber-500",
-  scheduled: "bg-purple-500",
-  interested: "bg-emerald-600",
-  quote_sent: "bg-violet-600",
-  not_interested: "bg-zinc-500",
-  needs_inspection: "bg-violet-500",
-  in_realization: "bg-emerald-600",
-  won: "bg-green-700",
-  lost: "bg-red-700",
-  archived: "bg-zinc-400",
+/**
+ * Emoji per status — musí MATCHOVAŤ tab-y v `/agent` (TABS array v
+ * app/agent/page.tsx). Nahradili sme farebné bodky lebo user povedal
+ * "emojis nech su aj v statuse miesto tych farieb nezmyslenych".
+ */
+const STATUS_EMOJI: Record<LeadStatus, string> = {
+  new: "🆕",
+  phone_revealed: "📞",
+  no_answer: "🟡",
+  scheduled: "📅",
+  interested: "✅",
+  quote_sent: "✅",
+  not_interested: "❌",
+  needs_inspection: "🔍",
+  inspected: "✔️",
+  in_realization: "🔨",
+  won: "🏆",
+  lost: "💔",
+  archived: "📦",
 };
 
+/**
+ * IMPORTANT: label-y musia matchovať tab-y v `/agent` (TABS array v
+ * app/agent/page.tsx) — inak user vidí v hornej liste tab "CP", ale
+ * v pickeri leadu "Otvorené" a nedá to logicky zladiť.
+ */
 const STATUS_TEXT: Record<LeadStatus, string> = {
-  new: "Nový",
+  new: "Nové",
   phone_revealed: "Kontakt",
-  no_answer: "Nedvíha",
+  no_answer: "Nezdvíhali",
   scheduled: "Naplánovaný",
-  interested: "Otvorené",
-  quote_sent: "Ponuka poslaná",
+  interested: "CP",
+  quote_sent: "CP poslaná",
   not_interested: "Nezáujem",
   needs_inspection: "Na obhliadku",
+  inspected: "Obhliadnutý",
   in_realization: "V realizácii",
   won: "Ukončené",
   lost: "Stratený",
@@ -167,13 +180,9 @@ export function LeadStatusPicker({
                   isActive && "bg-muted",
                 )}
               >
-                <span
-                  className={cn(
-                    "shrink-0 w-2.5 h-2.5 rounded-full",
-                    STATUS_DOT[s],
-                  )}
-                  aria-hidden
-                />
+                <span className="shrink-0 w-4 text-base leading-none" aria-hidden>
+                  {STATUS_EMOJI[s]}
+                </span>
                 <span className="flex-1">{STATUS_TEXT[s]}</span>
                 {isActive && (
                   <span className="text-emerald-600 text-xs">✓</span>

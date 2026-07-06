@@ -6,6 +6,7 @@ import {
   Phone,
   Hammer,
   ClipboardList,
+  GraduationCap,
   Headphones,
   X,
   Shield,
@@ -21,7 +22,12 @@ import {
  *   3. window.location.href = response.redirect (hard navigation → server
  *      RSC re-render s novou rolou)
  */
-type ViewAsRole = "obchod" | "obhliadky" | "realizacie" | "office";
+type ViewAsRole =
+  | "obchod"
+  | "obhliadky"
+  | "realizacie"
+  | "office"
+  | "skolenie";
 
 export function RoleViewDropdown({
   currentViewAs,
@@ -171,16 +177,16 @@ export function RoleViewDropdown({
             desc="Formulár, rozmery, foto z miesta"
           />
           <RoleButton
-            role="office"
+            role="skolenie"
             current={currentViewAs}
             busy={busy}
             onClick={switchTo}
-            icon={<Headphones className="w-4 h-4" />}
-            iconBg="bg-amber-100 text-amber-700"
-            hover="hover:bg-amber-50"
-            title="Office"
-            desc="Voice-to-task, poznámky, todo"
-            badge="vo výstavbe"
+            icon={<GraduationCap className="w-4 h-4" />}
+            iconBg="bg-rose-100 text-rose-700"
+            hover="hover:bg-rose-50"
+            title="Školenie"
+            desc="Onboarding pre nováčikov — videá, podklady"
+            badge="nováčik"
           />
         </div>
       )}
@@ -193,6 +199,7 @@ const ROLE_LABELS: Record<string, string> = {
   realizacie: "Realizácie",
   obhliadky: "Obhliadky",
   office: "Office",
+  skolenie: "Školenie",
 };
 
 function RoleButton({

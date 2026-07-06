@@ -12,6 +12,7 @@ import {
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatPhoneSK } from "@/lib/phone-format";
 import type { Lead } from "@/lib/types/lead";
 
 import { MediaUpload } from "./media-upload";
@@ -115,7 +116,7 @@ export default async function RealizaciaDetailPage({
         <InfoCard icon={<MapPin className="w-4 h-4" />} label="Lokalita" value={data.lokalita ?? "—"} />
         <InfoCard icon={<Ruler className="w-4 h-4" />} label="Plocha" value={data.plocha ? `${data.plocha} m²` : "—"} />
         <InfoCard icon={<Hammer className="w-4 h-4" />} label="Typ podlahy" value={data.typ_podlahy ?? "—"} />
-        <InfoCard icon={<Phone className="w-4 h-4" />} label="Telefón" value={l.phone ?? "—"} link={l.phone ? `tel:${l.phone}` : undefined} />
+        <InfoCard icon={<Phone className="w-4 h-4" />} label="Telefón" value={l.phone ? formatPhoneSK(l.phone) : "—"} link={l.phone ? `tel:${l.phone}` : undefined} />
         <InfoCard icon={<Calendar className="w-4 h-4" />} label="Priestor" value={data.priestor ?? "—"} />
         <InfoCard icon={<CheckCircle2 className="w-4 h-4" />} label="Termín (želaný)" value={data.termin ?? "—"} />
       </div>
@@ -151,6 +152,58 @@ export default async function RealizaciaDetailPage({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Tri samostatné tlačiteľné plány + technický postup */}
+      <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-4 space-y-3">
+        <div className="font-bold text-sm text-sky-900">
+          📋 Materiály pre realizátora
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Link
+            href={`/realizacie/${id}/plan?view=postup`}
+            className="rounded-xl border-2 border-emerald-300 bg-white hover:border-emerald-500 hover:bg-emerald-50 p-4 flex items-start gap-3 transition-all group"
+          >
+            <div className="text-3xl">🔨</div>
+            <div className="flex-1">
+              <div className="font-extrabold text-emerald-900 group-hover:text-emerald-700">
+                Postupový plán
+              </div>
+              <div className="text-xs text-emerald-800/80 mt-1">
+                10 krokov s podpismi na odškrtávanie priamo na stavbe.
+              </div>
+            </div>
+          </Link>
+          <Link
+            href={`/realizacie/${id}/plan?view=sklad`}
+            className="rounded-xl border-2 border-orange-300 bg-white hover:border-orange-500 hover:bg-orange-50 p-4 flex items-start gap-3 transition-all group"
+          >
+            <div className="text-3xl">📦</div>
+            <div className="flex-1">
+              <div className="font-extrabold text-orange-900 group-hover:text-orange-700">
+                Zoznam zo skladu
+              </div>
+              <div className="text-xs text-orange-800/80 mt-1">
+                Vyber systém → auto-výpočet balení podľa m². SAP # + ks.
+              </div>
+            </div>
+          </Link>
+          <Link
+            href={`/realizacie/${id}/plan?view=zodpovednost`}
+            className="rounded-xl border-2 border-amber-300 bg-white hover:border-amber-500 hover:bg-amber-50 p-4 flex items-start gap-3 transition-all group"
+          >
+            <div className="text-3xl">✍️</div>
+            <div className="flex-1">
+              <div className="font-extrabold text-amber-900 group-hover:text-amber-700">
+                Zodpovednosť
+              </div>
+              <div className="text-xs text-amber-800/80 mt-1">
+                Kto čo podpísal — obchodák, obhliadkár, realizator, skladník.
+                Jasná audit stopa pre reklamácie.
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
 

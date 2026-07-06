@@ -2,24 +2,112 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  Hammer,
+  Loader2,
   Pencil,
   Phone,
   Plus,
+  Send,
   Trash2,
   X,
 } from "lucide-react";
 
+import {
+  handoverToInspectionAction,
+  handoverToRealizationAction,
+  listUsersByRoleAction,
+} from "@/app/agent/actions";
 import { cn } from "@/lib/utils";
+import { formatPhoneSK } from "@/lib/phone-format";
 import {
   addCalendarEventAction,
   addCalendarNoteAction,
   deleteCalendarNoteAction,
   updateCalendarNoteAction,
 } from "./actions";
+import { ManualAssignModal } from "./manual-assign-modal";
+
+/** Normalizuj mesto pre case + diacritics insensitive match. */
+function normalizeCity(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+}
+
+/**
+ * Time24Picker — dva selecty (HH + MM), garantovane 24h formát.
+ * `<input type="time">` závisí na OS locale a v en-US ukazuje AM/PM,
+ * čo je pre SK CRM nežiaduce.
+ *
+ * Hodiny: 06–20 (pracovný deň).
+ * Minúty: 00, 15, 30, 45 (dostatočná granularita pre plánovanie obhliadky).
+ *
+ * Value: "HH:MM" (napr. "09:00"), rovnaký formát ako natívny input.
+ */
+function Time24Picker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const [h, m] = React.useMemo(() => {
+    const [hh, mm] = (value || "09:00").split(":");
+    return [hh || "09", mm || "00"];
+  }, [value]);
+  const HOURS = React.useMemo(
+    () => Array.from({ length: 15 }, (_, i) => String(i + 6).padStart(2, "0")),
+    [],
+  ); // 06 .. 20
+  const MINUTES = ["00", "15", "30", "45"];
+  const baseCls =
+    "h-11 rounded-lg border border-input bg-background px-3 text-lg font-bold tabular-nums " +
+    "disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-violet-400 " +
+    "focus:border-violet-400 transition-colors cursor-pointer";
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={h}
+        onChange={(e) => onChange(`${e.target.value}:${m}`)}
+        disabled={disabled}
+        aria-label="Hodina"
+        className={`${baseCls} flex-1`}
+      >
+        {HOURS.map((hh) => (
+          <option key={hh} value={hh}>
+            {hh}
+          </option>
+        ))}
+      </select>
+      <span className="text-xl font-black text-muted-foreground select-none">
+        :
+      </span>
+      <select
+        value={m}
+        onChange={(e) => onChange(`${h}:${e.target.value}`)}
+        disabled={disabled}
+        aria-label="Minúta"
+        className={`${baseCls} flex-1`}
+      >
+        {MINUTES.map((mm) => (
+          <option key={mm} value={mm}>
+            {mm}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 export type CalendarNote = {
   id: string;
@@ -39,10 +127,28 @@ export type CalendarCallback = {
   attempts: number;
 };
 
+export type AssignLead = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  m2: string | null;
+  floor_type: string | null;
+};
+
 interface Props {
   initialMonth: string; // YYYY-MM
   notes: CalendarNote[];
   callbacks: CalendarCallback[];
+  /** Rola aktuálneho usera — určuje či vidí + tlačidlá "Nová obhliadka / Realizácia". */
+  role?: string;
+  /** Assign mode — obchodák prišiel z lead karty a priraďuje robotu. */
+  assignMode?: "inspection" | "realization" | null;
+  /** Profil leadu (name, email, phone) — pre banner + Day modal keď assign mode. */
+  assignLead?: AssignLead | null;
+  /** Manual pick mode — otvoril + Nová obhliadka / realizácia bez leadu → otvor picker */
+  manualPick?: boolean;
 }
 
 const WEEKDAYS = ["Po", "Ut", "St", "Št", "Pi", "So", "Ne"];
@@ -61,7 +167,20 @@ const MONTHS = [
   "December",
 ];
 
-export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
+export function CalendarGrid({
+  initialMonth,
+  notes,
+  callbacks,
+  role,
+  assignMode,
+  assignLead,
+  manualPick,
+}: Props) {
+  const canAssign = role === "obchod" || role === "admin";
+  const isAssigning = !!assignMode;
+  const [manualOpen, setManualOpen] = React.useState<
+    "inspection" | "realization" | null
+  >(manualPick && assignMode ? assignMode : null);
   const [monthStr, setMonthStr] = React.useState(initialMonth);
   const [selected, setSelected] = React.useState<string | null>(null);
   const [localNotes, setLocalNotes] = React.useState<CalendarNote[]>(notes);
@@ -126,48 +245,155 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
 
   return (
     <>
-      {/* Calendar grid */}
-      <div className="rounded-2xl border bg-background overflow-hidden h-full flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 gap-2 flex-wrap">
-          <div className="font-bold text-base">
-            {MONTHS[monthIdx - 1]} {year}
+      {/* ASSIGN MODE BANNER — zobrazuje profil zákazníka pri priradzovaní */}
+      {isAssigning && assignLead && (
+        <div
+          className={cn(
+            "rounded-2xl border-2 p-4 mb-3 shadow-sm",
+            assignMode === "inspection"
+              ? "border-violet-300 bg-violet-50/60"
+              : "border-emerald-300 bg-emerald-50/60",
+          )}
+        >
+          <div className="flex items-start gap-3 flex-wrap">
+            <div
+              className={cn(
+                "w-12 h-12 rounded-full inline-flex items-center justify-center text-2xl shrink-0 shadow",
+                assignMode === "inspection"
+                  ? "bg-violet-500 text-white"
+                  : "bg-emerald-500 text-white",
+              )}
+            >
+              {assignMode === "inspection" ? "🔍" : "🔨"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">
+                Priraďuješ{" "}
+                {assignMode === "inspection" ? "obhliadku" : "realizáciu"}{" "}
+                zákazníkovi
+              </div>
+              <div className="text-lg font-extrabold tracking-tight">
+                {assignLead.name || (
+                  <span className="italic text-muted-foreground">
+                    bez mena
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 mt-1 text-xs">
+                {assignLead.phone && (
+                  <a
+                    href={`tel:${assignLead.phone}`}
+                    className="font-mono font-semibold text-foreground hover:underline tabular-nums"
+                  >
+                    📞 {formatPhoneSK(assignLead.phone)}
+                  </a>
+                )}
+                {assignLead.email && (
+                  <a
+                    href={`mailto:${assignLead.email}`}
+                    className="font-semibold text-foreground hover:underline truncate max-w-[220px]"
+                  >
+                    ✉️ {assignLead.email}
+                  </a>
+                )}
+                {assignLead.city && (
+                  <span className="inline-flex items-center gap-0.5">
+                    📍 <strong>{assignLead.city}</strong>
+                  </span>
+                )}
+                {assignLead.m2 && (
+                  <span className="inline-flex items-center gap-0.5">
+                    📐 <strong>{assignLead.m2} m²</strong>
+                  </span>
+                )}
+                {assignLead.floor_type && (
+                  <span className="inline-flex items-center gap-0.5">
+                    🎨 <strong>{assignLead.floor_type}</strong>
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 text-[11px] text-muted-foreground italic">
+                👇 Klikni na voľný deň v kalendári — otvorí sa formulár na
+                priradenie.
+              </div>
+            </div>
+            <Link
+              href={`/agent/leads/${assignLead.id}`}
+              target="_blank"
+              className="shrink-0 text-[11px] font-semibold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/60"
+            >
+              Otvoriť lead ↗
+            </Link>
           </div>
-          <div className="flex items-center gap-1.5">
+        </div>
+      )}
+
+      {/* Calendar grid — tučný a čistý */}
+      <div className="rounded-2xl border-2 bg-background overflow-hidden shadow-sm flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b-2 bg-gradient-to-b from-sky-50/50 to-transparent gap-2 flex-wrap">
+          <div className="font-extrabold text-xl tracking-tight">
+            {MONTHS[monthIdx - 1]}{" "}
+            <span className="text-muted-foreground font-bold">{year}</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {canAssign && (
+              <>
+                <Link
+                  href="/calendar?assign=inspection&manual=1"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white transition-colors shadow-sm"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" aria-hidden />
+                  Nová obhliadka
+                </Link>
+                <Link
+                  href="/calendar?assign=realization&manual=1"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm"
+                >
+                  <Hammer className="w-3.5 h-3.5" aria-hidden />
+                  Nová realizácia
+                </Link>
+                <div className="w-px h-6 bg-border mx-1" />
+              </>
+            )}
             <button
               type="button"
-              onClick={() => setAddEventOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-foreground text-background hover:bg-foreground/85"
+              onClick={() => {
+                const t = new Date();
+                setMonthStr(
+                  `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`,
+                );
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-muted/60 hover:bg-muted transition-colors"
             >
-              <Plus className="w-3.5 h-3.5" aria-hidden />
-              Hovor / Meeting
+              Dnes
             </button>
             <button
               type="button"
               onClick={prevMonth}
-              className="p-1.5 rounded-md hover:bg-muted/50"
+              className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-muted/60 transition-colors"
               aria-label="Predchádzajúci mesiac"
             >
-              <ChevronLeft className="w-4 h-4" aria-hidden />
+              <ChevronLeft className="w-5 h-5" aria-hidden />
             </button>
             <button
               type="button"
               onClick={nextMonth}
-              className="p-1.5 rounded-md hover:bg-muted/50"
+              className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-muted/60 transition-colors"
               aria-label="Ďalší mesiac"
             >
-              <ChevronRight className="w-4 h-4" aria-hidden />
+              <ChevronRight className="w-5 h-5" aria-hidden />
             </button>
           </div>
         </div>
 
-        {/* Weekday header */}
-        <div className="grid grid-cols-7 border-b bg-muted/10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        {/* Weekday header — bolder */}
+        <div className="grid grid-cols-7 border-b-2 bg-muted/30 text-xs font-extrabold uppercase tracking-widest text-muted-foreground">
           {WEEKDAYS.map((d, i) => (
             <div
               key={d}
               className={cn(
-                "px-2 py-2 text-center",
-                i >= 5 && "text-red-500/80",
+                "px-2 py-2.5 text-center",
+                i >= 5 && "text-rose-500/80",
               )}
             >
               {d}
@@ -175,55 +401,74 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
           ))}
         </div>
 
-        {/* Day cells — flex-1 fills the parent height so cells grow */}
-        <div className="grid grid-cols-7 flex-1 auto-rows-fr">
+        {/* Day cells — väčšie, čitateľnejšie */}
+        <div className="grid grid-cols-7 auto-rows-fr">
           {cells.map((c, i) => {
             const isToday = c.date === todayStr;
             const notesOnDay = notesByDate.get(c.date) ?? [];
             const callsOnDay = callbacksByDate.get(c.date) ?? [];
+            const isWeekend = i % 7 >= 5;
+            const hasContent = notesOnDay.length + callsOnDay.length > 0;
             return (
               <button
                 key={i}
                 type="button"
                 onClick={() => setSelected(c.date)}
                 className={cn(
-                  "relative min-h-[60px] border-r border-b last:border-r-0 px-2 py-1.5 text-left transition-colors group",
-                  !c.inMonth && "bg-muted/30 text-muted-foreground/50",
-                  c.inMonth && "hover:bg-sky-50 dark:hover:bg-sky-950/30",
+                  "relative min-h-[110px] border-r border-b last:border-r-0 px-2.5 py-2 text-left transition-all group",
+                  !c.inMonth && "bg-muted/25 text-muted-foreground/50",
+                  c.inMonth && "hover:bg-sky-50/70 dark:hover:bg-sky-950/30",
+                  c.inMonth && isWeekend && "bg-rose-50/20",
+                  isToday && "ring-2 ring-inset ring-sky-400 bg-sky-50/40",
+                  hasContent && c.inMonth && "font-medium",
                 )}
               >
                 <div className="flex items-center justify-between gap-1">
                   <span
                     className={cn(
-                      "inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-semibold",
-                      isToday && "bg-sky-500 text-white",
+                      "inline-flex items-center justify-center w-8 h-8 rounded-full text-base font-extrabold shrink-0",
+                      isToday && "bg-sky-500 text-white shadow-md",
+                      !isToday && isWeekend && c.inMonth && "text-rose-600",
                     )}
                   >
                     {c.dayOfMonth}
                   </span>
-                  <div className="flex flex-col items-end gap-1">
-                    {callsOnDay.length > 0 && (
-                      <span
-                        className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800"
-                        title={`${callsOnDay.length} pripomienok volania`}
-                      >
-                        📞 {pluralHovor(callsOnDay.length)}
-                      </span>
-                    )}
-                    {notesOnDay.length > 0 && (
-                      <span
-                        className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800"
-                      >
-                        {pluralPoznamka(notesOnDay.length)}
-                      </span>
-                    )}
-                  </div>
                 </div>
-                {notesOnDay.length > 0 && (
-                  <div className="mt-1 text-[11px] text-muted-foreground line-clamp-1">
-                    {notesOnDay[0].body}
-                  </div>
-                )}
+                <div className="mt-1.5 space-y-1">
+                  {/* CALLBACKY sa v kalendári NEZOBRAZUJÚ — nepatria sem.
+                      Callbacky sú osobná pripomienka obchodníka a chodia
+                      cez notifikácie (zvonček / /notifikacie), nie do
+                      spoločného kalendára. Tento kalendár je pre priradenia
+                      obhliadok / realizácií medzi rolami. */}
+                  {notesOnDay.slice(0, 3).map((n, idx) => {
+                    const isInspection = n.kind === "meeting";
+                    const isCall = n.kind === "call";
+                    return (
+                      <div
+                        key={`n-${idx}`}
+                        className={cn(
+                          "text-[11px] leading-tight line-clamp-1 pl-1.5 border-l-2 rounded-r px-1 py-0.5",
+                          isInspection &&
+                            "border-violet-500 bg-violet-50 text-violet-900",
+                          isCall && "border-emerald-500 bg-emerald-50 text-emerald-900",
+                          !isInspection &&
+                            !isCall &&
+                            "border-sky-400 bg-sky-50/60 text-foreground/85",
+                        )}
+                      >
+                        {n.contact_name && (
+                          <span className="font-bold">{n.contact_name}: </span>
+                        )}
+                        {n.body}
+                      </div>
+                    );
+                  })}
+                  {notesOnDay.length > 3 && (
+                    <div className="text-[10px] text-muted-foreground font-bold">
+                      +{notesOnDay.length - 3} ďalších
+                    </div>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -250,6 +495,17 @@ export function CalendarGrid({ initialMonth, notes, callbacks }: Props) {
           onDeleted={(noteId) =>
             setLocalNotes((prev) => prev.filter((n) => n.id !== noteId))
           }
+          assignMode={assignMode ?? null}
+          assignLead={assignLead ?? null}
+        />
+      )}
+
+      {/* Manual pick modal — otvorí sa keď obchodák klikne "+ Nová obhliadka
+          / realizácia" bez konkrétneho leadu (query param manual=1) */}
+      {manualOpen && (
+        <ManualAssignModal
+          kind={manualOpen}
+          onClose={() => setManualOpen(null)}
         />
       )}
     </>
@@ -263,6 +519,8 @@ function DayModal({
   onClose,
   onAdded,
   onDeleted,
+  assignMode,
+  assignLead,
 }: {
   date: string;
   notes: CalendarNote[];
@@ -270,7 +528,99 @@ function DayModal({
   onClose: () => void;
   onAdded: (n: CalendarNote) => void;
   onDeleted: (id: string) => void;
+  assignMode?: "inspection" | "realization" | null;
+  assignLead?: AssignLead | null;
 }) {
+  const isAssign = !!assignMode && !!assignLead;
+  const router = useRouter();
+
+  // Assign-mode state — person picker + time + submit
+  const [assignUsers, setAssignUsers] = React.useState<
+    Array<{ id: string; name: string; email: string; home_city: string | null }>
+  >([]);
+  const [assignLoading, setAssignLoading] = React.useState(false);
+  const [pickedUserId, setPickedUserId] = React.useState<string | null>(null);
+  const [pickedTime, setPickedTime] = React.useState("09:00");
+  const [pickedDateTo, setPickedDateTo] = React.useState("");
+  const [singleDay, setSingleDay] = React.useState(true);
+  const [assignBusy, setAssignBusy] = React.useState(false);
+  const [assignError, setAssignError] = React.useState<string | null>(null);
+
+  // Load users pri prvom otvorení assign-mode modal-u + auto-preselect
+  React.useEffect(() => {
+    if (!isAssign || assignMode === null) return;
+    let cancelled = false;
+    setAssignLoading(true);
+    listUsersByRoleAction(
+      assignMode === "inspection" ? "obhliadky" : "realizacie",
+    ).then((res) => {
+      if (cancelled) return;
+      setAssignLoading(false);
+      if (!res.ok) return;
+      setAssignUsers(res.users);
+      // Auto-preselect podľa home_city
+      const wantedCity = assignLead?.city
+        ? normalizeCity(assignLead.city)
+        : null;
+      if (wantedCity) {
+        const match = res.users.find(
+          (u) => u.home_city && normalizeCity(u.home_city) === wantedCity,
+        );
+        if (match) setPickedUserId(match.id);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAssign, assignMode, assignLead?.city]);
+
+  async function submitAssign() {
+    if (!isAssign || !assignLead || !pickedUserId || !assignMode) return;
+    setAssignBusy(true);
+    setAssignError(null);
+    const startDate = date;
+    const startDateTime = new Date(`${startDate}T${pickedTime || "09:00"}`);
+    const dateStr = startDateTime.toLocaleString("sk-SK", {
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const noteParts = [
+      `📅 Termín: ${dateStr}`,
+      assignMode === "realization" && !singleDay && pickedDateTo
+        ? `📅 Do: ${new Date(pickedDateTo).toLocaleDateString("sk-SK")}`
+        : null,
+      input.trim() || null,
+    ].filter(Boolean);
+    const fullNote = noteParts.join("\n");
+
+    const res =
+      assignMode === "inspection"
+        ? await handoverToInspectionAction(
+            assignLead.id,
+            pickedUserId,
+            fullNote || undefined,
+          )
+        : await handoverToRealizationAction(
+            assignLead.id,
+            pickedUserId,
+            fullNote || undefined,
+          );
+    setAssignBusy(false);
+    if (!res.ok) {
+      setAssignError(
+        res.error === "db_error"
+          ? "DB error — pravdepodobne treba spustiť supabase/10_role_handoff.sql"
+          : res.error,
+      );
+      return;
+    }
+    onClose();
+    router.push(`/agent/leads/${assignLead.id}`);
+  }
   // Esc → zatvor modal
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -348,6 +698,281 @@ function DayModal({
         </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* ASSIGN MODE — lead profil na vrchu Day modalu */}
+        {isAssign && assignLead && (
+          <section
+            className={cn(
+              "rounded-xl border-2 p-3.5",
+              assignMode === "inspection"
+                ? "border-violet-300 bg-violet-50/60"
+                : "border-emerald-300 bg-emerald-50/60",
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  "w-11 h-11 rounded-full inline-flex items-center justify-center text-xl shrink-0 shadow",
+                  assignMode === "inspection"
+                    ? "bg-violet-500 text-white"
+                    : "bg-emerald-500 text-white",
+                )}
+              >
+                {assignMode === "inspection" ? "🔍" : "🔨"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">
+                  Priraďuješ{" "}
+                  {assignMode === "inspection" ? "obhliadku" : "realizáciu"}
+                </div>
+                <div className="font-extrabold text-base leading-tight">
+                  {assignLead.name || (
+                    <span className="italic text-muted-foreground">
+                      bez mena
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+                  {assignLead.phone && (
+                    <a
+                      href={`tel:${assignLead.phone}`}
+                      className="font-mono font-semibold hover:underline tabular-nums truncate"
+                    >
+                      📞 {formatPhoneSK(assignLead.phone)}
+                    </a>
+                  )}
+                  {assignLead.email && (
+                    <a
+                      href={`mailto:${assignLead.email}`}
+                      className="font-semibold hover:underline truncate"
+                    >
+                      ✉️ {assignLead.email}
+                    </a>
+                  )}
+                  {assignLead.city && (
+                    <div>
+                      📍 <strong>{assignLead.city}</strong>
+                    </div>
+                  )}
+                  {assignLead.m2 && (
+                    <div>
+                      📐 <strong>{assignLead.m2} m²</strong>
+                    </div>
+                  )}
+                  {assignLead.floor_type && (
+                    <div className="sm:col-span-2">
+                      🎨 <strong>{assignLead.floor_type}</strong>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                  👇 Priradenie na tento deň — vyber osobu, čas + poznámka
+                  a klikni Potvrdiť dole.
+                </div>
+              </div>
+              <Link
+                href={`/agent/leads/${assignLead.id}`}
+                target="_blank"
+                className="shrink-0 text-[11px] font-semibold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/60"
+              >
+                Lead ↗
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {/* ASSIGN MODE — Person picker + čas + poznámka + submit */}
+        {isAssign && assignLead && (
+          <section className="space-y-3">
+            {/* Čas */}
+            <div>
+              <label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block mb-1">
+                ⏰ Čas
+                {assignMode === "inspection" && (
+                  <span className="ml-1 normal-case text-muted-foreground/70">
+                    (obhliadka trvá cca 30 min)
+                  </span>
+                )}
+                {assignMode === "realization" && (
+                  <span className="ml-1 normal-case text-muted-foreground/70">
+                    (voliteľné — realizácia trvá celý deň)
+                  </span>
+                )}
+              </label>
+              <Time24Picker
+                value={pickedTime}
+                onChange={setPickedTime}
+                disabled={assignBusy}
+              />
+            </div>
+
+            {/* Multi-day pre realizáciu */}
+            {assignMode === "realization" && (
+              <div className="rounded-lg border bg-muted/30 p-2.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="single-day"
+                    checked={singleDay}
+                    onChange={(e) => {
+                      setSingleDay(e.target.checked);
+                      if (e.target.checked) setPickedDateTo("");
+                    }}
+                    className="accent-emerald-600"
+                    disabled={assignBusy}
+                  />
+                  <label
+                    htmlFor="single-day"
+                    className="text-sm font-semibold cursor-pointer select-none"
+                  >
+                    Iba jeden deň
+                  </label>
+                </div>
+                {!singleDay && (
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block mb-1">
+                      Dátum do (viac-dňová realizácia)
+                    </label>
+                    <input
+                      type="date"
+                      value={pickedDateTo}
+                      min={date}
+                      onChange={(e) => setPickedDateTo(e.target.value)}
+                      disabled={assignBusy}
+                      className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Osoba — picker */}
+            <div>
+              <label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block mb-1">
+                👤 Komu?{" "}
+                {assignMode === "inspection" ? "Obhliadkár" : "Realizator"}
+                {assignLead.city && pickedUserId && (
+                  <span className="ml-1.5 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200 px-1 py-0.5 rounded">
+                    🎯 auto podľa {assignLead.city}
+                  </span>
+                )}
+              </label>
+              {assignLoading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                  Načítavam osoby…
+                </div>
+              ) : assignUsers.length === 0 ? (
+                <div className="rounded-lg border-2 border-dashed border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  Žiadny aktívny{" "}
+                  {assignMode === "inspection" ? "obhliadkár" : "realizator"}{" "}
+                  v systéme. Admin ho pridá cez <code>/admin/agents</code>.
+                </div>
+              ) : (
+                <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {assignUsers.map((u) => {
+                    const isPicked = pickedUserId === u.id;
+                    const cityMatch =
+                      u.home_city &&
+                      assignLead.city &&
+                      normalizeCity(u.home_city) ===
+                        normalizeCity(assignLead.city);
+                    return (
+                      <li key={u.id}>
+                        <button
+                          type="button"
+                          onClick={() => setPickedUserId(u.id)}
+                          disabled={assignBusy}
+                          className={cn(
+                            "w-full text-left rounded-lg border-2 p-2.5 transition-colors disabled:opacity-50 flex items-center justify-between gap-3",
+                            isPicked
+                              ? assignMode === "inspection"
+                                ? "border-violet-500 bg-violet-50/70 ring-2 ring-violet-200"
+                                : "border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-200"
+                              : "border-input bg-background hover:bg-muted/50",
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-sm truncate inline-flex items-center gap-1.5">
+                              {u.name}
+                              {u.home_city && (
+                                <span
+                                  className={cn(
+                                    "text-[9px] uppercase tracking-wider font-bold px-1 py-0.5 rounded border",
+                                    cityMatch
+                                      ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                                      : "bg-muted text-muted-foreground border-input",
+                                  )}
+                                >
+                                  📍 {u.home_city}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {u.email}
+                            </div>
+                          </div>
+                          {isPicked && (
+                            <div
+                              className={cn(
+                                "w-6 h-6 rounded-full inline-flex items-center justify-center shrink-0 text-white",
+                                assignMode === "inspection"
+                                  ? "bg-violet-500"
+                                  : "bg-emerald-500",
+                              )}
+                            >
+                              <Check className="w-3.5 h-3.5" aria-hidden />
+                            </div>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Error */}
+            {assignError && (
+              <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-900">
+                ⚠ {assignError}
+              </div>
+            )}
+
+            {/* Submit */}
+            <button
+              type="button"
+              onClick={submitAssign}
+              disabled={assignBusy || !pickedUserId}
+              className={cn(
+                "w-full h-12 rounded-xl font-bold text-white transition-colors inline-flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
+                assignMode === "inspection"
+                  ? "bg-violet-600 hover:bg-violet-700"
+                  : "bg-emerald-600 hover:bg-emerald-700",
+              )}
+            >
+              {assignBusy ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+                  Odovzdávam…
+                </>
+              ) : (
+                <>
+                  <Send className="w-5 h-5" aria-hidden />
+                  Potvrdiť —{" "}
+                  {assignMode === "inspection"
+                    ? "poslať obhliadku"
+                    : "poslať realizáciu"}
+                </>
+              )}
+            </button>
+
+            <div className="text-[11px] text-muted-foreground italic">
+              Poznámku pridaj do poľa dole (nižšie sa objaví u obhliadkára /
+              realizatora).
+            </div>
+          </section>
+        )}
+
         {/* Callbacks */}
         {callbacks.length > 0 && (
           <section>
@@ -376,8 +1001,8 @@ function DayModal({
                         </div>
                       </div>
                       {c.phone && (
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {c.phone} · {c.attempts}× nedvíhal
+                        <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                          {formatPhoneSK(c.phone)} · {c.attempts}× nedvíhal
                         </div>
                       )}
                     </Link>
@@ -725,12 +1350,7 @@ function AddEventModal({
               <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
                 Čas
               </div>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
-              />
+              <Time24Picker value={time} onChange={setTime} />
             </div>
           </div>
 

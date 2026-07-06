@@ -7,14 +7,20 @@ import { dashboardPathForRole } from "@/lib/roles";
 
 /**
  * POST /api/view-as
- * body: { role: 'obchod' | 'obhliadky' | 'realizacie' | 'office' | 'clear' }
+ * body: { role: 'obchod' | 'obhliadky' | 'realizacie' | 'office' | 'skolenie' | 'clear' }
  *
  * Set / clear view_as_role cookie. Client potom robí window.location.href
  * na správny dashboard.
  *
  * Bezpečnosť: iba admin môže view-as.
  */
-const VALID_ROLES = ["obchod", "obhliadky", "realizacie", "office"] as const;
+const VALID_ROLES = [
+  "obchod",
+  "obhliadky",
+  "realizacie",
+  "office",
+  "skolenie",
+] as const;
 
 export async function POST(request: Request) {
   const realRole = await getRealUserRole();
@@ -28,6 +34,7 @@ export async function POST(request: Request) {
   const redirectTo = (() => {
     if (role === "clear") return "/admin";
     if (role === "office") return "/office";
+    if (role === "skolenie") return "/skolenie";
     if (VALID_ROLES.includes(role as (typeof VALID_ROLES)[number])) {
       return dashboardPathForRole(role as "obchod" | "obhliadky" | "realizacie");
     }

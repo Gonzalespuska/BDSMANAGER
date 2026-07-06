@@ -6,7 +6,14 @@ import { loadNotifications } from "@/lib/notifications";
 
 export const runtime = "edge";
 
-export default async function OfficeLayout({
+/**
+ * /skolenie — layout shell pre onboarding/training sekciu.
+ *
+ * Prístup: každá rola. Aj admin (má prístup do všetkého), aj nováčik s
+ * rolou "skolenie" (jediná sekcia ktorú vidí), aj obchod/obhliadky/
+ * realizacie (môžu si materiály zaskočiť zopakovať).
+ */
+export default async function SkolenieLayout({
   children,
 }: {
   children: React.ReactNode;

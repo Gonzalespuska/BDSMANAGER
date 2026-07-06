@@ -559,13 +559,43 @@ export async function returnLeadAction(
 export async function listUsersByRoleAction(
   role: "obhliadky" | "realizacie",
 ): Promise<
-  { ok: true; users: Array<{ id: string; name: string; email: string }> }
+  {
+    ok: true;
+    users: Array<{
+      id: string;
+      name: string;
+      email: string;
+      home_city: string | null;
+    }>;
+  }
   | { ok: false; error: string }
 > {
   const user = await getCurrentAppUser();
   if (!user) return { ok: false, error: "unauthorized" };
 
   const supabase = await createClient();
+  // Skúsime načítať aj home_city; ak stĺpec ešte neexistuje (bez SQL migrácie
+  // 16_user_home_city), fallback bez neho.
+  const withCity = await supabase
+    .from("users")
+    .select("id, name, email, home_city")
+    .eq("role", role)
+    .eq("active", true)
+    .order("name");
+
+  if (!withCity.error) {
+    return {
+      ok: true,
+      users: (withCity.data ?? []).map((u) => ({
+        id: u.id as string,
+        name: (u.name as string) || (u.email as string),
+        email: u.email as string,
+        home_city: (u.home_city as string | null) ?? null,
+      })),
+    };
+  }
+
+  // Fallback ak home_city ešte neexistuje
   const { data, error } = await supabase
     .from("users")
     .select("id, name, email")
@@ -579,6 +609,7 @@ export async function listUsersByRoleAction(
       id: u.id,
       name: u.name || u.email,
       email: u.email,
+      home_city: null,
     })),
   };
 }

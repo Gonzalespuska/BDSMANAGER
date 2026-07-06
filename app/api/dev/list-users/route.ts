@@ -1,11 +1,11 @@
 export const runtime = "edge";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { assertDevOnly } from "@/lib/dev-guard";
 
-export async function GET() {
-  if (process.env.NODE_ENV === "production") {
-    return new NextResponse("Disabled", { status: 403 });
-  }
+export async function GET(request: Request) {
+  const blocked = assertDevOnly(request);
+  if (blocked) return blocked;
   const sb = createAdminClient();
   const { data, error } = await sb
     .from("users")

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, BellRing, ChevronDown, ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -9,19 +10,71 @@ import type { Notification } from "@/lib/notifications";
 import { timeAgo } from "@/lib/types/lead";
 
 /**
- * Bell s počtom notifikácií v header bare. Klik → dropdown s listom.
- * Server-rendered initial notifications; bola by sa pripojiť aj realtime,
- * ale zatiaľ stačí "refresh on click".
+ * Bell s počtom notifikácií v header bare.
+ *
+ * NOVÉ UX (per user request):
+ *   • HOVER na PC → dropdown sa OTVORÍ automaticky (peek)
+ *   • KLIK → naviguje na /notifikacie (celá stránka s notifikáciami,
+ *     kalendárom, todo list, chat rooms per úloha, atď.)
+ *   • Mobil (žiadny hover): klik sa najprv otvorí peek, druhý klik naviguje.
+ *
+ * Bola by dobrá aj realtime aktualizácia, ale zatiaľ postačí refresh on load.
  */
 export function NotificationsBell({
   initial,
 }: {
   initial: Notification[];
 }) {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [items] = React.useState<Notification[]>(initial);
   const [showNewLeads, setShowNewLeads] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
+  const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hover-open na desktope; mobil (touch) funguje na klik.
+  // matchMedia je client-only, takže guardíme window.
+  const isDesktop = React.useMemo(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  }, []);
+
+  function scheduleClose(delay: number) {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpen(false), delay);
+  }
+
+  function cancelClose() {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
+
+  function handleMouseEnter() {
+    if (!isDesktop) return;
+    cancelClose();
+    setOpen(true);
+  }
+
+  function handleMouseLeave() {
+    if (!isDesktop) return;
+    // Malý delay aby user stíhal presunúť kurzor na dropdown
+    scheduleClose(180);
+  }
+
+  function handleBellClick() {
+    if (!isDesktop) {
+      // Mobil: prvý klik otvorí peek, druhý klik naviguje.
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+    }
+    // Desktop klik alebo mobil druhý klik → naviguj na celú stránku
+    setOpen(false);
+    router.push("/notifikacie");
+  }
 
   React.useEffect(() => {
     if (!open) return;
@@ -34,21 +87,32 @@ export function NotificationsBell({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  React.useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
+
   const overdueCount = items.filter((n) => n.type === "callback_overdue").length;
   const totalCount = items.length;
   const hasAny = totalCount > 0;
   const Icon = overdueCount > 0 ? BellRing : Bell;
 
   return (
-    <div ref={ref} className="relative">
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={handleBellClick}
         className={cn(
           "relative inline-flex items-center justify-center w-10 h-10 rounded-full border bg-background hover:bg-muted/60 transition-colors",
           overdueCount > 0 && "border-red-300 bg-red-50 hover:bg-red-100",
         )}
-        aria-label={`Notifikácie (${totalCount})`}
+        aria-label={`Notifikácie (${totalCount}) — klik pre celú stránku, hover pre peek`}
       >
         <Icon
           className={cn(
@@ -76,18 +140,30 @@ export function NotificationsBell({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-xl border bg-background shadow-2xl z-50 overflow-hidden"
+          className="absolute right-0 top-full pt-2 w-96 max-w-[calc(100vw-2rem)] z-50"
+          onMouseEnter={cancelClose}
+          onMouseLeave={() => scheduleClose(180)}
         >
-          <div className="px-4 py-3 border-b flex items-center justify-between">
-            <div>
-              <div className="font-bold text-sm">Notifikácie</div>
-              <div className="text-[11px] text-muted-foreground">
-                {totalCount === 0
-                  ? "Nič nové, máš pokoj 🌴"
-                  : `${totalCount} ${totalCount === 1 ? "položka" : "položiek"}`}
+          <div className="rounded-xl border bg-background shadow-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <div>
+                <div className="font-bold text-sm">Notifikácie</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {totalCount === 0
+                    ? "Nič nové, máš pokoj 🌴"
+                    : `${totalCount} ${totalCount === 1 ? "položka" : "položiek"}`}
+                </div>
               </div>
+              <Link
+                href="/notifikacie"
+                onClick={() => setOpen(false)}
+                className="text-[11px] font-semibold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-sky-50"
+                title="Otvoriť celú stránku s notifikáciami, kalendárom a chatom"
+              >
+                Otvoriť celú stránku
+                <ExternalLink className="w-3 h-3" aria-hidden />
+              </Link>
             </div>
-          </div>
 
           <div className="max-h-[60vh] overflow-y-auto">
             {/* Sekcia 1: Pripomienka volať znova — vždy viditeľná */}
@@ -162,6 +238,7 @@ export function NotificationsBell({
                 </div>
               );
             })()}
+            </div>
           </div>
         </div>
       )}

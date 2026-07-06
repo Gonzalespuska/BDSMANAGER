@@ -81,12 +81,13 @@ function randomEmail(name: string): string {
 }
 
 export async function GET(request: Request) {
-  // Prod: iba admin, dev: ktokoľvek. Chránime pred spam-seedingom v prod.
+  // Prod: IBA info@epoxidovo.sk (jediný ktorý smie seedovať v proda pre QA).
+  // Dev: ktokoľvek.
   if (process.env.NODE_ENV === "production") {
     const me = await getCurrentAppUser();
-    if (!me || me.role !== "admin") {
+    if (!me || me.email.toLowerCase() !== "info@epoxidovo.sk") {
       return NextResponse.json(
-        { ok: false, error: "Iba admin môže seedovať v produkcii" },
+        { ok: false, error: "Seed v proda iba pre info@epoxidovo.sk" },
         { status: 403 },
       );
     }

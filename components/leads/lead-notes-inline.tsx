@@ -1,19 +1,25 @@
 "use client";
 
 import * as React from "react";
-import { Check, Pencil, StickyNote, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, Check, Pencil, StickyNote, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 async function saveNoteFast(
   leadId: string,
   note: string,
+  reminderAt?: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const res = await fetch("/api/lead/note", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lead_id: leadId, note }),
+      body: JSON.stringify({
+        lead_id: leadId,
+        note,
+        reminder_at: reminderAt ?? null,
+      }),
     });
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
@@ -27,6 +33,56 @@ async function saveNoteFast(
     return { ok: false, error: e instanceof Error ? e.message : "network" };
   }
 }
+
+/** datetime-local string (yyyy-mm-ddThh:mm) z Date. */
+function toDateTimeLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Dnes 0:00 (pre min hodnotu date picker-a). */
+function todayDateOnly(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Pridá offset (v dňoch) k dnešnému dátumu, vráti yyyy-mm-dd. */
+function dayOffset(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+interface DayOption {
+  key: string;
+  label: string;
+  days: number | "custom";
+}
+const DAY_OPTIONS: DayOption[] = [
+  { key: "today", label: "Dnes", days: 0 },
+  { key: "tomorrow", label: "Zajtra", days: 1 },
+  { key: "day2", label: "O 2 dni", days: 2 },
+  { key: "day3", label: "O 3 dni", days: 3 },
+  { key: "week", label: "Za týždeň", days: 7 },
+  { key: "custom", label: "Vlastný dátum…", days: "custom" },
+];
+
+interface TimeOption {
+  key: string;
+  label: string;
+  hour: number | "custom";
+  minute?: number;
+}
+const TIME_OPTIONS: TimeOption[] = [
+  { key: "morning", label: "Ráno (8:00)", hour: 8, minute: 0 },
+  { key: "midmorning", label: "Doobeda (10:00)", hour: 10, minute: 0 },
+  { key: "noon", label: "Napoludnie (12:00)", hour: 12, minute: 0 },
+  { key: "afternoon", label: "Popoludní (15:00)", hour: 15, minute: 0 },
+  { key: "evening", label: "Podvečer (18:00)", hour: 18, minute: 0 },
+  { key: "custom", label: "Vlastný čas…", hour: "custom" },
+];
 
 /**
  * Inline poznámka na lead karte.
@@ -45,17 +101,48 @@ export function LeadNotesInline({
   leadId: string;
   initialNote: string;
 }) {
+  const router = useRouter();
   const [note, setNote] = React.useState(initialNote);
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(initialNote);
+  // Reminder state — dropdown deň + dropdown čas
+  const [reminderEnabled, setReminderEnabled] = React.useState(false);
+  const [dayKey, setDayKey] = React.useState<string>("day3"); // default O 3 dni
+  const [customDay, setCustomDay] = React.useState<string>(dayOffset(3));
+  const [timeKey, setTimeKey] = React.useState<string>("morning"); // default Ráno 8:00
+  const [customTime, setCustomTime] = React.useState<string>("09:00");
   const [busy, setBusy] = React.useState(false);
+
+  // Vypočítaj finálny reminder ISO string
+  const reminderIso = React.useMemo(() => {
+    if (!reminderEnabled) return null;
+    const day = DAY_OPTIONS.find((o) => o.key === dayKey);
+    const time = TIME_OPTIONS.find((o) => o.key === timeKey);
+    if (!day || !time) return null;
+    const dateStr = day.days === "custom" ? customDay : dayOffset(day.days);
+    const [y, m, d] = dateStr.split("-").map((x) => parseInt(x, 10));
+    let hour = 8;
+    let minute = 0;
+    if (time.hour === "custom") {
+      const [h, mi] = customTime.split(":").map((x) => parseInt(x, 10));
+      hour = h;
+      minute = mi;
+    } else {
+      hour = time.hour;
+      minute = time.minute ?? 0;
+    }
+    const dt = new Date(y, m - 1, d, hour, minute, 0, 0);
+    return dt.toISOString();
+  }, [reminderEnabled, dayKey, customDay, timeKey, customTime]);
 
   async function handleSave() {
     setBusy(true);
-    const result = await saveNoteFast(leadId, draft);
+    const result = await saveNoteFast(leadId, draft, reminderIso);
     if (result.ok) {
       setNote(draft.trim());
       setEditing(false);
+      setReminderEnabled(false);
+      router.refresh();
     } else {
       alert(`Chyba: ${result.error}`);
     }
@@ -69,7 +156,9 @@ export function LeadNotesInline({
     if (result.ok) {
       setNote("");
       setDraft("");
+      setReminderEnabled(false);
       setEditing(false);
+      router.refresh();
     } else {
       alert(`Chyba: ${result.error}`);
     }
@@ -78,6 +167,7 @@ export function LeadNotesInline({
 
   function handleCancel() {
     setDraft(note);
+    setReminderEnabled(false);
     setEditing(false);
   }
 
@@ -103,9 +193,124 @@ export function LeadNotesInline({
           onKeyDown={handleKeyDown}
           autoFocus
           rows={2}
-          placeholder="napr. 'chce ponuku do piatka, volať po 17h'"
+          placeholder="napr. 'zavolat ujovi Petrovi na 12:00'"
           className="w-full px-2 py-1.5 rounded-md border border-amber-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
         />
+
+        {/* Reminder — pripomienka do notifikácií */}
+        <div className="mt-2 rounded-lg border-2 border-amber-200 bg-white p-3 space-y-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={reminderEnabled}
+              onChange={(e) => setReminderEnabled(e.target.checked)}
+              className="w-5 h-5 accent-amber-500"
+            />
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-800">
+              <Bell className="w-4 h-4" aria-hidden />
+              Pripomienka
+            </span>
+          </label>
+
+          {reminderEnabled && (
+            <div className="space-y-3 pt-1">
+              {/* KEDY — deň */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs font-bold uppercase tracking-wider text-amber-800 min-w-[60px]">
+                  Kedy
+                </label>
+                <select
+                  value={dayKey}
+                  onChange={(e) => setDayKey(e.target.value)}
+                  className="text-sm font-bold rounded-lg border-2 border-amber-300 bg-white px-3 py-2 focus:outline-none focus:border-amber-500 min-w-[140px]"
+                >
+                  {DAY_OPTIONS.map((o) => (
+                    <option key={o.key} value={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {dayKey === "custom" && (
+                  <>
+                    <input
+                      type="date"
+                      value={customDay}
+                      onChange={(e) => setCustomDay(e.target.value)}
+                      min={todayDateOnly()}
+                      style={{ accentColor: "#f59e0b" }}
+                      className={cn(
+                        "text-sm font-bold rounded-lg border-2 px-3 py-2 focus:outline-none focus:border-amber-500 tabular-nums transition-colors",
+                        customDay === todayDateOnly()
+                          ? "bg-amber-100 border-amber-500 text-amber-900"
+                          : "bg-white border-amber-300 text-amber-800",
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCustomDay(todayDateOnly())}
+                      className={cn(
+                        "text-xs font-bold rounded-md px-2.5 py-1.5 border-2 transition-colors uppercase tracking-wider",
+                        customDay === todayDateOnly()
+                          ? "bg-amber-500 text-white border-amber-500"
+                          : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100",
+                      )}
+                      title="Nastaviť dnešný dátum"
+                    >
+                      → Dnes
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* O KOĽKEJ */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs font-bold uppercase tracking-wider text-amber-800 min-w-[60px]">
+                  O koľkej
+                </label>
+                <select
+                  value={timeKey}
+                  onChange={(e) => setTimeKey(e.target.value)}
+                  className="text-sm font-bold rounded-lg border-2 border-amber-300 bg-white px-3 py-2 focus:outline-none focus:border-amber-500 min-w-[180px]"
+                >
+                  {TIME_OPTIONS.map((o) => (
+                    <option key={o.key} value={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {timeKey === "custom" && (
+                  <input
+                    type="time"
+                    value={customTime}
+                    onChange={(e) => setCustomTime(e.target.value)}
+                    step="60"
+                    lang="sk-SK"
+                    style={{ accentColor: "#f59e0b" }}
+                    className="text-lg font-black rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-900 px-3 py-2 focus:outline-none tabular-nums w-32"
+                  />
+                )}
+              </div>
+
+              {/* Súhrn */}
+              {reminderIso && (
+                <div className="rounded-lg bg-amber-50 border-2 border-amber-200 px-3 py-2 text-sm text-amber-900 font-semibold">
+                  🔔 Notifikáciu pošleme{" "}
+                  <strong>
+                    {new Date(reminderIso).toLocaleString("sk-SK", {
+                      weekday: "long",
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                    })}
+                  </strong>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="mt-2 flex items-center gap-2 flex-wrap">
           <button
             type="button"

@@ -4,11 +4,13 @@ import { ArrowLeft, ClipboardList, MapPin, Phone, Ruler } from "lucide-react";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatPhoneSK } from "@/lib/phone-format";
 import type { Lead } from "@/lib/types/lead";
 
 import { InspectionForm } from "./inspection-form";
 import { MediaUpload } from "@/app/realizacie/[id]/media-upload";
 import { MediaGallery } from "@/app/realizacie/[id]/media-gallery";
+import { PhotoChecklist } from "@/components/obhliadky/photo-checklist";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -57,13 +59,27 @@ export default async function ObhliadkaDetailPage({
     l.assigned_to === user.id;
   if (!canAccess) redirect("/obhliadky");
 
-  // Media
+  // Media (legacy realizacia bucket — pre backward-compat)
   const { data: mediaRaw } = await sb
     .from("realization_media")
     .select("id, storage_path, file_type, original_filename, caption, uploaded_at, uploaded_by")
     .eq("lead_id", id)
     .order("uploaded_at", { ascending: false });
   const media = mediaRaw ?? [];
+
+  // Foto-checklist media — inspection_media table s checklist_key
+  const { data: checklistMediaRaw } = await sb
+    .from("inspection_media")
+    .select("id, storage_path, checklist_key")
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false });
+  const checklistMedia = (checklistMediaRaw ?? []).map((m) => ({
+    id: m.id as string,
+    url: sb.storage
+      .from("inspection-media")
+      .getPublicUrl(m.storage_path as string).data.publicUrl,
+    checklist_key: (m.checklist_key as string | null) ?? null,
+  }));
 
   // Users
   const userIds = [l.assigned_to, l.inspection_by].filter(Boolean) as string[];
@@ -110,7 +126,7 @@ export default async function ObhliadkaDetailPage({
         <InfoCard
           icon={<Phone className="w-4 h-4" />}
           label="Telefón zákazníka"
-          value={l.phone ?? "—"}
+          value={l.phone ? formatPhoneSK(l.phone) : "—"}
           link={l.phone ? `tel:${l.phone}` : undefined}
         />
       </div>
@@ -142,20 +158,35 @@ export default async function ObhliadkaDetailPage({
         </div>
       </div>
 
-      {/* Foto upload */}
-      {(user.role === "obhliadky" || user.role === "admin") && !alreadyCompleted && (
-        <MediaUpload leadId={id} />
-      )}
+      {/* PHOTO CHECKLIST — presné inštrukcie čo odfotiť pre realizátorov */}
+      {(user.role === "obhliadky" || user.role === "admin") &&
+        !alreadyCompleted && (
+          <PhotoChecklist leadId={id} media={checklistMedia} />
+        )}
 
-      {/* Galéria */}
-      <MediaGallery leadId={id} media={media} canDelete={user.role === "admin" || user.role === "obhliadky"} />
-
-      {/* Form — iba obhliadkar, iba ak ešte nedokončená */}
+      {/* Form — testy (vlhkosť, odtrhový test, ...) MUSÍ byť pred fotkami */}
       {isInspector && !alreadyCompleted && (
         <InspectionForm
           leadId={id}
           existingResult={l.inspection_result}
         />
+      )}
+
+      {/* Legacy — voľné fotky bez checklist_key */}
+      {(user.role === "obhliadky" || user.role === "admin") && !alreadyCompleted && (
+        <details className="rounded-2xl border-2 border-slate-200 bg-white overflow-hidden">
+          <summary className="px-4 py-3 cursor-pointer text-sm font-bold text-slate-700 hover:bg-slate-50">
+            📷 Voľné fotky (mimo checklistu)
+          </summary>
+          <div className="p-4 pt-0 space-y-3">
+            <MediaUpload leadId={id} />
+            <MediaGallery
+              leadId={id}
+              media={media}
+              canDelete={user.role === "admin" || user.role === "obhliadky"}
+            />
+          </div>
+        </details>
       )}
 
       {alreadyCompleted && l.inspection_result && (

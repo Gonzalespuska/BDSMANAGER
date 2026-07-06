@@ -16,7 +16,13 @@ import { cookies } from "next/headers";
  *   obchádza. App-level filter (assigned_to = peter.id) musí spraviť page.
  */
 export async function createClient() {
-  if (process.env.NODE_ENV !== "production" && process.env.SUPABASE_SECRET_KEY) {
+  // Rovnaká defense-in-depth ako v getCurrentAppUser: dev bypass IBA
+  // ak ALLOW_DEV_AUTH_BYPASS=1 je explicitne nastavený.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ALLOW_DEV_AUTH_BYPASS === "1" &&
+    process.env.SUPABASE_SECRET_KEY
+  ) {
     return createSbClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SECRET_KEY!,

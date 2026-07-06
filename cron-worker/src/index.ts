@@ -17,6 +17,8 @@ export interface Env {
   CRON_SECRET: string;
   TARGET_URL: string;
   META_TARGET_URL: string;
+  /** URL na auto_transition_inspected endpoint — CP → Obhliadnutý po termíne. */
+  AUTO_TRANSITION_URL?: string;
 }
 
 export default {
@@ -60,18 +62,34 @@ export default {
 async function runSync(
   env: Env,
   scheduledTime: number,
-): Promise<{ ok: boolean; web: unknown; meta: unknown }> {
+): Promise<{ ok: boolean; web: unknown; meta: unknown; transition: unknown }> {
   const startedAt = new Date(scheduledTime).toISOString();
-  console.log(`[cron-worker] Triggering both syncs at ${startedAt}`);
+  console.log(`[cron-worker] Triggering all syncs at ${startedAt}`);
 
-  // Web + Meta paralelne aby cron worker rýchlo skončil
-  const [webRes, metaRes] = await Promise.allSettled([
+  // Default fallback URL — ak AUTO_TRANSITION_URL nie je v env
+  const autoTransitionUrl =
+    env.AUTO_TRANSITION_URL ||
+    (env.TARGET_URL
+      ? env.TARGET_URL.replace(
+          "/api/cron/sync-epoxidovo",
+          "/api/cron/auto-transition",
+        )
+      : null);
+
+  // Web + Meta + auto-transition paralelne
+  const [webRes, metaRes, transitionRes] = await Promise.allSettled([
     fetch(env.TARGET_URL, {
       method: "POST",
       headers: { "X-Cron-Secret": env.CRON_SECRET },
     }),
     env.META_TARGET_URL
       ? fetch(env.META_TARGET_URL, {
+          method: "POST",
+          headers: { "X-Cron-Secret": env.CRON_SECRET },
+        })
+      : Promise.resolve(null),
+    autoTransitionUrl
+      ? fetch(autoTransitionUrl, {
           method: "POST",
           headers: { "X-Cron-Secret": env.CRON_SECRET },
         })
@@ -87,8 +105,10 @@ async function runSync(
 
   const web = await parseRes(webRes);
   const meta = await parseRes(metaRes);
+  const transition = await parseRes(transitionRes);
   console.log("[cron-worker] web:", JSON.stringify(web));
   console.log("[cron-worker] meta:", JSON.stringify(meta));
+  console.log("[cron-worker] transition:", JSON.stringify(transition));
 
-  return { ok: true, web, meta };
+  return { ok: true, web, meta, transition };
 }

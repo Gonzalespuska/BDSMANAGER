@@ -12,6 +12,13 @@ export type LeadStatus =
   | "not_interested"
   | "quote_sent"
   | "needs_inspection"
+  /**
+   * Obhliadnutý — obhliadka prebehla (dátum + čas priradenia prešiel).
+   * Auto-transition z quote_sent → inspected sa vykoná cron workerom
+   * po prejdení `inspection_at` času. Lead ostane v tomto stave až kým
+   * obchodák neposunie na `in_realization` alebo `won` / `lost`.
+   */
+  | "inspected"
   | "in_realization"
   | "won"
   | "lost"
@@ -77,13 +84,27 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
   other: "📥 Iné",
 };
 
-/** Display meta pre status pill */
+/**
+ * Display meta pre status pill.
+ *
+ * IMPORTANT: label-y musia MATCHOVAŤ tab-y v `/agent` (TABS array v
+ * app/agent/page.tsx) — inak user vidí v hornej liste iné názvy ako
+ * v badge na leade, a nedá to logicky zladiť.
+ *
+ * Tabs → status mapping:
+ *   🆕 Nové       → new
+ *   📞 Kontakt    → phone_revealed
+ *   🟡 Nezdvíhali → no_answer
+ *   ✅ CP         → interested + quote_sent
+ *   🏆 Ukončené   → won
+ *   📦 Archivované→ archived + lost + not_interested
+ */
 export const STATUS_META: Record<
   LeadStatus,
   { label: string; pill: string }
 > = {
   new: {
-    label: "🔴 NOVÝ",
+    label: "🆕 NOVÉ",
     pill: "bg-red-500 text-white",
   },
   phone_revealed: {
@@ -91,7 +112,7 @@ export const STATUS_META: Record<
     pill: "bg-blue-500 text-white",
   },
   no_answer: {
-    label: "🟡 NEDVÍHA",
+    label: "🟡 NEZDVÍHALI",
     pill: "bg-amber-500 text-white",
   },
   scheduled: {
@@ -99,7 +120,7 @@ export const STATUS_META: Record<
     pill: "bg-purple-500 text-white",
   },
   interested: {
-    label: "✅ OTVORENÉ",
+    label: "✅ CP",
     pill: "bg-emerald-600 text-white",
   },
   not_interested: {
@@ -107,12 +128,16 @@ export const STATUS_META: Record<
     pill: "bg-zinc-500 text-white",
   },
   quote_sent: {
-    label: "📋 PONUKA",
+    label: "✅ CP POSLANÁ",
     pill: "bg-violet-600 text-white",
   },
   needs_inspection: {
     label: "🔍 NA OBHLIADKU",
     pill: "bg-violet-500 text-white",
+  },
+  inspected: {
+    label: "✔️ OBHLIADNUTÝ",
+    pill: "bg-teal-600 text-white",
   },
   in_realization: {
     label: "🔨 V REALIZÁCII",

@@ -22,8 +22,9 @@ const TABS = [
   { id: "kontakt", label: "📞 Kontakt" },
   { id: "nedovolany", label: "🟡 Nezdvíhali" },
   { id: "otvorene", label: "✅ CP" },
-  { id: "ukoncene", label: "🏆 Ukončené" },
+  { id: "obhliadnute", label: "✔️ Obhliadnuté" },
   { id: "archivovane", label: "📦 Archivované" },
+  { id: "ukoncene", label: "🏆 Ukončené" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -42,7 +43,11 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
   if (!user) return null;
 
   // Admin vidí VŠETKY leady, obchodník iba svoje pridelené.
-  const isAdmin = user.role === "admin";
+  // VÝNIMKA: info@epoxidovo.sk je TEST admin účet — vidí IBA svoje test leady,
+  // aby sa neplietli s reálnymi leadmi Leo/Elo. Reálni admini (napr. Tristan)
+  // vidia všetko.
+  const isTestAccount = user.email.toLowerCase() === "info@epoxidovo.sk";
+  const isAdmin = user.role === "admin" && !isTestAccount;
 
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
@@ -59,23 +64,62 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
   //     data.agent_note, data.plocha
   const leadsListQuery = searchMode
     ? (() => {
+        // Escape PostgREST special chars pre bezpečnosť
         const safe = q.replace(/[\\%_,]/g, (m) => "\\" + m);
+        // Normalizovaný variant — lower + strip diacritics ("František" → "frantisek")
+        // Umožňuje aby obchodník napísal "frantisek" a našiel "František Pavlík".
+        const safeNorm = safe
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "");
         const like = `*${safe}*`;
+        const likeNorm = `*${safeNorm}*`;
+
+        // ─── Phone number normalization ─────────────────────────────
+        // User napíše "0915199" alebo "0950 890" alebo "+421 915" — všetko
+        // musí nájsť lead s DB hodnotou "+421 915 199 693".
+        // Strategy: strip všetko okrem číslic; ak vstup je aspoň 3 číslice,
+        // hľadaj cez `phone_digits` generovaný stĺpec (SQL migrácia 19).
+        // Ak začína 0 → nahraď za 421 (SK format).
+        const digitsOnly = q.replace(/[^0-9]/g, "");
+        let phoneQueries: string[] = [];
+        if (digitsOnly.length >= 3) {
+          const variants = new Set<string>();
+          variants.add(digitsOnly);
+          if (digitsOnly.startsWith("0")) {
+            variants.add("421" + digitsOnly.slice(1));
+          } else if (digitsOnly.startsWith("421")) {
+            variants.add("0" + digitsOnly.slice(3));
+          }
+          for (const v of variants) {
+            phoneQueries.push(`phone_digits.ilike.*${v}*`);
+          }
+        }
+
         return supabase
           .from("leads")
           .select("*")
           .or(
             [
+              // Phone search cez normalizovaný stĺpec (najviac účinné pre
+              // telefonálne search-e — funguje bez ohľadu na formát).
+              ...phoneQueries,
+              // name_norm = generovaný lowercase+unaccent stĺpec
+              // (viď supabase/13_search_diacritics.sql). Ak migrácia
+              // nebola spustená, PostgREST vráti error na tomto filtri
+              // ale ostatné klauzuly stále bežia (OR).
+              `name_norm.ilike.${likeNorm}`,
+              // Fallback pre ne-normalized DB (kým migrácia nebeží)
               `name.ilike.${like}`,
               `phone.ilike.${like}`,
-              `email.ilike.${like}`,
-              `source_campaign.ilike.${like}`,
-              `data->>lokalita.ilike.${like}`,
-              `data->>priestor.ilike.${like}`,
-              `data->>typ_podlahy.ilike.${like}`,
-              `data->>message.ilike.${like}`,
-              `data->>agent_note.ilike.${like}`,
-              `data->>plocha.ilike.${like}`,
+              `email.ilike.${likeNorm}`,
+              `source_campaign.ilike.${likeNorm}`,
+              `data->>lokalita.ilike.${likeNorm}`,
+              `data->>priestor.ilike.${likeNorm}`,
+              `data->>typ_podlahy.ilike.${likeNorm}`,
+              `data->>message.ilike.${likeNorm}`,
+              `data->>agent_note.ilike.${likeNorm}`,
+              `data->>plocha.ilike.${likeNorm}`,
             ].join(","),
           )
           .order("created_at", { ascending: false })
@@ -98,6 +142,15 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
 
       case "otvorene": {
         let q = supabase.from("leads").select("*").in("status", ["interested", "quote_sent"]);
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        return q.order("last_activity_at", { ascending: false }).limit(200);
+      }
+
+      case "obhliadnute": {
+        // Leady po obhliadke (status=inspected). Automaticky sem prídu keď
+        // uplynul termín obhliadky (cron worker prehodí quote_sent →
+        // inspected). Zostávajú tu kým agent nezvolí ukončiť alebo archivovať.
+        let q = supabase.from("leads").select("*").in("status", ["inspected", "needs_inspection"]);
         if (!isAdmin) q = q.eq("assigned_to", user.id);
         return q.order("last_activity_at", { ascending: false }).limit(200);
       }
@@ -129,6 +182,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     kontaktCountRes,
     nedovolanyCountRes,
     otvoreneCountRes,
+    obhliadnuteCountRes,
     ukonceneCountRes,
     archivovaneCountRes,
   ] = await Promise.all([
@@ -162,6 +216,14 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
         .from("leads")
         .select("id", { count: "exact", head: true })
         .in("status", ["interested", "quote_sent"]);
+      if (!isAdmin) q = q.eq("assigned_to", user.id);
+      return q;
+    })(),
+    (() => {
+      let q = supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["inspected", "needs_inspection"]);
       if (!isAdmin) q = q.eq("assigned_to", user.id);
       return q;
     })(),
@@ -212,6 +274,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
     kontakt: kontaktCountRes.count ?? undefined,
     nedovolany: nedovolanyCountRes.count ?? undefined,
     otvorene: otvoreneCountRes.count ?? undefined,
+    obhliadnute: obhliadnuteCountRes.count ?? undefined,
     ukoncene: ukonceneCountRes.count ?? undefined,
     archivovane: archivovaneCountRes.count ?? undefined,
   };
@@ -302,6 +365,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
             {!searchMode && tab === "kontakt" && "Žiadny aktívny kontakt. Po volaní zdvihla → klikni 'Kontakt' a lead bude tu."}
             {!searchMode && tab === "nedovolany" && "Žiadne nezdvíhajú. Po 3. neúspechu sa pridá tlačidlo 'Archivovať' s SMS+Email follow-up."}
             {!searchMode && tab === "otvorene" && "Žiadna poslaná cenová ponuka. Po odoslaní CP z generátora sa lead presunie sem."}
+            {!searchMode && tab === "obhliadnute" && "Žiadne obhliadnuté leady. Keď obchodák pošle lead na obhliadku a termín uplynie, automaticky sa objaví tu. Odtiaľto ho presunieš na Ukončené alebo Archivované."}
             {!searchMode && tab === "ukoncene" && "Žiadne ukončené dealy. Po podpise / dodaní označ lead ako 'Ukončené'."}
             {!searchMode && tab === "archivovane" && "Žiadne archivované leady. Po neúspešnom kontakte / 3× nezdvihol sa lead presunie sem."}
           </p>

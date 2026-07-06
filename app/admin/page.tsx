@@ -1,11 +1,10 @@
 import Link from "next/link";
 import {
-  Activity,
   ArrowRight,
-  BarChart3,
+  Bell,
   Eye,
-  Layers,
-  Plug,
+  Package,
+  Share2,
   Settings,
   TrendingUp,
   UserPlus,
@@ -29,19 +28,25 @@ export const runtime = "edge";
 export default async function AdminDashboard() {
   // Quick stats
   const admin = createAdminClient();
-  const [{ count: agentsCount }, { count: activeLeads }, { count: totalLeads }] =
-    await Promise.all([
-      admin
-        .from("users")
-        .select("*", { count: "exact", head: true })
-        .eq("active", true)
-        .eq("role", "obchod"),
-      admin
-        .from("leads")
-        .select("*", { count: "exact", head: true })
-        .not("status", "in", "(won,lost,archived)"),
-      admin.from("leads").select("*", { count: "exact", head: true }),
-    ]);
+
+  const iso30d = new Date(Date.now() - 30 * 86400_000).toISOString();
+  const [
+    { count: agentsCount },
+    { count: meta30d },
+    { count: totalLeads },
+  ] = await Promise.all([
+    admin
+      .from("users")
+      .select("*", { count: "exact", head: true })
+      .eq("active", true)
+      .eq("role", "obchod"),
+    admin
+      .from("leads")
+      .select("*", { count: "exact", head: true })
+      .in("source_type", ["facebook", "instagram"])
+      .gte("created_at", iso30d),
+    admin.from("leads").select("*", { count: "exact", head: true }),
+  ]);
 
   const stats = [
     {
@@ -51,10 +56,10 @@ export default async function AdminDashboard() {
       color: "sky",
     },
     {
-      label: "Otvorené leady",
-      value: activeLeads ?? 0,
-      icon: Activity,
-      color: "emerald",
+      label: "Leady z Mety (30d)",
+      value: meta30d ?? 0,
+      icon: Share2,
+      color: "indigo",
     },
     {
       label: "Leady celkovo",
@@ -75,42 +80,35 @@ export default async function AdminDashboard() {
     {
       href: "/admin/prehlad",
       title: "Prehľad — supervision",
-      desc: "Read-only audit view. Posledné leady, obhliadky aj realizácie na jednom screene. Skontroluj že tím tečie a nikde nezasekol.",
+      desc: "Realtime — posledné leady, obhliadky aj realizácie na jednom screene. Nový lead sa objaví hore hneď ako príde (web/Meta/Google).",
       icon: Eye,
+      badge: "🔴 live",
     },
     {
-      href: "/admin/leads-analytika",
-      title: "Analytika leadov",
-      desc: "Odkiaľ prichádzajú leady (web / Meta / Google), tabuľka posledných 500, mesačné porovnanie so zmenou v %.",
-      icon: BarChart3,
+      href: "/admin/uloha",
+      title: "Priradiť úlohu tímu",
+      desc: "Napíš čo má kto spraviť + kedy. Notifikácia sa mu objaví v zvončeku od zvoleného dátumu (napr. „Zavolať Petrovi späť 12.7.\").",
+      icon: Bell,
     },
     {
       href: "/admin/agents",
-      title: "Tím & Workload",
+      title: "Tím",
       desc: "Pridať obchodníkov / obhliadkárov / realizačný tím, sledovať aktivitu. Klik na meno → detail + permissions.",
       icon: UserPlus,
     },
     {
-      href: "/admin/integracie",
-      title: "Integrácie — health",
-      desc: "Lead webhook zdroje (web, Meta, Google) + env vars status. Vidíš tu prečo prípadne 'leady nechodia' a ako to opraviť.",
-      icon: Plug,
-    },
-    {
-      href: "/admin/materials",
-      title: "Materiály a sadzby",
-      desc: "Cenník generátora ponúk — 4 typy podlahy + voliteľné operácie.",
-      icon: Layers,
-      badge: "🚧 čoskoro",
-      disabled: true,
+      href: "/admin/objednavky",
+      title: "Objednávky materiálu",
+      desc: "Generuj objednávkové tabuľky pre Siku / Topstone (SAP # + názov + balenie + ks → PDF).",
+      icon: Package,
+      badge: "🚧 In building",
     },
     {
       href: "/admin/settings",
       title: "Nastavenia",
-      desc: "Marže, sadzby dopravy, minimálna objednávka, DPH.",
+      desc: "Materiály & cenník generátora, marže, DPH, doprava, min. objednávka.",
       icon: Settings,
-      badge: "🚧 čoskoro",
-      disabled: true,
+      badge: "🚧 In building",
     },
   ];
 
@@ -145,35 +143,49 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {sections.map(({ href, title, desc, icon: Icon, badge, disabled }) =>
-          disabled ? (
-            <div
-              key={href}
-              className="rounded-xl border bg-muted/30 p-4 opacity-60 cursor-not-allowed"
-            >
-              <SectionCardInner
-                title={title}
-                desc={desc}
-                Icon={Icon}
-                badge={badge}
-                disabled
-              />
-            </div>
-          ) : (
+        {sections.map(({ href, title, desc, icon: Icon, badge, disabled }) => {
+          const isInBuilding = badge?.toLowerCase().includes("building");
+          const isLive = badge?.toLowerCase().includes("live");
+          if (disabled) {
+            return (
+              <div
+                key={href}
+                className="rounded-xl border bg-muted/30 p-4 opacity-60 cursor-not-allowed"
+              >
+                <SectionCardInner
+                  title={title}
+                  desc={desc}
+                  Icon={Icon}
+                  badge={badge}
+                  disabled
+                />
+              </div>
+            );
+          }
+          return (
             <Link
               key={href}
               href={href}
-              className="group rounded-xl border bg-background p-4 transition-all hover:border-sky-300 hover:bg-sky-50/40 hover:shadow-sm"
+              className={
+                "group relative rounded-xl border-2 bg-background p-4 transition-all hover:shadow-md " +
+                (isInBuilding
+                  ? "border-amber-200 hover:border-amber-400 hover:bg-amber-50/40"
+                  : isLive
+                    ? "border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/40"
+                    : "border-slate-200 hover:border-sky-300 hover:bg-sky-50/40")
+              }
             >
               <SectionCardInner
                 title={title}
                 desc={desc}
                 Icon={Icon}
                 badge={badge}
+                isInBuilding={isInBuilding}
+                isLive={isLive}
               />
             </Link>
-          ),
-        )}
+          );
+        })}
       </div>
     </div>
   );
@@ -185,24 +197,45 @@ function SectionCardInner({
   Icon,
   badge,
   disabled,
+  isInBuilding,
+  isLive,
 }: {
   title: string;
   desc: string;
   Icon: typeof Users;
   badge?: string;
   disabled?: boolean;
+  isInBuilding?: boolean;
+  isLive?: boolean;
 }) {
+  const iconColor = disabled
+    ? "text-muted-foreground"
+    : isInBuilding
+      ? "text-amber-600"
+      : isLive
+        ? "text-emerald-600"
+        : "text-sky-600";
+  const badgeClass = isInBuilding
+    ? "bg-amber-100 text-amber-800 border border-amber-300"
+    : isLive
+      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+      : "bg-muted text-muted-foreground";
+  const arrowColor = isInBuilding
+    ? "group-hover:text-amber-700"
+    : isLive
+      ? "group-hover:text-emerald-700"
+      : "group-hover:text-sky-600";
   return (
     <>
       <div className="flex items-center justify-between gap-2">
-        <Icon
-          className={
-            "w-5 h-5 " + (disabled ? "text-muted-foreground" : "text-sky-600")
-          }
-          aria-hidden
-        />
+        <Icon className={"w-5 h-5 " + iconColor} aria-hidden />
         {badge && (
-          <span className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+          <span
+            className={
+              "text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded " +
+              badgeClass
+            }
+          >
             {badge}
           </span>
         )}
@@ -211,7 +244,10 @@ function SectionCardInner({
         {title}
         {!disabled && (
           <ArrowRight
-            className="w-3.5 h-3.5 text-muted-foreground group-hover:text-sky-600 group-hover:translate-x-0.5 transition-all"
+            className={
+              "w-3.5 h-3.5 text-muted-foreground transition-all group-hover:translate-x-0.5 " +
+              arrowColor
+            }
             aria-hidden
           />
         )}
@@ -220,3 +256,4 @@ function SectionCardInner({
     </>
   );
 }
+

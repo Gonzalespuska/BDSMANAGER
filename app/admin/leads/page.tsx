@@ -1,13 +1,49 @@
 import Link from "next/link";
-import { ArrowLeft, Eye, EyeOff, Phone, UserCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  Facebook,
+  Globe,
+  Phone,
+  UserCircle,
+} from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatPhoneSK } from "@/lib/phone-format";
 import {
   STATUS_META,
   SOURCE_TYPE_LABELS,
   type LeadStatus,
 } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
+
+/** "pred 2h 15min" / "pred 3d" — kompaktný SK relative time. */
+function relTimeSK(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffMs = Math.max(0, now - then);
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "práve teraz";
+  if (diffMin < 60) return `pred ${diffMin}min`;
+  const diffH = Math.floor(diffMin / 60);
+  const remMin = diffMin % 60;
+  if (diffH < 24)
+    return remMin > 0 ? `pred ${diffH}h ${remMin}min` : `pred ${diffH}h`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 7) return `pred ${diffD}d`;
+  const diffW = Math.floor(diffD / 7);
+  if (diffW < 4) return `pred ${diffW}t`;
+  return new Date(iso).toLocaleDateString("sk-SK");
+}
+
+/** Mapa source_type → široká kategória (Meta / Web / iné) */
+function sourceCategory(src: string): "meta" | "web" | "other" {
+  if (["facebook", "instagram", "meta_form", "fb_lead_ads"].includes(src))
+    return "meta";
+  if (["web_webhook", "website", "web"].includes(src)) return "web";
+  return "other";
+}
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -96,6 +132,11 @@ export default async function AdminLeadsPage() {
 
   const revealedCount = rows.filter((r) => r.phone_revealed_at).length;
 
+  // Posledný Meta lead + posledný Web lead — rows sú už zoradené desc
+  // podľa created_at, takže prvý match je najnovší.
+  const lastMetaLead = rows.find((r) => sourceCategory(r.source_type) === "meta");
+  const lastWebLead = rows.find((r) => sourceCategory(r.source_type) === "web");
+
   return (
     <div className="space-y-4">
       <header>
@@ -115,6 +156,23 @@ export default async function AdminLeadsPage() {
           Najnovších 500 leadov. Karty zoskupené podľa priradeného agenta.
         </p>
       </header>
+
+      {/* Posledné leady per zdroj — Meta / Web.
+          Admin tu vidí či pipeline z Meta/webu tečie realtime. */}
+      <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
+        <LastLeadCard
+          label="Posledný Meta lead"
+          icon={<Facebook className="w-4 h-4" aria-hidden />}
+          tint="violet"
+          lead={lastMetaLead}
+        />
+        <LastLeadCard
+          label="Posledný Web lead"
+          icon={<Globe className="w-4 h-4" aria-hidden />}
+          tint="sky"
+          lead={lastWebLead}
+        />
+      </div>
 
       {/* Stats */}
       <div className="grid gap-2 grid-cols-3">
@@ -189,8 +247,8 @@ function LeadCardMini({ lead }: { lead: AdminLeadRow }) {
           <span className="text-muted-foreground italic">bez mena</span>
         )}
       </div>
-      <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-        {lead.phone ?? lead.email ?? "—"}
+      <div className="text-[11px] text-muted-foreground truncate mt-0.5 tabular-nums">
+        {lead.phone ? formatPhoneSK(lead.phone) : (lead.email ?? "—")}
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
         {lead.phone_revealed_at ? (
@@ -207,6 +265,74 @@ function LeadCardMini({ lead }: { lead: AdminLeadRow }) {
         <span className="text-muted-foreground tabular-nums">
           {formatShort(lead.created_at)}
         </span>
+      </div>
+    </Link>
+  );
+}
+
+function LastLeadCard({
+  label,
+  icon,
+  tint,
+  lead,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  tint: "violet" | "sky";
+  lead: AdminLeadRow | undefined;
+}) {
+  const tintCls =
+    tint === "violet"
+      ? "border-violet-200 bg-violet-50/60 text-violet-800"
+      : "border-sky-200 bg-sky-50/60 text-sky-800";
+  const iconCls = tint === "violet" ? "text-violet-600" : "text-sky-600";
+  if (!lead) {
+    return (
+      <div
+        className={cn(
+          "rounded-xl border-2 px-4 py-3 flex items-center gap-3",
+          tintCls,
+          "opacity-60",
+        )}
+      >
+        <div className={cn("shrink-0", iconCls)}>{icon}</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] uppercase tracking-wider font-bold">
+            {label}
+          </div>
+          <div className="text-sm font-semibold text-muted-foreground italic">
+            zatiaľ žiadny
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <Link
+      href={`/agent/leads/${lead.id}`}
+      className={cn(
+        "rounded-xl border-2 px-4 py-3 flex items-center gap-3 hover:shadow-md hover:border-current transition-all",
+        tintCls,
+      )}
+    >
+      <div className={cn("shrink-0", iconCls)}>{icon}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1.5">
+          {label}
+          <span className="text-current/70 normal-case tabular-nums">
+            · {relTimeSK(lead.created_at)}
+          </span>
+        </div>
+        <div className="text-sm font-extrabold truncate">
+          {lead.name || (
+            <span className="italic text-muted-foreground">bez mena</span>
+          )}
+        </div>
+        <div className="text-[11px] text-muted-foreground tabular-nums truncate">
+          {SOURCE_TYPE_LABELS[lead.source_type] ?? lead.source_type}
+          {lead.source_campaign && ` · ${lead.source_campaign}`}
+          {lead.phone && ` · ${formatPhoneSK(lead.phone)}`}
+        </div>
       </div>
     </Link>
   );

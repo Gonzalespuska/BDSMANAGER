@@ -38,22 +38,30 @@ export function NavPillClient({
   href,
   icon,
   children,
+  tint,
 }: {
   href: string;
   icon: React.ReactNode;
   children: React.ReactNode;
+  /** Farba tabu — default sky, admin=rose. */
+  tint?: "sky" | "rose";
 }) {
   const pathname = usePathname();
   const active = isActive(pathname, href);
+  const useRose = tint === "rose";
 
   return (
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-all",
+        "inline-flex items-center gap-1.5 rounded-full px-3 md:px-4 py-2 text-sm font-semibold transition-all whitespace-nowrap shrink-0",
         active
-          ? "bg-sky-500 text-white border border-sky-500 shadow-[0_4px_14px_rgba(14,165,233,0.35)]"
-          : "border bg-background text-foreground hover:bg-muted/60",
+          ? useRose
+            ? "bg-rose-600 text-white border border-rose-600 shadow-[0_4px_14px_rgba(225,29,72,0.35)]"
+            : "bg-sky-500 text-white border border-sky-500 shadow-[0_4px_14px_rgba(14,165,233,0.35)]"
+          : useRose
+            ? "border-2 border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100"
+            : "border bg-background text-foreground hover:bg-muted/60",
       )}
     >
       {icon}
