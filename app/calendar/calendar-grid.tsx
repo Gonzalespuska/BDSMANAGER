@@ -69,11 +69,13 @@ function Time24Picker({
 }) {
   // Rozdeľ value na h/m — držíme ich ako string aby sme umožnili
   // "9" (mid-typing) → padne na "09" po blur.
+  // Ak value je prázdny "", inputs zostanú prázdne (placeholder HH/MM).
   const parsed = React.useMemo(() => {
-    const [hh, mm] = (value || "09:00").split(":");
+    if (!value) return { h: "", m: "" };
+    const [hh, mm] = value.split(":");
     return {
-      h: (hh || "09").padStart(2, "0"),
-      m: (mm || "00").padStart(2, "0"),
+      h: (hh || "").padStart(2, "0"),
+      m: (mm || "").padStart(2, "0"),
     };
   }, [value]);
 
@@ -89,6 +91,11 @@ function Time24Picker({
   function commit(hOverride?: string, mOverride?: string) {
     const rawHVal = hOverride ?? rawH;
     const rawMVal = mOverride ?? rawM;
+    // Ak sú OBE polia prázdne, nič nezmeníme — pickedTime ostane "".
+    if (!rawHVal && !rawMVal) {
+      onChange("");
+      return;
+    }
     const hNum = Math.max(0, Math.min(23, parseInt(rawHVal || "0", 10) || 0));
     const mNum = Math.max(0, Math.min(59, parseInt(rawMVal || "0", 10) || 0));
     const hStr = String(hNum).padStart(2, "0");
@@ -632,7 +639,10 @@ function DayModal({
   >([]);
   const [assignLoading, setAssignLoading] = React.useState(false);
   const [pickedUserId, setPickedUserId] = React.useState<string | null>(null);
-  const [pickedTime, setPickedTime] = React.useState("09:00");
+  // Default prázdny — user musí kliknúť a vyplniť (aby si neomylom
+  // nepotvrdil "09:00" bez uvedomenia). Fallback na "09:00" iba v
+  // submitAssign() ak by predsa len submitol prázdny čas.
+  const [pickedTime, setPickedTime] = React.useState("");
   const [pickedDateTo, setPickedDateTo] = React.useState("");
   const [singleDay, setSingleDay] = React.useState(true);
   const [assignBusy, setAssignBusy] = React.useState(false);
@@ -1055,6 +1065,21 @@ function DayModal({
               </div>
             )}
 
+            {/* Validation hints — user vidí presne prečo je button off */}
+            {(!pickedTime || !pickedUserId) && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-900 space-y-0.5">
+                {!pickedTime && <div>⏰ Vyplň čas (HH : MM)</div>}
+                {!pickedUserId && (
+                  <div>
+                    👤 Vyber{" "}
+                    {assignMode === "inspection"
+                      ? "obhliadkára"
+                      : "realizátora"}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Submit — POSLEDNÝ krok */}
             <button
               type="button"
@@ -1063,7 +1088,7 @@ function DayModal({
                 // Note-textarea je vyššie (viď blok pred týmto buttonom).
                 submitAssign();
               }}
-              disabled={assignBusy || !pickedUserId}
+              disabled={assignBusy || !pickedUserId || !pickedTime}
               className={cn(
                 "w-full h-12 rounded-xl font-bold text-white transition-colors inline-flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
                 assignMode === "inspection"

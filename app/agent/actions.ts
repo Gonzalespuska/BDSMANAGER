@@ -649,7 +649,9 @@ export async function handoverToInspectionAction(
     .select("id, role, active")
     .eq("id", inspectorId)
     .maybeSingle();
-  if (!inspector || inspector.role !== "obhliadky" || !inspector.active) {
+  // Bez active check — flag nemusi byt u vsetkych obhliadkarov nastaveny
+  // (napr. novo-vytvoreni cez seed alebo pred zavedenim active kolumny).
+  if (!inspector || inspector.role !== "obhliadky") {
     return { ok: false, error: "invalid_inspector" };
   }
 
@@ -708,7 +710,8 @@ export async function handoverToRealizationAction(
     .select("id, role, active")
     .eq("id", teamMemberId)
     .maybeSingle();
-  if (!member || member.role !== "realizacie" || !member.active) {
+  // Bez active check — viď handoverToInspectionAction.
+  if (!member || member.role !== "realizacie") {
     return { ok: false, error: "invalid_team_member" };
   }
 
