@@ -116,7 +116,18 @@ function Time24Picker({
         maxLength={2}
         value={rawH}
         onChange={(e) => {
+          // Iba cifry, max 2. Live clamp na 0-23 — ak by nasledujuca
+          // cifra spravila hodinu > 23, zahodime ju (tzn. napisat "80"
+          // sa nikdy nepodari, ostane len "8").
           const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+          if (digits.length === 2) {
+            const num = parseInt(digits, 10);
+            if (num > 23) {
+              // Zachovaj iba prvu cifru (napr. "80" → "8")
+              setRawH(digits.slice(0, 1));
+              return;
+            }
+          }
           setRawH(digits);
         }}
         onBlur={() => commit()}
@@ -149,7 +160,15 @@ function Time24Picker({
         maxLength={2}
         value={rawM}
         onChange={(e) => {
+          // Live clamp na 0-59 — napisat "80" sa nepodari, ostane "8".
           const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+          if (digits.length === 2) {
+            const num = parseInt(digits, 10);
+            if (num > 59) {
+              setRawM(digits.slice(0, 1));
+              return;
+            }
+          }
           setRawM(digits);
         }}
         onBlur={() => commit()}
