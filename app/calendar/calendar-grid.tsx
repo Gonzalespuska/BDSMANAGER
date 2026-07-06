@@ -149,8 +149,18 @@ function Time24Picker({
         onBlur={() => commit()}
         // Focus AJ click → select all. Bez click by user musel manuálne
         // selectovať pri druhom vstupe do pola s hotovým "00".
-        onFocus={(e) => e.currentTarget.select()}
-        onClick={(e) => e.currentTarget.select()}
+        onFocus={(e) => {
+          // Defer select() na next frame — inak browser cursor placement
+          // po mouseup deselektne text hneď po focus-e.
+          const el = e.currentTarget;
+          requestAnimationFrame(() => el.select());
+        }}
+        onMouseUp={(e) => {
+          // Zabraň browserovi deselectnut text po mouseup.
+          e.preventDefault();
+          const el = e.currentTarget;
+          requestAnimationFrame(() => el.select());
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
@@ -191,8 +201,18 @@ function Time24Picker({
           setRawM(digits);
         }}
         onBlur={() => commit()}
-        onFocus={(e) => e.currentTarget.select()}
-        onClick={(e) => e.currentTarget.select()}
+        onFocus={(e) => {
+          // Defer select() na next frame — inak browser cursor placement
+          // po mouseup deselektne text hneď po focus-e.
+          const el = e.currentTarget;
+          requestAnimationFrame(() => el.select());
+        }}
+        onMouseUp={(e) => {
+          // Zabraň browserovi deselectnut text po mouseup.
+          e.preventDefault();
+          const el = e.currentTarget;
+          requestAnimationFrame(() => el.select());
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
