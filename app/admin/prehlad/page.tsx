@@ -247,16 +247,19 @@ export default async function PrehladPage() {
 
   // ─── Top VÝKON obchodákov (30d) ──────────────────────────────────────
   // Meriame REÁLNY VÝKON, nie počet pridelených leadov (auto-assign).
-  // Výkon = počet handed_over_to_inspection akcií + počet email_sent
+  // Výkon = počet handed_over_to_inspection + počet email_sent
   // (odoslaných CP) v posledných 30 dňoch.
+  //
+  // ⚠ Legacy bug: staré email_sent zápisy nemajú user_id. Fallback:
+  // ak user_id chýba, priradíme akciu obchodákovi z lead.assigned_to.
+  // Bez toho by Leo Hrisenko mal 0 CP, hoci ich reálne poslal 6.
   const perfSinceIso = new Date(now - 30 * 86400_000).toISOString();
   const { data: perfActions } = await sb
     .from("lead_activities")
     .select("user_id, type, created_at, lead_id")
     .in("type", ["handed_over_to_inspection", "email_sent"])
     .gte("created_at", perfSinceIso);
-  // Zisti mená leadov pre všetky perfActions naraz — potrebujeme na
-  // filter TEST-prefixed leadov (nesmú sa počítať do výkonu).
+  // Fetch mien + assigned_to pre všetky leady na ktorých sú činnosti.
   const perfLeadIds = Array.from(
     new Set(
       (perfActions ?? [])
@@ -264,27 +267,35 @@ export default async function PrehladPage() {
         .filter((x): x is string => !!x),
     ),
   );
-  const perfLeadNames = new Map<string, string>();
+  const perfLeadMeta = new Map<
+    string,
+    { name: string; assigned_to: string | null }
+  >();
   if (perfLeadIds.length > 0) {
     const { data: perfLeads } = await sb
       .from("leads")
-      .select("id, name")
+      .select("id, name, assigned_to")
       .in("id", perfLeadIds);
     for (const l of perfLeads ?? [])
-      perfLeadNames.set(l.id as string, (l.name as string) ?? "");
+      perfLeadMeta.set(l.id as string, {
+        name: (l.name as string) ?? "",
+        assigned_to: (l.assigned_to as string | null) ?? null,
+      });
   }
   const obchodTotals = new Map<
     string,
     { cpSent: number; toInspection: number }
   >();
   for (const a of perfActions ?? []) {
-    const uid = a.user_id as string | null;
-    if (!uid || testUserIds.has(uid)) continue;
+    const leadMeta = a.lead_id
+      ? perfLeadMeta.get(a.lead_id as string)
+      : undefined;
     // TEST-named lead → neráta sa do obchod. výkonu
-    const leadName = a.lead_id
-      ? perfLeadNames.get(a.lead_id as string)
-      : null;
-    if (isTestLeadName(leadName)) continue;
+    if (leadMeta && isTestLeadName(leadMeta.name)) continue;
+    // Fallback: ak user_id chýba (staré emaily), priradiť podľa
+    // lead.assigned_to (najlepší proxy pre "kto to poslal").
+    const uid = (a.user_id as string | null) ?? leadMeta?.assigned_to ?? null;
+    if (!uid || testUserIds.has(uid)) continue;
     const s = obchodTotals.get(uid) ?? { cpSent: 0, toInspection: 0 };
     if (a.type === "email_sent") s.cpSent += 1;
     if (a.type === "handed_over_to_inspection") s.toInspection += 1;
@@ -292,58 +303,125 @@ export default async function PrehladPage() {
   }
 
   // ─── Top REALIZÁTORI (30d) ───────────────────────────────────────────
-  // Meriame počet dokončených + aktívnych realizácií.
-  const { data: realizatorLeads } = await sb
-    .from("leads")
-    .select("realization_by, name, status, realization_completed_at, data")
-    .not("realization_by", "is", null)
-    .in("status", ["in_realization", "won"]);
+  // Rovnaký zdroj (lead_activities) ako Activity log — user spec.
+  //
+  // Meriame:
+  //   • completed = počet "realization_completed" akcií
+  //   • uploaded  = počet "media_uploaded" akcií (foto z realizácie)
+  //   • active    = počet leadov v in_realization stave (proxy, nie
+  //                 activity — reprezentuje "má rozrobené")
+  //
+  // Fallback na user_id → lead.assigned_to → lead.realization_by
+  // (rôzne endpointy historicky zapisovali rôzne fieldy).
+  const { data: realizatorActs } = await sb
+    .from("lead_activities")
+    .select("user_id, type, created_at, lead_id")
+    .in("type", ["realization_completed", "media_uploaded"])
+    .gte("created_at", perfSinceIso);
+  const realActLeadIds = Array.from(
+    new Set(
+      (realizatorActs ?? [])
+        .map((a) => a.lead_id as string | null)
+        .filter((x): x is string => !!x),
+    ),
+  );
+  const realActLeadMeta = new Map<
+    string,
+    { name: string; realization_by: string | null }
+  >();
+  if (realActLeadIds.length > 0) {
+    const { data: realActLeads } = await sb
+      .from("leads")
+      .select("id, name, realization_by")
+      .in("id", realActLeadIds);
+    for (const l of realActLeads ?? [])
+      realActLeadMeta.set(l.id as string, {
+        name: (l.name as string) ?? "",
+        realization_by: (l.realization_by as string | null) ?? null,
+      });
+  }
   const realizatorTotals = new Map<
     string,
-    { active: number; completed: number; m2: number }
+    { active: number; completed: number; uploaded: number }
   >();
-  for (const l of realizatorLeads ?? []) {
+  for (const a of realizatorActs ?? []) {
+    const leadMeta = a.lead_id
+      ? realActLeadMeta.get(a.lead_id as string)
+      : undefined;
+    if (leadMeta && isTestLeadName(leadMeta.name)) continue;
+    const uid =
+      (a.user_id as string | null) ?? leadMeta?.realization_by ?? null;
+    if (!uid || testUserIds.has(uid)) continue;
+    const s = realizatorTotals.get(uid) ?? {
+      active: 0,
+      completed: 0,
+      uploaded: 0,
+    };
+    if (a.type === "realization_completed") s.completed += 1;
+    if (a.type === "media_uploaded") s.uploaded += 1;
+    realizatorTotals.set(uid, s);
+  }
+  // Aktívne (in_realization) leady — proxy pre "má rozrobené"
+  const { data: activeRealLeads } = await sb
+    .from("leads")
+    .select("realization_by, name")
+    .eq("status", "in_realization")
+    .not("realization_by", "is", null);
+  for (const l of activeRealLeads ?? []) {
     const rid = l.realization_by as string | null;
     if (!rid || testUserIds.has(rid)) continue;
-    // TEST-named lead → neráta sa do realizátor. výkonu
     if (isTestLeadName(l.name as string | null)) continue;
-    const s = realizatorTotals.get(rid) ?? { active: 0, completed: 0, m2: 0 };
-    const d = (l.data as Record<string, unknown>) ?? {};
-    const p = d.plocha;
-    const m2 =
-      typeof p === "number"
-        ? p
-        : typeof p === "string"
-          ? parseFloat(p.replace(",", ".")) || 0
-          : 0;
-    if (l.realization_completed_at) {
-      s.completed += 1;
-      s.m2 += m2;
-    } else {
-      s.active += 1;
-    }
+    const s = realizatorTotals.get(rid) ?? {
+      active: 0,
+      completed: 0,
+      uploaded: 0,
+    };
+    s.active += 1;
     realizatorTotals.set(rid, s);
   }
 
   // ─── ROLE ACTIVITY — dôkaz že pracujú všetky 3 role ──────────────────
   // Pre každú rolu (obchod, obhliadky, realizacie): počet lead_activities
   // za 7 dní + čas poslednej akcie. Ak > ROLE_INACTIVE_DAYS → warning.
+  // POZOR: bez .eq("active", true) — active flag nemusí byť u všetkých
+  // userov nastavený a strácali sme by tak Lea/Ela zo štatistiky role.
   const { data: roleUsersRaw } = await sb
     .from("users")
     .select("id, role")
-    .in("role", ["obchod", "obhliadky", "realizacie"])
-    .eq("active", true);
+    .in("role", ["obchod", "obhliadky", "realizacie"]);
   const roleByUser = new Map<string, string>();
   for (const u of roleUsersRaw ?? []) {
     if (!testUserIds.has(u.id as string))
       roleByUser.set(u.id as string, u.role as string);
   }
+  // Role activity — používame ROVNAKÝ zdroj (lead_activities) ako
+  // Activity log. Fallback: keď user_id chýba (staré emaily), použij
+  // lead.assigned_to.
+  //
+  // Filtrujeme SYSTÉMOVÉ typy (created / web_webhook / manual / atď.),
+  // aby zodpovedali defaultu Activity logu (bez „Zobraziť aj systémové").
+  const HUMAN_ACTIVITY_TYPES = [
+    "call_answered",
+    "call_missed",
+    "phone_revealed",
+    "note_added",
+    "email_sent",
+    "email",
+    "handed_over_to_inspection",
+    "handed_over_to_realization",
+    "inspection_completed",
+    "realization_completed",
+    "media_uploaded",
+    "status_changed",
+    "manually_archived",
+    "claimed",
+  ] as const;
   const { data: roleActions } = await sb
     .from("lead_activities")
-    .select("user_id, created_at, lead_id")
+    .select("user_id, created_at, lead_id, type")
     .gte("created_at", since7)
-    .not("user_id", "is", null);
-  // Fetch lead names pre role activity — filter TEST leadov
+    .in("type", HUMAN_ACTIVITY_TYPES as unknown as string[]);
+  // Fetch lead names + assigned_to pre fallback + test filter
   const roleLeadIds = Array.from(
     new Set(
       (roleActions ?? [])
@@ -351,14 +429,20 @@ export default async function PrehladPage() {
         .filter((x): x is string => !!x),
     ),
   );
-  const roleLeadNames = new Map<string, string>();
+  const roleLeadMeta = new Map<
+    string,
+    { name: string; assigned_to: string | null }
+  >();
   if (roleLeadIds.length > 0) {
     const { data: roleLeads } = await sb
       .from("leads")
-      .select("id, name")
+      .select("id, name, assigned_to")
       .in("id", roleLeadIds);
     for (const l of roleLeads ?? [])
-      roleLeadNames.set(l.id as string, (l.name as string) ?? "");
+      roleLeadMeta.set(l.id as string, {
+        name: (l.name as string) ?? "",
+        assigned_to: (l.assigned_to as string | null) ?? null,
+      });
   }
   const roleStats = new Map<
     string,
@@ -367,14 +451,17 @@ export default async function PrehladPage() {
   for (const r of ["obchod", "obhliadky", "realizacie"])
     roleStats.set(r, { count7d: 0, lastAt: null });
   for (const a of roleActions ?? []) {
-    const uid = a.user_id as string;
+    const leadMeta = a.lead_id
+      ? roleLeadMeta.get(a.lead_id as string)
+      : undefined;
+    // TEST-named lead → neráta
+    if (leadMeta && isTestLeadName(leadMeta.name)) continue;
+    // Fallback user_id
+    const uid =
+      (a.user_id as string | null) ?? leadMeta?.assigned_to ?? null;
+    if (!uid) continue;
     const role = roleByUser.get(uid);
     if (!role) continue;
-    // Aktivita na TEST leade sa neráta do role-activity
-    const leadName = a.lead_id
-      ? roleLeadNames.get(a.lead_id as string)
-      : null;
-    if (isTestLeadName(leadName)) continue;
     const s = roleStats.get(role)!;
     s.count7d += 1;
     const t = a.created_at as string;
@@ -409,11 +496,16 @@ export default async function PrehladPage() {
     .map(([id, s]) => ({
       id,
       name: analyticsAgentMap.get(id) ?? "?",
-      total: s.completed + s.active,
+      total: s.completed + s.active + s.uploaded,
       ...s,
     }))
     .filter((x) => x.total > 0)
-    .sort((a, b) => b.completed - a.completed || b.active - a.active)
+    .sort(
+      (a, b) =>
+        b.completed - a.completed ||
+        b.uploaded - a.uploaded ||
+        b.active - a.active,
+    )
     .slice(0, 5);
 
   // ─── Activity log — posledných 150 akcií naprieč tímom ────────────────
@@ -580,10 +672,14 @@ export default async function PrehladPage() {
     .limit(20);
   const recentObhliadky = (recentObhliadkyRaw ?? []).filter(notTest).slice(0, 10);
 
+  // POZOR: Realizácie musia byť skutočné realizácie, NIE CP.
+  // Preto NE-zahrnujeme "quote_sent" (to je CP → patrí do CP stĺpca).
+  // Zahrnujeme: in_realization (obchodák posunul na realizáciu) +
+  // won (zákazka je uzavretá).
   const { data: recentRealizacieRaw } = await sb
     .from("leads")
     .select("id, name, status, last_activity_at, value_estimate, assigned_to, data, realization_at")
-    .in("status", ["in_realization", "won", "quote_sent"])
+    .in("status", ["in_realization", "won"])
     .order("last_activity_at", { ascending: false })
     .limit(20);
   const recentRealizacie = (recentRealizacieRaw ?? [])
@@ -718,7 +814,7 @@ export default async function PrehladPage() {
           icon={<ClipboardList className="w-5 h-5 text-violet-500" />}
           title="CP poslané"
           count={leadsQuoteSent}
-          delta={leadsQuoteSentDelta}
+          countLast24h={leadsQuoteSent24h}
           tint="violet"
           href="/admin/leads?filter=cp"
         >
@@ -749,7 +845,7 @@ export default async function PrehladPage() {
           icon={<ClipboardList className="w-5 h-5 text-violet-500" />}
           title="Obhliadky"
           count={obhliadkyOpen}
-          delta={obhliadkyOpenDelta}
+          countLast24h={obhliadkyOpen24h}
           tint="violet"
           href="/obhliadky"
         >
@@ -791,7 +887,7 @@ export default async function PrehladPage() {
           icon={<Hammer className="w-5 h-5 text-emerald-500" />}
           title="Realizácie"
           count={realizacieActive}
-          delta={realizacieActiveDelta}
+          countLast24h={realizacieActive24h}
           tint="emerald"
           href="/realizacie"
         >
@@ -1023,22 +1119,22 @@ export default async function PrehladPage() {
                   <div className="flex items-center gap-1.5 shrink-0 text-[10px] font-bold">
                     <span
                       className="tabular-nums bg-sky-100 text-sky-800 border border-sky-200 px-1.5 py-0.5 rounded"
-                      title="Aktívne realizácie"
+                      title="Aktívne realizácie (in_realization stav)"
                     >
                       AKT {r.active}
                     </span>
                     <span
                       className="tabular-nums bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded"
-                      title="Dokončené realizácie"
+                      title="Dokončené realizácie (30d)"
                     >
                       DOK {r.completed}
                     </span>
-                    {r.m2 > 0 && (
+                    {r.uploaded > 0 && (
                       <span
                         className="tabular-nums bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded"
-                        title="Dokončené m²"
+                        title="Nahraté fotky z realizácie (30d)"
                       >
-                        {Math.round(r.m2)} m²
+                        FOTO {r.uploaded}
                       </span>
                     )}
                   </div>
@@ -1467,7 +1563,7 @@ function PipelineColumn({
   icon,
   title,
   count,
-  delta,
+  countLast24h,
   tint,
   href,
   children,
@@ -1475,7 +1571,8 @@ function PipelineColumn({
   icon: React.ReactNode;
   title: string;
   count: number;
-  delta?: number | null;
+  /** Počet za posledných 24h — zobrazí sa ako "(24h: N)" vedľa hlavného čísla. */
+  countLast24h?: number;
   tint: "sky" | "violet" | "emerald";
   href?: string;
   children: React.ReactNode;
@@ -1490,16 +1587,6 @@ function PipelineColumn({
     violet: "text-violet-800",
     emerald: "text-emerald-800",
   }[tint];
-  const deltaCls =
-    delta == null
-      ? "bg-zinc-100 text-zinc-500 border-zinc-200"
-      : delta > 0
-        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-        : delta < 0
-          ? "bg-rose-100 text-rose-800 border-rose-300"
-          : "bg-zinc-100 text-zinc-600 border-zinc-200";
-  const deltaText =
-    delta == null ? "—" : delta > 0 ? `+${delta}%` : `${delta}%`;
   return (
     <section className="rounded-2xl border bg-background overflow-hidden flex flex-col">
       <header
@@ -1519,19 +1606,16 @@ function PipelineColumn({
           >
             · {count}
           </span>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {delta !== undefined && (
+          {countLast24h !== undefined && (
             <span
-              className={cn(
-                "text-[9px] font-black px-1.5 py-0.5 rounded border tabular-nums",
-                deltaCls,
-              )}
-              title="Δ za posledných 24h vs. denný priemer prior 6d"
+              className="text-[11px] font-semibold text-muted-foreground tabular-nums shrink-0"
+              title="Nových za posledných 24h"
             >
-              24h {deltaText}
+              (24h: {countLast24h})
             </span>
           )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
           {href && (
             <Link
               href={href}

@@ -220,9 +220,11 @@ export async function POST(request: NextRequest) {
         const admin = createAdminClient();
         const nowIso = new Date().toISOString();
 
-        // Audit log
+        // Audit log — s user_id, aby sa dalo priradiť ku obchodákovi
+        // v prehľade rolí + top výkonu.
         await admin.from("lead_activities").insert({
           lead_id: body.lead_id,
+          user_id: user.id,
           type: "email_sent",
           data: {
             to: body.to_email,

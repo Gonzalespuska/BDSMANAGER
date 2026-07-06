@@ -4,12 +4,16 @@ import * as React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
+// SYSTEM (skryte pod toggle): eventy ktore vytvoril systém, nie clovek.
+// User feedback: "created" bol predtym human — je systemovy (webhook,
+// manual create...). "status_changed" naopak PATRI k ludskym akciam
+// (zmena stavu leadu je legitimna prace obchodaka).
 const SYSTEM_ACTIVITY_TYPES = new Set<string>([
-  "web_webhook",
-  "manual",
-  "magiclink",
-  "returned",
-  "status_changed",
+  "created",         // Nový lead prišiel (webhook/manual/import)
+  "web_webhook",     // Legacy alias na "created" z webu
+  "manual",          // Manuálne vytvorený lead
+  "magiclink",       // Auth event, nie lead-work
+  "returned",        // Auto-vratenie leadu do inbox po pause
 ]);
 
 export type ActivityRow = {

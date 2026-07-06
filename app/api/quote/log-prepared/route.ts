@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
 
     await admin.from("lead_activities").insert({
       lead_id: body.lead_id,
+      user_id: user.id,
       type: "email_sent",
       data: {
         to: body.to_email,
