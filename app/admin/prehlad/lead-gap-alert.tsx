@@ -176,12 +176,24 @@ function SourceChip({
     );
   }
   const { alarm, minutesSince } = state;
+  // Text pre 3 stavy:
+  //   • alarm → "⚠ Xmin" (červené, blika)
+  //   • OK + má lead → "OK · pred Xmin"
+  //   • OK + null → "OK · zatiaľ žiadny" (napr. len TEST leady existujú)
+  let text: string;
+  if (alarm) {
+    text = `⚠ ${formatMin(minutesSince ?? 0)}`;
+  } else if (minutesSince != null) {
+    text = `OK · pred ${formatMin(minutesSince)}`;
+  } else {
+    text = "OK · zatiaľ žiadny";
+  }
   return (
     <span
       title={
         state.lastAt
-          ? `Posledný ${label} lead: ${new Date(state.lastAt).toLocaleString("sk-SK")}`
-          : `Zatiaľ žiadny ${label} lead`
+          ? `Posledný reálny ${label} lead: ${new Date(state.lastAt).toLocaleString("sk-SK")}`
+          : `Zatiaľ žiadny reálny ${label} lead (TEST leady sa nerátajú)`
       }
       className={cn(
         "inline-flex items-center gap-1 px-2 py-0.5 rounded-md border tabular-nums",
@@ -195,12 +207,7 @@ function SourceChip({
       ) : (
         <CheckCircle2 className="w-3 h-3" aria-hidden />
       )}
-      {label}:{" "}
-      {alarm
-        ? `⚠️ ${minutesSince}min`
-        : minutesSince != null
-          ? `OK · ${formatMin(minutesSince)}`
-          : "OK"}
+      {label}: {text}
     </span>
   );
 }
