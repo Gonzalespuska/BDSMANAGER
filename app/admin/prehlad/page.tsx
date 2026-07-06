@@ -773,16 +773,6 @@ export default async function PrehladPage() {
             >
               {leadsStaleUncalled}
             </div>
-            <div
-              className={cn(
-                "text-[11px] font-semibold mt-1.5",
-                uncalledAlarm ? "text-rose-700" : "text-emerald-700",
-              )}
-            >
-              {uncalledAlarm
-                ? `⚠️ Prekročený prah (${UNCALLED_ALERT_THRESHOLD}) — treba obvolať`
-                : `OK · pod prahom ${UNCALLED_ALERT_THRESHOLD}`}
-            </div>
           </div>
         </Link>
 
