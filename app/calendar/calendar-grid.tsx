@@ -752,6 +752,7 @@ function DayModal({
 
       // REST endpoint namiesto Server Action — Server Actions v Cloudflare
       // Pages edge runtime často zlyhavali s "undefined is not an object".
+      // Posielame scheduled_at (dátum + čas) aby to sedelo v kalendári.
       const httpRes = await fetch("/api/lead/handover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -760,6 +761,8 @@ function DayModal({
           target_user_id: pickedUserId,
           mode: assignMode,
           note: fullNote || undefined,
+          scheduled_at: startDateTime.toISOString(),
+          scheduled_date: startDate, // YYYY-MM-DD
         }),
       });
       const res = (await httpRes.json().catch(() => null)) as

@@ -37,6 +37,10 @@ export async function POST(request: Request) {
     target_user_id?: string;
     mode?: "inspection" | "realization";
     note?: string;
+    /** ISO timestamp — kedy je obhliadka/realizácia naplánovaná. */
+    scheduled_at?: string;
+    /** YYYY-MM-DD — dátum obhliadky, pre calendar_notes.date. */
+    scheduled_date?: string;
   };
   try {
     body = await request.json();
@@ -44,7 +48,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  const { lead_id, target_user_id, mode, note } = body;
+  const { lead_id, target_user_id, mode, note, scheduled_at, scheduled_date } =
+    body;
   if (!lead_id || !target_user_id || !mode) {
     return NextResponse.json(
       { ok: false, error: "missing_fields" },
@@ -109,20 +114,27 @@ export async function POST(request: Request) {
     }
 
     const nowIso = new Date().toISOString();
+    // Naplánovaný čas z picker-a (dátum + hodina + minúta). Ak nebolo
+    // poslané, fallback na now (tak ako pôvodne).
+    const scheduledIso = scheduled_at || nowIso;
+    const scheduledDate =
+      scheduled_date ||
+      (scheduled_at ? scheduled_at.slice(0, 10) : nowIso.slice(0, 10));
 
-    // Update lead
+    // Update lead — inspection_at/realization_at je NAPLÁNOVANÝ termín,
+    // nie čas kliknutia Potvrdiť. last_activity_at je čas kliknutia.
     const updatePayload =
       mode === "inspection"
         ? {
             status: "needs_inspection",
             inspection_by: target_user_id,
-            inspection_at: nowIso,
+            inspection_at: scheduledIso,
             last_activity_at: nowIso,
           }
         : {
             status: "in_realization",
             realization_by: target_user_id,
-            realization_at: nowIso,
+            realization_at: scheduledIso,
             last_activity_at: nowIso,
           };
     const { error: updErr } = await sb
@@ -144,8 +156,8 @@ export async function POST(request: Request) {
         : "handed_over_to_realization";
     const activityData =
       mode === "inspection"
-        ? { inspector_id: target_user_id, note: note ?? null }
-        : { realization_by: target_user_id, note: note ?? null };
+        ? { inspector_id: target_user_id, note: note ?? null, scheduled_at: scheduledIso }
+        : { realization_by: target_user_id, note: note ?? null, scheduled_at: scheduledIso };
     const { error: actErr } = await sb.from("lead_activities").insert({
       lead_id,
       user_id: user.id,
@@ -155,6 +167,26 @@ export async function POST(request: Request) {
     if (actErr) {
       console.error("[handover] activity insert failed:", actErr);
       // Nie fatal
+    }
+
+    // Insert calendar_note aby priradenie bolo VIDITEĽNÉ v kalendári
+    // (deň so značkou "obhliadka: TEST · Meno" na daný dátum).
+    // kind='meeting' aby obchodák aj cieľový user videli event.
+    const { error: calErr } = await sb.from("calendar_notes").insert({
+      date: scheduledDate,
+      body:
+        mode === "inspection"
+          ? `🔍 Obhliadka${note ? ` — ${note.split("\n").slice(-1)[0]}` : ""}`
+          : `🔨 Realizácia${note ? ` — ${note.split("\n").slice(-1)[0]}` : ""}`,
+      kind: "meeting",
+      starts_at: scheduledIso,
+      user_id: user.id, // creator
+      target_user_id, // priradený obhliadkár/realizátor
+      lead_id,
+    });
+    if (calErr) {
+      console.error("[handover] calendar_note insert failed:", calErr);
+      // Nie fatal — hlavne že lead update prešiel. Log kvôli diagnostike.
     }
 
     return NextResponse.json({ ok: true });

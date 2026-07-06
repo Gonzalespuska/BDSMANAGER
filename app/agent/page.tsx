@@ -22,7 +22,7 @@ const TABS = [
   { id: "kontakt", label: "📞 Kontakt" },
   { id: "nedovolany", label: "🟡 Nezdvíhali" },
   { id: "otvorene", label: "✅ CP" },
-  { id: "obhliadnute", label: "✔️ Obhliadnuté" },
+  { id: "obhliadnute", label: "🔍 Na obhliadke" },
   { id: "archivovane", label: "📦 Archivované" },
   { id: "ukoncene", label: "🏆 Ukončené" },
 ] as const;
@@ -365,7 +365,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
             {!searchMode && tab === "kontakt" && "Žiadny aktívny kontakt. Po volaní zdvihla → klikni 'Kontakt' a lead bude tu."}
             {!searchMode && tab === "nedovolany" && "Žiadne nezdvíhajú. Po 3. neúspechu sa pridá tlačidlo 'Archivovať' s SMS+Email follow-up."}
             {!searchMode && tab === "otvorene" && "Žiadna poslaná cenová ponuka. Po odoslaní CP z generátora sa lead presunie sem."}
-            {!searchMode && tab === "obhliadnute" && "Žiadne obhliadnuté leady. Keď obchodák pošle lead na obhliadku a termín uplynie, automaticky sa objaví tu. Odtiaľto ho presunieš na Ukončené alebo Archivované."}
+            {!searchMode && tab === "obhliadnute" && "Žiadne leady na obhliadke. Keď obchodák posunie lead na obhliadku, objaví sa tu. Po dokončení obhliadky ho posunieš na Ukončené alebo Archivované."}
             {!searchMode && tab === "ukoncene" && "Žiadne ukončené dealy. Po podpise / dodaní označ lead ako 'Ukončené'."}
             {!searchMode && tab === "archivovane" && "Žiadne archivované leady. Po neúspešnom kontakte / 3× nezdvihol sa lead presunie sem."}
           </p>
