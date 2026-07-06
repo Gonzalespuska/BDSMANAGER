@@ -43,14 +43,20 @@ function normalizeCity(s: string): string {
 }
 
 /**
- * Time24Picker — dva selecty (HH + MM), garantovane 24h formát.
- * `<input type="time">` závisí na OS locale a v en-US ukazuje AM/PM,
- * čo je pre SK CRM nežiaduce.
+ * Time24Picker — dva NUMBER inputy (HH + MM), garantovane 24h formát.
  *
- * Hodiny: 06–20 (pracovný deň).
- * Minúty: 00, 15, 30, 45 (dostatočná granularita pre plánovanie obhliadky).
+ * Prečo nie <input type="time">: závisí na OS locale a v en-US ukazuje
+ * AM/PM. Chceme čistý 24h vzhľad.
+ *
+ * Prečo nie <select>: user chce zadať aj neštandardný čas ako 8:20
+ * alebo 9:37 — selecty by ho obmedzili na 15-min kroky.
  *
  * Value: "HH:MM" (napr. "09:00"), rovnaký formát ako natívny input.
+ * Validácia:
+ *   • Hodiny: 0-23 (clampujeme, nie fixné pracovné hodiny)
+ *   • Minúty: 0-59
+ *   • Text: 2 znaky max, digit-only
+ *   • Onblur padding na "09" / "07"
  */
 function Time24Picker({
   value,
@@ -61,50 +67,116 @@ function Time24Picker({
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
-  const [h, m] = React.useMemo(() => {
+  // Rozdeľ value na h/m — držíme ich ako string aby sme umožnili
+  // "9" (mid-typing) → padne na "09" po blur.
+  const parsed = React.useMemo(() => {
     const [hh, mm] = (value || "09:00").split(":");
-    return [hh || "09", mm || "00"];
+    return {
+      h: (hh || "09").padStart(2, "0"),
+      m: (mm || "00").padStart(2, "0"),
+    };
   }, [value]);
-  const HOURS = React.useMemo(
-    () => Array.from({ length: 15 }, (_, i) => String(i + 6).padStart(2, "0")),
-    [],
-  ); // 06 .. 20
-  const MINUTES = ["00", "15", "30", "45"];
+
+  const [rawH, setRawH] = React.useState(parsed.h);
+  const [rawM, setRawM] = React.useState(parsed.m);
+
+  // Sync externých zmien value → local rawH/rawM
+  React.useEffect(() => {
+    setRawH(parsed.h);
+    setRawM(parsed.m);
+  }, [parsed.h, parsed.m]);
+
+  function commit(hOverride?: string, mOverride?: string) {
+    const rawHVal = hOverride ?? rawH;
+    const rawMVal = mOverride ?? rawM;
+    const hNum = Math.max(0, Math.min(23, parseInt(rawHVal || "0", 10) || 0));
+    const mNum = Math.max(0, Math.min(59, parseInt(rawMVal || "0", 10) || 0));
+    const hStr = String(hNum).padStart(2, "0");
+    const mStr = String(mNum).padStart(2, "0");
+    if (hStr !== rawH) setRawH(hStr);
+    if (mStr !== rawM) setRawM(mStr);
+    onChange(`${hStr}:${mStr}`);
+  }
+
   const baseCls =
-    "h-11 rounded-lg border border-input bg-background px-3 text-lg font-bold tabular-nums " +
+    "h-11 rounded-lg border border-input bg-background px-3 text-lg font-bold tabular-nums text-center " +
     "disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-violet-400 " +
-    "focus:border-violet-400 transition-colors cursor-pointer";
+    "focus:border-violet-400 transition-colors [appearance:textfield] " +
+    "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
   return (
     <div className="flex items-center gap-2">
-      <select
-        value={h}
-        onChange={(e) => onChange(`${e.target.value}:${m}`)}
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={2}
+        value={rawH}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+          setRawH(digits);
+        }}
+        onBlur={() => commit()}
+        onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          }
+          // Šípky hore/dole = ±1 hodina
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            const cur = parseInt(rawH || "0", 10) || 0;
+            const next = e.key === "ArrowUp" ? (cur + 1) % 24 : (cur + 23) % 24;
+            const s = String(next).padStart(2, "0");
+            setRawH(s);
+            commit(s, undefined);
+          }
+        }}
         disabled={disabled}
         aria-label="Hodina"
+        placeholder="HH"
         className={`${baseCls} flex-1`}
-      >
-        {HOURS.map((hh) => (
-          <option key={hh} value={hh}>
-            {hh}
-          </option>
-        ))}
-      </select>
+      />
       <span className="text-xl font-black text-muted-foreground select-none">
         :
       </span>
-      <select
-        value={m}
-        onChange={(e) => onChange(`${h}:${e.target.value}`)}
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={2}
+        value={rawM}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+          setRawM(digits);
+        }}
+        onBlur={() => commit()}
+        onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          }
+          // Šípky = ±5 minút
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            const cur = parseInt(rawM || "0", 10) || 0;
+            const step = 5;
+            const next =
+              e.key === "ArrowUp"
+                ? (cur + step) % 60
+                : (cur - step + 60) % 60;
+            const s = String(next).padStart(2, "0");
+            setRawM(s);
+            commit(undefined, s);
+          }
+        }}
         disabled={disabled}
         aria-label="Minúta"
+        placeholder="MM"
         className={`${baseCls} flex-1`}
-      >
-        {MINUTES.map((mm) => (
-          <option key={mm} value={mm}>
-            {mm}
-          </option>
-        ))}
-      </select>
+      />
     </div>
   );
 }
