@@ -8,15 +8,52 @@
  *   • jeho manuálne vytvorené leady sa auto-priradia inému
  *     obchodníkovi (viď /api/lead/create-manual)
  *
+ * Okrem toho FILTRÚJEME leady podľa NÁZVU:
+ *   • Ak name začína "TEST ", "TEST·", "TEST REAL", "TEST OBHL",
+ *     "TEST-", "TEST_", je považovaný za tester lead a NEráta sa
+ *     do žiadnej štatistiky ani zoznamu na /admin/prehlad,
+ *     top obchodáci, uncalled count, gap-monitoring atď.
+ *
+ * User confirmation:
+ *   "nepocitaj testy do ziadnych statistik tie testy sluzia iba na to
+ *    aby som si z info emailu mohol sledovat ako tento software funguje"
+ *
  * Zoznam emailov je centralizovaný tu, aby sa daný filter dal ľahko
  * upraviť keby pribudol ďalší tester (napr. developerov účet).
  */
 export const TEST_USER_EMAILS = ["info@epoxidovo.sk"] as const;
 
+/** Prefixy v `leads.name` ktoré označujú testovací lead. */
+const TEST_LEAD_NAME_PATTERNS = [
+  /^\s*test\b/i, // "TEST · X", "TEST OBHL · X", "TEST REAL · X", "test-", "test_"
+];
+
 /** Rýchly check: je táto email adresa test-account? */
 export function isTestUserEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   return TEST_USER_EMAILS.includes(email.toLowerCase().trim() as (typeof TEST_USER_EMAILS)[number]);
+}
+
+/** Je názov leadu testovací? (napr. "TEST · Peter Novák", "test_lead") */
+export function isTestLeadName(name: string | null | undefined): boolean {
+  if (!name) return false;
+  return TEST_LEAD_NAME_PATTERNS.some((r) => r.test(name));
+}
+
+/**
+ * Komplet check: lead je "test" ak
+ *   1) je priradený test-user-ovi (Mário), ALEBO
+ *   2) jeho name spĺňa TEST prefix
+ *
+ * `testUserIds` je Set z fetchTestUserIds().
+ */
+export function isTestLead(
+  lead: { name?: string | null; assigned_to?: string | null },
+  testUserIds: Set<string>,
+): boolean {
+  if (lead.assigned_to && testUserIds.has(lead.assigned_to)) return true;
+  if (isTestLeadName(lead.name)) return true;
+  return false;
 }
 
 /**

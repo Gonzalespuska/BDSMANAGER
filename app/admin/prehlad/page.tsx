@@ -18,7 +18,7 @@ import { getCurrentAppUser, getRealUserRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AgentLiveWrapper } from "@/components/agent-live-wrapper";
 import { STATUS_META, type LeadStatus } from "@/lib/types/lead";
-import { fetchTestUserIds } from "@/lib/test-account";
+import { fetchTestUserIds, isTestLead, isTestLeadName } from "@/lib/test-account";
 import {
   UNCALLED_ALERT_THRESHOLD,
   STAGNATION_DAYS,
@@ -52,16 +52,25 @@ export default async function PrehladPage() {
 
   const sb = createAdminClient();
 
-  // ─── TEST ACCOUNT FILTER ──────────────────────────────────────────────
-  // info@epoxidovo.sk (Mário Vitáz) je tester — NESMIE sa objaviť
-  // v žiadnych admin štatistikách. Filter aplikujeme na všetkých
-  // úrovniach (recentLeads, obhliadky, realizácie, top obchodáci,
-  // activity log, hourly chart).
+  // ─── TEST ACCOUNT + TEST-NAMED LEADS FILTER ───────────────────────────
+  // Vylučujeme z admin štatistík:
+  //   1) leady priradené test-userovi (info@epoxidovo / Mário Vitáz)
+  //   2) leady s "TEST" prefixom v mene (napr. "TEST · Peter Novák")
+  //
+  // User confirmed: "nepocitaj testy do ziadnych statistik".
+  // Test leady existujú iba preto aby si admin cez info@ účet mohol
+  // sledovať ako CRM funguje — nesmú kaziť produkčné čísla.
   const testUserIds = await fetchTestUserIds(sb);
   const isTestAssigned = (assignedTo: string | null | undefined) =>
     !!assignedTo && testUserIds.has(assignedTo);
-  const notTest = <T extends { assigned_to?: string | null }>(l: T) =>
-    !isTestAssigned(l.assigned_to);
+  /**
+   * Filter helper — funguje na oboch dimenziách:
+   *   • name != null → filtrujeme aj podľa mena (test-prefix)
+   *   • assigned_to → filtrujeme podľa priradenia
+   */
+  const notTest = <T extends { assigned_to?: string | null; name?: string | null }>(
+    l: T,
+  ) => !isTestLead(l, testUserIds);
 
   const now = Date.now();
   const nowDate = new Date(now);
@@ -100,7 +109,7 @@ export default async function PrehladPage() {
   const doneBase = () =>
     sb
       .from("leads")
-      .select("data, assigned_to, realization_at, status")
+      .select("data, assigned_to, name, realization_at, status")
       .not("realization_at", "is", null)
       .lte("realization_at", nowIso)
       .not("status", "in", "(lost,archived,no_answer,not_interested)");
@@ -156,7 +165,7 @@ export default async function PrehladPage() {
   const analyticsSinceIso = new Date(now - 30 * 86400_000).toISOString();
   const { data: analyticsLeads } = await sb
     .from("leads")
-    .select("id, source_type, created_at, assigned_to, status")
+    .select("id, name, source_type, created_at, assigned_to, status")
     .gte("created_at", analyticsSinceIso)
     .order("created_at", { ascending: false })
     .limit(500);
@@ -243,9 +252,27 @@ export default async function PrehladPage() {
   const perfSinceIso = new Date(now - 30 * 86400_000).toISOString();
   const { data: perfActions } = await sb
     .from("lead_activities")
-    .select("user_id, type, created_at")
+    .select("user_id, type, created_at, lead_id")
     .in("type", ["handed_over_to_inspection", "email_sent"])
     .gte("created_at", perfSinceIso);
+  // Zisti mená leadov pre všetky perfActions naraz — potrebujeme na
+  // filter TEST-prefixed leadov (nesmú sa počítať do výkonu).
+  const perfLeadIds = Array.from(
+    new Set(
+      (perfActions ?? [])
+        .map((a) => a.lead_id as string | null)
+        .filter((x): x is string => !!x),
+    ),
+  );
+  const perfLeadNames = new Map<string, string>();
+  if (perfLeadIds.length > 0) {
+    const { data: perfLeads } = await sb
+      .from("leads")
+      .select("id, name")
+      .in("id", perfLeadIds);
+    for (const l of perfLeads ?? [])
+      perfLeadNames.set(l.id as string, (l.name as string) ?? "");
+  }
   const obchodTotals = new Map<
     string,
     { cpSent: number; toInspection: number }
@@ -253,6 +280,11 @@ export default async function PrehladPage() {
   for (const a of perfActions ?? []) {
     const uid = a.user_id as string | null;
     if (!uid || testUserIds.has(uid)) continue;
+    // TEST-named lead → neráta sa do obchod. výkonu
+    const leadName = a.lead_id
+      ? perfLeadNames.get(a.lead_id as string)
+      : null;
+    if (isTestLeadName(leadName)) continue;
     const s = obchodTotals.get(uid) ?? { cpSent: 0, toInspection: 0 };
     if (a.type === "email_sent") s.cpSent += 1;
     if (a.type === "handed_over_to_inspection") s.toInspection += 1;
@@ -263,7 +295,7 @@ export default async function PrehladPage() {
   // Meriame počet dokončených + aktívnych realizácií.
   const { data: realizatorLeads } = await sb
     .from("leads")
-    .select("realization_by, status, realization_completed_at, data")
+    .select("realization_by, name, status, realization_completed_at, data")
     .not("realization_by", "is", null)
     .in("status", ["in_realization", "won"]);
   const realizatorTotals = new Map<
@@ -273,6 +305,8 @@ export default async function PrehladPage() {
   for (const l of realizatorLeads ?? []) {
     const rid = l.realization_by as string | null;
     if (!rid || testUserIds.has(rid)) continue;
+    // TEST-named lead → neráta sa do realizátor. výkonu
+    if (isTestLeadName(l.name as string | null)) continue;
     const s = realizatorTotals.get(rid) ?? { active: 0, completed: 0, m2: 0 };
     const d = (l.data as Record<string, unknown>) ?? {};
     const p = d.plocha;
@@ -306,9 +340,26 @@ export default async function PrehladPage() {
   }
   const { data: roleActions } = await sb
     .from("lead_activities")
-    .select("user_id, created_at")
+    .select("user_id, created_at, lead_id")
     .gte("created_at", since7)
     .not("user_id", "is", null);
+  // Fetch lead names pre role activity — filter TEST leadov
+  const roleLeadIds = Array.from(
+    new Set(
+      (roleActions ?? [])
+        .map((a) => a.lead_id as string | null)
+        .filter((x): x is string => !!x),
+    ),
+  );
+  const roleLeadNames = new Map<string, string>();
+  if (roleLeadIds.length > 0) {
+    const { data: roleLeads } = await sb
+      .from("leads")
+      .select("id, name")
+      .in("id", roleLeadIds);
+    for (const l of roleLeads ?? [])
+      roleLeadNames.set(l.id as string, (l.name as string) ?? "");
+  }
   const roleStats = new Map<
     string,
     { count7d: number; lastAt: string | null }
@@ -319,6 +370,11 @@ export default async function PrehladPage() {
     const uid = a.user_id as string;
     const role = roleByUser.get(uid);
     if (!role) continue;
+    // Aktivita na TEST leade sa neráta do role-activity
+    const leadName = a.lead_id
+      ? roleLeadNames.get(a.lead_id as string)
+      : null;
+    if (isTestLeadName(leadName)) continue;
     const s = roleStats.get(role)!;
     s.count7d += 1;
     const t = a.created_at as string;
@@ -422,12 +478,12 @@ export default async function PrehladPage() {
   const [leadsOpenRes, leads24hRes, leadsStaleUncalledRes] = await Promise.all([
     sb
       .from("leads")
-      .select("assigned_to")
+      .select("assigned_to, name")
       .not("status", "in", "(won,lost,archived,not_interested)"),
-    sb.from("leads").select("assigned_to").gte("created_at", since24h),
+    sb.from("leads").select("assigned_to, name").gte("created_at", since24h),
     sb
       .from("leads")
-      .select("assigned_to")
+      .select("assigned_to, name")
       .is("phone_revealed_at", null)
       .lt("created_at", since24h)
       .not("status", "in", "(lost,archived,unreachable,not_interested,won)"),
@@ -457,32 +513,32 @@ export default async function PrehladPage() {
   ] = await Promise.all([
     sb
       .from("leads")
-      .select("assigned_to")
+      .select("assigned_to, name")
       .eq("status", "quote_sent")
       .gte("last_activity_at", since7),
     sb
       .from("leads")
-      .select("assigned_to")
+      .select("assigned_to, name")
       .eq("status", "quote_sent")
       .gte("last_activity_at", since24h),
     sb
       .from("leads")
-      .select("assigned_to")
+      .select("assigned_to, name")
       .in("status", ["scheduled", "interested", "needs_inspection"])
       .gte("last_activity_at", since7),
     sb
       .from("leads")
-      .select("assigned_to")
+      .select("assigned_to, name")
       .in("status", ["scheduled", "interested", "needs_inspection"])
       .gte("last_activity_at", since24h),
     sb
       .from("leads")
-      .select("assigned_to")
+      .select("assigned_to, name")
       .in("status", ["in_realization", "won"])
       .gte("last_activity_at", since7),
     sb
       .from("leads")
-      .select("assigned_to")
+      .select("assigned_to, name")
       .in("status", ["in_realization", "won"])
       .gte("last_activity_at", since24h),
   ]);

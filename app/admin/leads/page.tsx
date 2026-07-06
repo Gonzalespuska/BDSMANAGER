@@ -16,6 +16,7 @@ import {
   SOURCE_TYPE_LABELS,
   type LeadStatus,
 } from "@/lib/types/lead";
+import { isTestLeadName } from "@/lib/test-account";
 import { cn } from "@/lib/utils";
 
 /** "pred 2h 15min" / "pred 3d" — kompaktný SK relative time. */
@@ -134,8 +135,14 @@ export default async function AdminLeadsPage() {
 
   // Posledný Meta lead + posledný Web lead — rows sú už zoradené desc
   // podľa created_at, takže prvý match je najnovší.
-  const lastMetaLead = rows.find((r) => sourceCategory(r.source_type) === "meta");
-  const lastWebLead = rows.find((r) => sourceCategory(r.source_type) === "web");
+  // TEST-named leady vylučujeme (user: "nepocitaj testy do statistik").
+  const lastMetaLead = rows.find(
+    (r) =>
+      sourceCategory(r.source_type) === "meta" && !isTestLeadName(r.name),
+  );
+  const lastWebLead = rows.find(
+    (r) => sourceCategory(r.source_type) === "web" && !isTestLeadName(r.name),
+  );
 
   return (
     <div className="space-y-4">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentAppUser, getRealUserRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isTestLeadName } from "@/lib/test-account";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -38,25 +39,37 @@ export async function GET() {
 
   const sb = createAdminClient();
 
+  // Fetchujeme viac (limit 10) aby sme mohli preskočiť TEST-named
+  // a nájsť prvý REÁLNY lead. TEST leady sa NErátajú do source-gap
+  // monitoringu — inak by spustili false alarm keď admin robí testy.
   const [metaRes, webRes] = await Promise.all([
     sb
       .from("leads")
-      .select("created_at, source_type")
+      .select("created_at, source_type, name")
       .in("source_type", META_SOURCES as unknown as string[])
       .order("created_at", { ascending: false })
-      .limit(1),
+      .limit(10),
     sb
       .from("leads")
-      .select("created_at, source_type")
+      .select("created_at, source_type, name")
       .in("source_type", WEB_SOURCES as unknown as string[])
       .order("created_at", { ascending: false })
-      .limit(1),
+      .limit(10),
   ]);
 
   const now = Date.now();
 
-  function statFor(rows: Array<{ created_at: string }> | null | undefined) {
-    const lastAt = rows?.[0]?.created_at ?? null;
+  function statFor(
+    rows:
+      | Array<{ created_at: string; name?: string | null }>
+      | null
+      | undefined,
+  ) {
+    // Nájdi prvý NON-TEST lead
+    const firstReal = (rows ?? []).find(
+      (r) => !isTestLeadName(r.name ?? null),
+    );
+    const lastAt = firstReal?.created_at ?? null;
     if (!lastAt) {
       return { lastAt: null, minutesSince: null, alarm: false };
     }
