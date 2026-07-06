@@ -143,7 +143,7 @@ export const STATUS_META: Record<
     pill: "bg-violet-600 text-white",
   },
   needs_inspection: {
-    label: "🔍 NA OBHLIADKU",
+    label: "🔍 OBHLIADKA",
     pill: "bg-violet-500 text-white",
   },
   inspected: {

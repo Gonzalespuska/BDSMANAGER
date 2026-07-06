@@ -318,59 +318,63 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
             )}
             </div>
 
-            {/* Callback reminder vpravo */}
-            {lead.next_callback_at && (
-              <CallbackReminder when={lead.next_callback_at} />
-            )}
+            {/* Pravý stĺpec — callback + obhliadka + realizácia (all vpravo hore).
+                Obhliadka/realizácia badge sú klikateľné → otvoria kalendár
+                na daný mesiac. Farbou farbia typ udalosti. */}
+            <div className="flex flex-col items-end gap-1.5 shrink-0">
+              {lead.next_callback_at && (
+                <CallbackReminder when={lead.next_callback_at} />
+              )}
+              {lead.inspection_at && (
+                <Link
+                  href={`/calendar?m=${lead.inspection_at.slice(0, 7)}`}
+                  className="inline-flex flex-col items-end gap-0 px-2.5 py-1.5 rounded-lg border-2 border-violet-300 bg-violet-50 text-[11px] font-bold text-violet-900 hover:bg-violet-100 hover:border-violet-400 hover:shadow-sm transition-all min-w-fit"
+                  title="Otvoriť v kalendári"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    🔍 <span className="uppercase tracking-wider text-[9px]">Obhliadka</span>
+                  </span>
+                  <span className="font-extrabold tabular-nums">
+                    {new Date(lead.inspection_at).toLocaleString("sk-SK", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  {lead.inspection_by_name && (
+                    <span className="text-[10px] opacity-80 font-semibold">
+                      {lead.inspection_by_name}
+                    </span>
+                  )}
+                </Link>
+              )}
+              {lead.realization_at && (
+                <Link
+                  href={`/calendar?m=${lead.realization_at.slice(0, 7)}`}
+                  className="inline-flex flex-col items-end gap-0 px-2.5 py-1.5 rounded-lg border-2 border-emerald-300 bg-emerald-50 text-[11px] font-bold text-emerald-900 hover:bg-emerald-100 hover:border-emerald-400 hover:shadow-sm transition-all min-w-fit"
+                  title="Otvoriť v kalendári"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    🔨 <span className="uppercase tracking-wider text-[9px]">Realizácia</span>
+                  </span>
+                  <span className="font-extrabold tabular-nums">
+                    {new Date(lead.realization_at).toLocaleString("sk-SK", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  {lead.realization_by_name && (
+                    <span className="text-[10px] opacity-80 font-semibold">
+                      {lead.realization_by_name}
+                    </span>
+                  )}
+                </Link>
+              )}
+            </div>
           </div>
-
-          {/* OBHLIADKA — priradenie s termínom + obhliadkárom (needs_inspection). */}
-          {lead.inspection_at && (
-            <div className="px-5 pt-3">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border-2 border-violet-300 bg-violet-50 text-xs font-bold text-violet-900">
-                🔍 Obhliadka:{" "}
-                <span className="font-extrabold tabular-nums">
-                  {new Date(lead.inspection_at).toLocaleString("sk-SK", {
-                    weekday: "short",
-                    day: "2-digit",
-                    month: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                {lead.inspection_by_name && (
-                  <>
-                    <span className="opacity-60">·</span>
-                    <span>{lead.inspection_by_name}</span>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* REALIZÁCIA — priradenie s termínom + realizátorom. */}
-          {lead.realization_at && (
-            <div className="px-5 pt-3">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border-2 border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-900">
-                🔨 Realizácia:{" "}
-                <span className="font-extrabold tabular-nums">
-                  {new Date(lead.realization_at).toLocaleString("sk-SK", {
-                    weekday: "short",
-                    day: "2-digit",
-                    month: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                {lead.realization_by_name && (
-                  <>
-                    <span className="opacity-60">·</span>
-                    <span>{lead.realization_by_name}</span>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Termín realizácie — prominentný badge (najdôležitejšia info
               pre obchodníka: 'Urgentne do mesiaca' vs 'Zatiaľ info' = úplne

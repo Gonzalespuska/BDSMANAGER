@@ -22,8 +22,8 @@ const TABS = [
   { id: "kontakt", label: "📞 Kontakt" },
   { id: "nedovolany", label: "🟡 Nezdvíhali" },
   { id: "otvorene", label: "✅ CP" },
-  // "Na obhliadke" = needs_inspection A termín je v BUDÚCNOSTI
-  { id: "obhliadnute", label: "🔍 Na obhliadke" },
+  // "Obhliadka" = needs_inspection A termín je v BUDÚCNOSTI
+  { id: "obhliadnute", label: "🔍 Obhliadka" },
   // "Obhliadnuté" = needs_inspection A termín PREŠIEL, alebo status=inspected
   // (dátum obhliadky uplynul → automaticky sem)
   { id: "obhliadnute_hotove", label: "✔️ Obhliadnuté" },
