@@ -18,11 +18,7 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  handoverToInspectionAction,
-  handoverToRealizationAction,
-  listUsersByRoleAction,
-} from "@/app/agent/actions";
+import { listUsersByRoleAction } from "@/app/agent/actions";
 import { cn } from "@/lib/utils";
 import { formatPhoneSK } from "@/lib/phone-format";
 import {
@@ -754,32 +750,32 @@ function DayModal({
       ].filter(Boolean);
       const fullNote = noteParts.join("\n");
 
-      const res =
-        assignMode === "inspection"
-          ? await handoverToInspectionAction(
-              assignLead.id,
-              pickedUserId,
-              fullNote || undefined,
-            )
-          : await handoverToRealizationAction(
-              assignLead.id,
-              pickedUserId,
-              fullNote || undefined,
-            );
-      console.log("[submitAssign] result:", res);
+      // REST endpoint namiesto Server Action — Server Actions v Cloudflare
+      // Pages edge runtime často zlyhavali s "undefined is not an object".
+      const httpRes = await fetch("/api/lead/handover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: assignLead.id,
+          target_user_id: pickedUserId,
+          mode: assignMode,
+          note: fullNote || undefined,
+        }),
+      });
+      const res = (await httpRes.json().catch(() => null)) as
+        | { ok: true }
+        | { ok: false; error: string }
+        | null;
+      console.log("[submitAssign] result:", res, "status:", httpRes.status);
       setAssignBusy(false);
       if (!res) {
         setAssignError(
-          "Server action vrátila undefined — pravdepodobne exception na serveri. Pozri Cloudflare Pages runtime logs.",
+          `HTTP ${httpRes.status} — server nevrátil JSON. Skontroluj Cloudflare Pages logs.`,
         );
         return;
       }
       if (!res.ok) {
-        setAssignError(
-          res.error === "db_error"
-            ? "DB error — pravdepodobne treba spustiť supabase/10_role_handoff.sql"
-            : res.error,
-        );
+        setAssignError(res.error);
         return;
       }
       onClose();
