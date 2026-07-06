@@ -91,28 +91,28 @@ function Time24Picker({
   function commit(hOverride?: string, mOverride?: string) {
     const rawHVal = hOverride ?? rawH;
     const rawMVal = mOverride ?? rawM;
-    // Pad-uj IBA vyplnené pole, druhé nechaj prázdne. Nechceme aby
-    // po napísaní "9" do HH sa MM auto-vyplnilo na "00" — user musí
-    // MM zadať sám (jasne signalizuje že MM je jeho zodpovednosť).
-    const hPadded = rawHVal
-      ? String(
-          Math.max(0, Math.min(23, parseInt(rawHVal, 10) || 0)),
-        ).padStart(2, "0")
-      : "";
-    const mPadded = rawMVal
-      ? String(
-          Math.max(0, Math.min(59, parseInt(rawMVal, 10) || 0)),
-        ).padStart(2, "0")
-      : "";
+    // Ak sú OBE prázdne → nevyplneny cas, onChange("")
+    if (!rawHVal && !rawMVal) {
+      onChange("");
+      return;
+    }
+    // Ak je HH vyplnené, MM sa auto-doplní na "00" (aby user nemusel
+    // klikať dvakrát pre "13:00"). To iste sa nedeje naopak — ak je
+    // MM vyplnené ale HH nie, počkáme kým user zadá HH.
+    if (!rawHVal) {
+      // Iba MM napísané → onChange stále prázdne kým HH je prázdne
+      onChange("");
+      return;
+    }
+    const hPadded = String(
+      Math.max(0, Math.min(23, parseInt(rawHVal, 10) || 0)),
+    ).padStart(2, "0");
+    const mPadded = String(
+      Math.max(0, Math.min(59, parseInt(rawMVal || "0", 10) || 0)),
+    ).padStart(2, "0");
     if (hPadded !== rawH) setRawH(hPadded);
     if (mPadded !== rawM) setRawM(mPadded);
-    // onChange s platným časom LEN keď sú OBE polia vyplnené. Inak
-    // pickedTime ostane "" a submit-button je disabled (validation).
-    if (hPadded && mPadded) {
-      onChange(`${hPadded}:${mPadded}`);
-    } else {
-      onChange("");
-    }
+    onChange(`${hPadded}:${mPadded}`);
   }
 
   // Fixná šírka inputu (w-20 = 80px). Nechceme flex-1 lebo box je
@@ -690,51 +690,81 @@ function DayModal({
   }, [isAssign, assignMode, assignLead?.city]);
 
   async function submitAssign() {
-    if (!isAssign || !assignLead || !pickedUserId || !assignMode) return;
-    setAssignBusy(true);
-    setAssignError(null);
-    const startDate = date;
-    const startDateTime = new Date(`${startDate}T${pickedTime || "09:00"}`);
-    const dateStr = startDateTime.toLocaleString("sk-SK", {
-      weekday: "long",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+    // Debug log — nech vidime v konzole aky je stav pri click
+    console.log("[submitAssign] click:", {
+      isAssign,
+      assignLead: assignLead?.id,
+      pickedUserId,
+      pickedTime,
+      assignMode,
     });
-    const noteParts = [
-      `📅 Termín: ${dateStr}`,
-      assignMode === "realization" && !singleDay && pickedDateTo
-        ? `📅 Do: ${new Date(pickedDateTo).toLocaleDateString("sk-SK")}`
-        : null,
-      input.trim() || null,
-    ].filter(Boolean);
-    const fullNote = noteParts.join("\n");
-
-    const res =
-      assignMode === "inspection"
-        ? await handoverToInspectionAction(
-            assignLead.id,
-            pickedUserId,
-            fullNote || undefined,
-          )
-        : await handoverToRealizationAction(
-            assignLead.id,
-            pickedUserId,
-            fullNote || undefined,
-          );
-    setAssignBusy(false);
-    if (!res.ok) {
-      setAssignError(
-        res.error === "db_error"
-          ? "DB error — pravdepodobne treba spustiť supabase/10_role_handoff.sql"
-          : res.error,
-      );
+    if (!isAssign || !assignLead || !pickedUserId || !assignMode) {
+      // Namiesto silent return zobrazime PRESNU chybu userovi
+      const missing: string[] = [];
+      if (!isAssign) missing.push("assign mode");
+      if (!assignLead) missing.push("lead");
+      if (!pickedUserId) missing.push("obhliadkár/realizátor");
+      if (!assignMode) missing.push("typ (obhliadka/realizácia)");
+      setAssignError(`Chýba: ${missing.join(", ")}`);
       return;
     }
-    onClose();
-    router.push(`/agent/leads/${assignLead.id}`);
+    if (!pickedTime) {
+      setAssignError("Vyplň čas (HH : MM) pred potvrdením.");
+      return;
+    }
+    setAssignBusy(true);
+    setAssignError(null);
+    try {
+      const startDate = date;
+      const startDateTime = new Date(`${startDate}T${pickedTime}`);
+      const dateStr = startDateTime.toLocaleString("sk-SK", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const noteParts = [
+        `📅 Termín: ${dateStr}`,
+        assignMode === "realization" && !singleDay && pickedDateTo
+          ? `📅 Do: ${new Date(pickedDateTo).toLocaleDateString("sk-SK")}`
+          : null,
+        input.trim() || null,
+      ].filter(Boolean);
+      const fullNote = noteParts.join("\n");
+
+      const res =
+        assignMode === "inspection"
+          ? await handoverToInspectionAction(
+              assignLead.id,
+              pickedUserId,
+              fullNote || undefined,
+            )
+          : await handoverToRealizationAction(
+              assignLead.id,
+              pickedUserId,
+              fullNote || undefined,
+            );
+      console.log("[submitAssign] result:", res);
+      setAssignBusy(false);
+      if (!res.ok) {
+        setAssignError(
+          res.error === "db_error"
+            ? "DB error — pravdepodobne treba spustiť supabase/10_role_handoff.sql"
+            : res.error,
+        );
+        return;
+      }
+      onClose();
+      router.push(`/agent/leads/${assignLead.id}`);
+    } catch (err) {
+      console.error("[submitAssign] EXCEPTION:", err);
+      setAssignBusy(false);
+      setAssignError(
+        err instanceof Error ? `Exception: ${err.message}` : "Neznáma chyba",
+      );
+    }
   }
   // Esc → zatvor modal
   React.useEffect(() => {
@@ -1093,15 +1123,26 @@ function DayModal({
               </div>
             )}
 
-            {/* Submit — POSLEDNÝ krok */}
+            {/* Submit — POSLEDNÝ krok.
+                POZOR: NEDISABLEUJEME kvôli pickedTime — user by mohol
+                stlačiť Potvrdiť skôr ako HH input stihol blur-nút
+                (race condition mezi blur + click). Validáciu robíme
+                v submitAssign() — ak čas chýba, ukáže sa error. */}
             <button
               type="button"
-              onClick={() => {
-                // Zjednodušený UX: v ASSIGN móde je Potvrdiť POSLEDNÝ krok.
-                // Note-textarea je vyššie (viď blok pred týmto buttonom).
-                submitAssign();
+              onMouseDown={() => {
+                // Force blur na akéhokoľvek focus-ovaného inputu →
+                // spustí sa commit() → pickedTime sa updatne pred
+                // tým než sa spracuje click event.
+                if (
+                  document.activeElement &&
+                  document.activeElement instanceof HTMLElement
+                ) {
+                  document.activeElement.blur();
+                }
               }}
-              disabled={assignBusy || !pickedUserId || !pickedTime}
+              onClick={() => submitAssign()}
+              disabled={assignBusy || !pickedUserId}
               className={cn(
                 "w-full h-12 rounded-xl font-bold text-white transition-colors inline-flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
                 assignMode === "inspection"
