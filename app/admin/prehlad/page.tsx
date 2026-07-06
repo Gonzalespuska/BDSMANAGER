@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { LeadGapAlert } from "./lead-gap-alert";
 import { ActivityLogClient, type ActivityRow } from "./activity-log-client";
+import { PipelineWindowSwitch } from "./pipeline-window-switch";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -44,11 +45,19 @@ export const dynamic = "force-dynamic";
  * problém (napr. 0 odobehnutých obhliadok za 7 dní), môže si zavolať
  * obhliadkára.
  */
-export default async function PrehladPage() {
+export default async function PrehladPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pw?: string }>;
+}) {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
   const realRole = await getRealUserRole();
   if (realRole !== "admin") redirect("/agent");
+
+  // Pipeline window — 7d (default) alebo 30d cez URL param ?pw=30d.
+  const sp = await searchParams;
+  const pipelineWindow: "7d" | "30d" = sp.pw === "30d" ? "30d" : "7d";
 
   const sb = createAdminClient();
 
@@ -75,6 +84,9 @@ export default async function PrehladPage() {
   const now = Date.now();
   const nowDate = new Date(now);
   const since7 = new Date(now - 7 * 86400_000).toISOString();
+  const since30 = new Date(now - 30 * 86400_000).toISOString();
+  // Aktívne okno pre pipeline — pod kontrolou switchu (?pw=7d|30d).
+  const sinceWindow = pipelineWindow === "30d" ? since30 : since7;
   const since24h = new Date(now - 24 * 60 * 60_000).toISOString();
   const since3d = new Date(now - 3 * 86400_000).toISOString();
   const monthStart = new Date(
@@ -607,7 +619,7 @@ export default async function PrehladPage() {
       .from("leads")
       .select("assigned_to, name")
       .eq("status", "quote_sent")
-      .gte("last_activity_at", since7),
+      .gte("last_activity_at", sinceWindow),
     sb
       .from("leads")
       .select("assigned_to, name")
@@ -617,7 +629,7 @@ export default async function PrehladPage() {
       .from("leads")
       .select("assigned_to, name")
       .in("status", ["scheduled", "interested", "needs_inspection"])
-      .gte("last_activity_at", since7),
+      .gte("last_activity_at", sinceWindow),
     sb
       .from("leads")
       .select("assigned_to, name")
@@ -627,7 +639,7 @@ export default async function PrehladPage() {
       .from("leads")
       .select("assigned_to, name")
       .in("status", ["in_realization", "won"])
-      .gte("last_activity_at", since7),
+      .gte("last_activity_at", sinceWindow),
     sb
       .from("leads")
       .select("assigned_to, name")
@@ -795,9 +807,14 @@ export default async function PrehladPage() {
       {/* ═══════════════════════════════════════════════════════════════
           2) PIPELINE zjednotený — počet v headere každého stĺpca +
              stagnation flag (>STAGNATION_DAYS bez pohybu).
-             Zrušené: samostatné číslo-tiles (CP=7 / Obhliadky=3 /
-             Realizácie=1) sú teraz priamo v headeri.
+             Switch 7d/30d ovplyvňuje pipeline count queries.
           ═══════════════════════════════════════════════════════════════ */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-[11px] uppercase tracking-wider font-black text-slate-700">
+          🚀 Pipeline · okno {pipelineWindow === "30d" ? "30 dní" : "7 dní"}
+        </div>
+        <PipelineWindowSwitch current={pipelineWindow} />
+      </div>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* ── CP POSLANÉ ── (7d weekly window, kliknuteľné) */}
         <PipelineColumn
