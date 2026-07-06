@@ -98,14 +98,17 @@ function Time24Picker({
     onChange(`${hStr}:${mStr}`);
   }
 
+  // Fixná šírka inputu (w-20 = 80px). Nechceme flex-1 lebo box je
+  // potom neprimerane široký a text "09" vyzerá stratený.
+  // Text-center + style={{textAlign:"center"}} — dvojitá poistka
+  // (niekedy Tailwind text-center prehrá s browser defaultami).
   const baseCls =
-    "h-11 rounded-lg border border-input bg-background px-3 text-lg font-bold tabular-nums text-center " +
+    "h-12 w-20 rounded-lg border-2 border-input bg-background text-2xl font-black tabular-nums text-center " +
     "disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-violet-400 " +
-    "focus:border-violet-400 transition-colors [appearance:textfield] " +
-    "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+    "focus:border-violet-400 transition-colors";
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center justify-center gap-3">
       <input
         type="text"
         inputMode="numeric"
@@ -123,7 +126,6 @@ function Time24Picker({
             e.preventDefault();
             (e.currentTarget as HTMLInputElement).blur();
           }
-          // Šípky hore/dole = ±1 hodina
           if (e.key === "ArrowUp" || e.key === "ArrowDown") {
             e.preventDefault();
             const cur = parseInt(rawH || "0", 10) || 0;
@@ -136,11 +138,10 @@ function Time24Picker({
         disabled={disabled}
         aria-label="Hodina"
         placeholder="HH"
-        className={`${baseCls} flex-1`}
+        style={{ textAlign: "center", padding: 0 }}
+        className={baseCls}
       />
-      <span className="text-xl font-black text-muted-foreground select-none">
-        :
-      </span>
+      <span className="text-2xl font-black text-slate-400 select-none">:</span>
       <input
         type="text"
         inputMode="numeric"
@@ -158,7 +159,6 @@ function Time24Picker({
             e.preventDefault();
             (e.currentTarget as HTMLInputElement).blur();
           }
-          // Šípky = ±5 minút
           if (e.key === "ArrowUp" || e.key === "ArrowDown") {
             e.preventDefault();
             const cur = parseInt(rawM || "0", 10) || 0;
@@ -175,7 +175,8 @@ function Time24Picker({
         disabled={disabled}
         aria-label="Minúta"
         placeholder="MM"
-        className={`${baseCls} flex-1`}
+        style={{ textAlign: "center", padding: 0 }}
+        className={baseCls}
       />
     </div>
   );
