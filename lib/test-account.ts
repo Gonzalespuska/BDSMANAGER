@@ -28,22 +28,16 @@ export function isTestUserEmail(email: string | null | undefined): boolean {
  *   const testIds = await fetchTestUserIds(sb);
  *   const filtered = leads.filter(l => !l.assigned_to || !testIds.has(l.assigned_to));
  */
-export async function fetchTestUserIds(sb: {
-  from: (t: string) => {
-    select: (c: string) => {
-      in: (
-        col: string,
-        vals: readonly string[],
-      ) => Promise<{ data: Array<{ id: string }> | null }>;
-    };
-  };
-}): Promise<Set<string>> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchTestUserIds(sb: any): Promise<Set<string>> {
   try {
     const { data } = await sb
       .from("users")
       .select("id")
       .in("email", TEST_USER_EMAILS);
-    return new Set((data ?? []).map((u) => u.id));
+    return new Set(
+      ((data as Array<{ id: string }> | null) ?? []).map((u) => u.id),
+    );
   } catch {
     return new Set();
   }

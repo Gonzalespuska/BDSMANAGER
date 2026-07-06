@@ -2,13 +2,16 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   Activity,
+  AlertCircle,
   ArrowLeft,
   Calendar,
   ClipboardList,
   Eye,
+  Flame,
   Hammer,
   Phone,
   TrendingUp,
+  Users,
 } from "lucide-react";
 
 import { getCurrentAppUser, getRealUserRole } from "@/lib/auth";
@@ -16,7 +19,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { AgentLiveWrapper } from "@/components/agent-live-wrapper";
 import { STATUS_META, type LeadStatus } from "@/lib/types/lead";
 import { fetchTestUserIds } from "@/lib/test-account";
+import {
+  UNCALLED_ALERT_THRESHOLD,
+  STAGNATION_DAYS,
+  ROLE_INACTIVE_DAYS,
+} from "@/lib/admin-thresholds";
 import { cn } from "@/lib/utils";
+import { LeadGapAlert } from "./lead-gap-alert";
+import { ActivityLogClient, type ActivityRow } from "./activity-log-client";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -57,12 +67,23 @@ export default async function PrehladPage() {
   const nowDate = new Date(now);
   const since7 = new Date(now - 7 * 86400_000).toISOString();
   const since24h = new Date(now - 24 * 60 * 60_000).toISOString();
+  const since3d = new Date(now - 3 * 86400_000).toISOString();
   const monthStart = new Date(
     nowDate.getFullYear(),
     nowDate.getMonth(),
     1,
   ).toISOString();
   const monthLabel = nowDate.toLocaleDateString("sk-SK", { month: "long" });
+  // Kvartál — Q1 (Jan-Mar), Q2 (Apr-Jun), Q3 (Jul-Sep), Q4 (Oct-Dec)
+  const quarterIdx = Math.floor(nowDate.getMonth() / 3);
+  const quarterStart = new Date(
+    nowDate.getFullYear(),
+    quarterIdx * 3,
+    1,
+  ).toISOString();
+  const quarterLabel = `Q${quarterIdx + 1} ${nowDate.getFullYear()}`;
+  const stagnationCutoffMs = now - STAGNATION_DAYS * 86400_000;
+  const roleInactiveCutoffMs = now - ROLE_INACTIVE_DAYS * 86400_000;
 
   // ─── m² štatistika — DOKONČENÉ zákazky ─────────────────────────────
   // Nová definícia "dokončené" (per user spec):
@@ -83,8 +104,8 @@ export default async function PrehladPage() {
       .not("realization_at", "is", null)
       .lte("realization_at", nowIso)
       .not("status", "in", "(lost,archived,no_answer,not_interested)");
-  const [wonAll, wonMonth, won7d] = await Promise.all([
-    doneBase(),
+  const [wonQuarter, wonMonth, won7d] = await Promise.all([
+    doneBase().gte("realization_at", quarterStart),
     doneBase().gte("realization_at", monthStart),
     doneBase().gte("realization_at", since7),
   ]);
@@ -113,10 +134,10 @@ export default async function PrehladPage() {
     return (rows ?? []).filter((r) => !isTestAssigned(r.assigned_to)).length;
   }
 
-  const m2Total = sumM2(wonAll.data);
+  const m2Quarter = sumM2(wonQuarter.data);
   const m2Month = sumM2(wonMonth.data);
   const m27d = sumM2(won7d.data);
-  const jobsTotal = countReal(wonAll.data);
+  const jobsQuarter = countReal(wonQuarter.data);
   const jobsMonth = countReal(wonMonth.data);
   const jobs7d = countReal(won7d.data);
 
@@ -124,7 +145,7 @@ export default async function PrehladPage() {
   // Fetch trochu viac (20) aby po filtrovaní test-userov zostalo ~10.
   const { data: recentLeadsRaw } = await sb
     .from("leads")
-    .select("id, name, status, source_type, created_at, assigned_to, phone_revealed_at, value_estimate")
+    .select("id, name, status, source_type, created_at, last_activity_at, assigned_to, phone_revealed_at, value_estimate")
     .eq("status", "quote_sent")
     .order("last_activity_at", { ascending: false })
     .limit(20);
@@ -215,27 +236,129 @@ export default async function PrehladPage() {
   const lastPace = (lastMonthCount ?? 0) / Math.max(1, daysInLastMonth);
   const momDelta = lastPace > 0 ? ((thisPace - lastPace) / lastPace) * 100 : null;
 
-  // Agents top 4 — počet leadov za 30d
-  const agentTotals = new Map<string, number>();
-  for (const l of leadsForAnalytics) {
-    const aid = l.assigned_to as string | null;
-    if (!aid) continue;
-    agentTotals.set(aid, (agentTotals.get(aid) ?? 0) + 1);
+  // ─── Top VÝKON obchodákov (30d) ──────────────────────────────────────
+  // Meriame REÁLNY VÝKON, nie počet pridelených leadov (auto-assign).
+  // Výkon = počet handed_over_to_inspection akcií + počet email_sent
+  // (odoslaných CP) v posledných 30 dňoch.
+  const perfSinceIso = new Date(now - 30 * 86400_000).toISOString();
+  const { data: perfActions } = await sb
+    .from("lead_activities")
+    .select("user_id, type, created_at")
+    .in("type", ["handed_over_to_inspection", "email_sent"])
+    .gte("created_at", perfSinceIso);
+  const obchodTotals = new Map<
+    string,
+    { cpSent: number; toInspection: number }
+  >();
+  for (const a of perfActions ?? []) {
+    const uid = a.user_id as string | null;
+    if (!uid || testUserIds.has(uid)) continue;
+    const s = obchodTotals.get(uid) ?? { cpSent: 0, toInspection: 0 };
+    if (a.type === "email_sent") s.cpSent += 1;
+    if (a.type === "handed_over_to_inspection") s.toInspection += 1;
+    obchodTotals.set(uid, s);
   }
-  const analyticsAgentIds = Array.from(agentTotals.keys());
+
+  // ─── Top REALIZÁTORI (30d) ───────────────────────────────────────────
+  // Meriame počet dokončených + aktívnych realizácií.
+  const { data: realizatorLeads } = await sb
+    .from("leads")
+    .select("realization_by, status, realization_completed_at, data")
+    .not("realization_by", "is", null)
+    .in("status", ["in_realization", "won"]);
+  const realizatorTotals = new Map<
+    string,
+    { active: number; completed: number; m2: number }
+  >();
+  for (const l of realizatorLeads ?? []) {
+    const rid = l.realization_by as string | null;
+    if (!rid || testUserIds.has(rid)) continue;
+    const s = realizatorTotals.get(rid) ?? { active: 0, completed: 0, m2: 0 };
+    const d = (l.data as Record<string, unknown>) ?? {};
+    const p = d.plocha;
+    const m2 =
+      typeof p === "number"
+        ? p
+        : typeof p === "string"
+          ? parseFloat(p.replace(",", ".")) || 0
+          : 0;
+    if (l.realization_completed_at) {
+      s.completed += 1;
+      s.m2 += m2;
+    } else {
+      s.active += 1;
+    }
+    realizatorTotals.set(rid, s);
+  }
+
+  // ─── ROLE ACTIVITY — dôkaz že pracujú všetky 3 role ──────────────────
+  // Pre každú rolu (obchod, obhliadky, realizacie): počet lead_activities
+  // za 7 dní + čas poslednej akcie. Ak > ROLE_INACTIVE_DAYS → warning.
+  const { data: roleUsersRaw } = await sb
+    .from("users")
+    .select("id, role")
+    .in("role", ["obchod", "obhliadky", "realizacie"])
+    .eq("active", true);
+  const roleByUser = new Map<string, string>();
+  for (const u of roleUsersRaw ?? []) {
+    if (!testUserIds.has(u.id as string))
+      roleByUser.set(u.id as string, u.role as string);
+  }
+  const { data: roleActions } = await sb
+    .from("lead_activities")
+    .select("user_id, created_at")
+    .gte("created_at", since7)
+    .not("user_id", "is", null);
+  const roleStats = new Map<
+    string,
+    { count7d: number; lastAt: string | null }
+  >();
+  for (const r of ["obchod", "obhliadky", "realizacie"])
+    roleStats.set(r, { count7d: 0, lastAt: null });
+  for (const a of roleActions ?? []) {
+    const uid = a.user_id as string;
+    const role = roleByUser.get(uid);
+    if (!role) continue;
+    const s = roleStats.get(role)!;
+    s.count7d += 1;
+    const t = a.created_at as string;
+    if (!s.lastAt || t > s.lastAt) s.lastAt = t;
+  }
+
+  // ─── Collect all names potrebné pre top výkon + realizators + role ───
+  const perfUserIds = new Set<string>([
+    ...Array.from(obchodTotals.keys()),
+    ...Array.from(realizatorTotals.keys()),
+  ]);
   const analyticsAgentMap = new Map<string, string>();
-  if (analyticsAgentIds.length > 0) {
-    const { data: ausers } = await sb
+  if (perfUserIds.size > 0) {
+    const { data: pusers } = await sb
       .from("users")
       .select("id, name, email")
-      .in("id", analyticsAgentIds);
-    for (const u of ausers ?? [])
+      .in("id", Array.from(perfUserIds));
+    for (const u of pusers ?? [])
       analyticsAgentMap.set(u.id, u.name || u.email);
   }
-  const agentTopList = Array.from(agentTotals.entries())
-    .map(([id, total]) => ({ id, name: analyticsAgentMap.get(id) ?? "?", total }))
+  const obchodTopList = Array.from(obchodTotals.entries())
+    .map(([id, s]) => ({
+      id,
+      name: analyticsAgentMap.get(id) ?? "?",
+      total: s.cpSent + s.toInspection,
+      ...s,
+    }))
+    .filter((x) => x.total > 0)
     .sort((a, b) => b.total - a.total)
-    .slice(0, 4);
+    .slice(0, 5);
+  const realizatorTopList = Array.from(realizatorTotals.entries())
+    .map(([id, s]) => ({
+      id,
+      name: analyticsAgentMap.get(id) ?? "?",
+      total: s.completed + s.active,
+      ...s,
+    }))
+    .filter((x) => x.total > 0)
+    .sort((a, b) => b.completed - a.completed || b.active - a.active)
+    .slice(0, 5);
 
   // ─── Activity log — posledných 150 akcií naprieč tímom ────────────────
   // Načítame trochu viac (300) aby po filtrovaní test-usera zostalo
@@ -292,20 +415,28 @@ export default async function PrehladPage() {
   // Lead counts — filter test-usera (Mário Vitáz) v JS. Nefiltrujeme
   // priamo v query, lebo Supabase .or() s .not.in nie je 100% spoľahlivé
   // pri head:true count.
-  const [leadsTotalRes, leads24hRes, leadsStaleUncalledRes] = await Promise.all([
-    sb.from("leads").select("assigned_to"),
+  //
+  // "Otvorené leady" = aktívne, čo ešte NIE sú uzavreté (won/lost/archived
+  // /not_interested). Toto je práca pred obchodákom, na rozdiel od
+  // lifetime totalu (vanity číslo).
+  const [leadsOpenRes, leads24hRes, leadsStaleUncalledRes] = await Promise.all([
+    sb
+      .from("leads")
+      .select("assigned_to")
+      .not("status", "in", "(won,lost,archived,not_interested)"),
     sb.from("leads").select("assigned_to").gte("created_at", since24h),
     sb
       .from("leads")
       .select("assigned_to")
       .is("phone_revealed_at", null)
       .lt("created_at", since24h)
-      .not("status", "in", "(lost,archived,unreachable,not_interested)"),
+      .not("status", "in", "(lost,archived,unreachable,not_interested,won)"),
   ]);
-  const leadsTotal = (leadsTotalRes.data ?? []).filter(notTest).length;
+  const leadsOpen = (leadsOpenRes.data ?? []).filter(notTest).length;
   const leads24h = (leads24hRes.data ?? []).filter(notTest).length;
   const leadsStaleUncalled = (leadsStaleUncalledRes.data ?? []).filter(notTest)
     .length;
+  const uncalledAlarm = leadsStaleUncalled >= UNCALLED_ALERT_THRESHOLD;
   // Pipeline stats — WEEKLY window (posledných 7 dní).
   // Ku každému číslu ešte spočítame count za posledných 24h, aby sme
   // vedeli ukázať delta chip "+X %" oproti predchádzajúcim 6 dňom
@@ -423,59 +554,90 @@ export default async function PrehladPage() {
 
   return (
     <AgentLiveWrapper>
-      <header>
-        <Link
-          href="/admin"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-sky-700 mb-3 px-2 py-1 rounded-md hover:bg-sky-50/60 transition-colors w-fit"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
-          Späť na admin
-        </Link>
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
-          <Eye className="w-6 h-6 text-sky-500" aria-hidden />
-          Prehľad — supervision
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Read-only audit view. Admin tu nič nemení — len overuje že tím
-          tečie, nedochádza k stagnácii a všetky 3 role pracujú.
-        </p>
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-sky-700 mb-3 px-2 py-1 rounded-md hover:bg-sky-50/60 transition-colors w-fit"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
+            Späť na admin
+          </Link>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
+            <Eye className="w-6 h-6 text-sky-500" aria-hidden />
+            Prehľad — supervision
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Read-only audit view. Admin tu nič nemení — len overuje že tím
+            tečie, nedochádza k stagnácii a všetky 3 role pracujú.
+          </p>
+        </div>
+        {/* Lead-source gap indicator + sticky alarm banners */}
+        <LeadGapAlert />
       </header>
 
-      {/* ─── m² štatistika — dokončené realizácie ─── */}
-      <section className="rounded-2xl border-2 border-emerald-300 bg-gradient-to-b from-emerald-50/70 to-transparent p-4">
-        <header className="mb-3 flex items-center justify-between gap-2 flex-wrap">
-          <h2 className="font-extrabold text-sm inline-flex items-center gap-2 text-emerald-900">
-            📐 Dokončené m² (realizácie)
-          </h2>
-          <span className="text-[10px] text-emerald-700 font-semibold">
-            realization_at ≤ dnes · nezrušené
-          </span>
-        </header>
-        <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
-          <M2Tile label="Za 7 dní" value={m27d} count={jobs7d} tint="emerald" />
-          <M2Tile
-            label={`Tento mesiac (${monthLabel})`}
-            value={m2Month}
-            count={jobsMonth}
-            tint="emerald"
-          />
-          <M2Tile
-            label="Celkovo"
-            value={m2Total}
-            count={jobsTotal}
-            tint="emerald"
-            highlighted
-          />
-        </div>
-      </section>
+      {/* ═══════════════════════════════════════════════════════════════
+          1) ALARMY — najvyššia priorita, farebne
+          ═══════════════════════════════════════════════════════════════
+          Poradie: Neobvolané > 24h (najväčšie, red keď prah prekročený),
+          Otvorené leady (aktívne, nie lifetime total), Nové za 24h. */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        {/* Neobvolané > 24h — biggest, spans 2 cols */}
+        <Link
+          href="/admin/leads?filter=stale"
+          className={cn(
+            "md:col-span-2 rounded-2xl border-2 p-5 flex items-center gap-4 hover:shadow-md transition-all",
+            uncalledAlarm
+              ? "border-rose-400 bg-gradient-to-br from-rose-50 to-rose-100/50 shadow-[0_0_20px_rgba(244,63,94,0.15)]"
+              : "border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100/40",
+          )}
+        >
+          <div
+            className={cn(
+              "p-3 rounded-xl shrink-0",
+              uncalledAlarm ? "bg-rose-200/60" : "bg-emerald-200/60",
+            )}
+          >
+            {uncalledAlarm ? (
+              <Flame className="w-8 h-8 text-rose-700" aria-hidden />
+            ) : (
+              <Activity className="w-8 h-8 text-emerald-700" aria-hidden />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div
+              className={cn(
+                "text-[10px] uppercase tracking-wider font-black",
+                uncalledAlarm ? "text-rose-800" : "text-emerald-800",
+              )}
+            >
+              🚨 Neobvolané &gt; 24h
+            </div>
+            <div
+              className={cn(
+                "text-5xl md:text-6xl font-black tabular-nums leading-none mt-1",
+                uncalledAlarm ? "text-rose-900" : "text-emerald-900",
+              )}
+            >
+              {leadsStaleUncalled}
+            </div>
+            <div
+              className={cn(
+                "text-[11px] font-semibold mt-1.5",
+                uncalledAlarm ? "text-rose-700" : "text-emerald-700",
+              )}
+            >
+              {uncalledAlarm
+                ? `⚠️ Prekročený prah (${UNCALLED_ALERT_THRESHOLD}) — treba obvolať`
+                : `OK · pod prahom ${UNCALLED_ALERT_THRESHOLD}`}
+            </div>
+          </div>
+        </Link>
 
-      {/* Top stats — leady všeobecne. „Leady spolu" je klikateľné →
-          /admin/leads (activity log: kedy, odkiaľ, kto má pridelené). */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <StatCard
           icon={<Phone className="w-4 h-4 text-sky-600" />}
-          label="Leady spolu"
-          value={leadsTotal ?? 0}
+          label="Otvorené leady"
+          value={leadsOpen ?? 0}
           tint="sky"
           href="/admin/leads"
         />
@@ -486,174 +648,195 @@ export default async function PrehladPage() {
           tint="sky"
           href="/admin/leads?range=24h"
         />
-        <StatCard
-          icon={<Activity className="w-4 h-4 text-rose-600" />}
-          label="Neobvolané > 24h"
-          value={leadsStaleUncalled ?? 0}
-          tint="rose"
-          href="/admin/leads?filter=stale"
-        />
       </div>
 
-      {/* Pipeline — CP → Obhliadky → Realizácie, v jednom veľkom okne.
-          Merame WEEKLY (posledných 7 dní). Delta chip = tempo za
-          posledných 24h vs denný priemer prior 6d. */}
-      <section className="rounded-2xl border-2 border-sky-200 bg-gradient-to-b from-sky-50/60 to-transparent p-4">
-        <header className="mb-3 flex items-center justify-between gap-2 flex-wrap">
-          <h2 className="font-extrabold text-sm inline-flex items-center gap-2 text-sky-900">
-            🚀 Pipeline — CP → Obhliadky → Realizácie
-          </h2>
-          <span className="text-[10px] text-sky-800/70 italic">
-            Posledných 7 dní · delta chip = tempo dnes vs. denný priemer
-            prior 6d
-          </span>
-        </header>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <StatCard
-            icon={<ClipboardList className="w-4 h-4 text-violet-600" />}
-            label="CP poslané · 7d"
-            value={leadsQuoteSent ?? 0}
-            tint="violet"
-            delta={leadsQuoteSentDelta}
-            deltaLabel="24h vs. prior 6d avg"
-          />
-          <StatCard
-            icon={<ClipboardList className="w-4 h-4 text-violet-600" />}
-            label="Otvorené obhliadky · 7d"
-            value={obhliadkyOpen ?? 0}
-            tint="violet"
-            delta={obhliadkyOpenDelta}
-            deltaLabel="24h vs. prior 6d avg"
-          />
-          <StatCard
-            icon={<Hammer className="w-4 h-4 text-emerald-600" />}
-            label="Naplánované realizácie · 7d"
-            value={realizacieActive ?? 0}
-            tint="emerald"
-            delta={realizacieActiveDelta}
-            deltaLabel="24h vs. prior 6d avg"
-          />
-        </div>
-      </section>
-
-      {/* 3 sekcie — vedľa seba na xl, pod seba na menších */}
+      {/* ═══════════════════════════════════════════════════════════════
+          2) PIPELINE zjednotený — počet v headere každého stĺpca +
+             stagnation flag (>STAGNATION_DAYS bez pohybu).
+             Zrušené: samostatné číslo-tiles (CP=7 / Obhliadky=3 /
+             Realizácie=1) sú teraz priamo v headeri.
+          ═══════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* ────── CENOVÉ PONUKY ────── */}
-        <Section
-          icon={<Phone className="w-5 h-5 text-sky-500" />}
-          title="Cenové ponuky"
-          subtitle={`${recentLeads?.length ?? 0} posledných`}
-          tint="sky"
+        {/* ── CP POSLANÉ ── (7d weekly window, kliknuteľné) */}
+        <PipelineColumn
+          icon={<ClipboardList className="w-5 h-5 text-violet-500" />}
+          title="CP poslané"
+          count={leadsQuoteSent}
+          delta={leadsQuoteSentDelta}
+          tint="violet"
+          href="/admin/leads?filter=cp"
         >
           {(recentLeads?.length ?? 0) > 0 ? (
             <ul className="divide-y">
               {recentLeads!.map((l) => (
-                <li key={l.id} className="px-3 py-2 hover:bg-muted/30 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-sm truncate">{l.name}</div>
-                      <div className="text-[10px] text-muted-foreground inline-flex items-center gap-1.5 flex-wrap mt-0.5">
-                        <StatusPill status={l.status as LeadStatus} />
-                        <span>{l.source_type}</span>
-                        {l.assigned_to && (
-                          <span>· {userMap.get(l.assigned_to) ?? "?"}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground shrink-0">
-                      {relTime(l.created_at)}
-                    </div>
-                  </div>
-                </li>
+                <PipelineItem
+                  key={l.id}
+                  leadId={l.id as string}
+                  name={l.name as string}
+                  status={l.status as LeadStatus}
+                  source={l.source_type as string}
+                  assignedName={
+                    l.assigned_to ? (userMap.get(l.assigned_to as string) ?? null) : null
+                  }
+                  lastActivityAt={(l.last_activity_at as string) ?? (l.created_at as string)}
+                  stagnationCutoffMs={stagnationCutoffMs}
+                />
               ))}
             </ul>
           ) : (
-            <EmptyState message="Žiadne leady" />
+            <EmptyState message="Žiadne CP poslané" />
           )}
-        </Section>
+        </PipelineColumn>
 
-        {/* ────── OBHLIADKY ────── */}
-        <Section
+        {/* ── OBHLIADKY ── */}
+        <PipelineColumn
           icon={<ClipboardList className="w-5 h-5 text-violet-500" />}
           title="Obhliadky"
-          subtitle={`${recentObhliadky?.length ?? 0} otvorených`}
+          count={obhliadkyOpen}
+          delta={obhliadkyOpenDelta}
           tint="violet"
+          href="/obhliadky"
         >
           {(recentObhliadky?.length ?? 0) > 0 ? (
             <ul className="divide-y">
               {recentObhliadky!.map((l) => (
-                <li key={l.id} className="px-3 py-2 hover:bg-muted/30 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-sm truncate">{l.name}</div>
-                      <div className="text-[10px] text-muted-foreground inline-flex items-center gap-1.5 flex-wrap mt-0.5">
-                        <StatusPill status={l.status as LeadStatus} />
-                        {(l.data as Record<string, string>)?.lokalita && (
-                          <span>📍 {(l.data as Record<string, string>).lokalita}</span>
+                <PipelineItem
+                  key={l.id}
+                  leadId={l.id as string}
+                  name={l.name as string}
+                  status={l.status as LeadStatus}
+                  city={(l.data as Record<string, string>)?.lokalita ?? null}
+                  assignedName={
+                    l.assigned_to ? (userMap.get(l.assigned_to as string) ?? null) : null
+                  }
+                  lastActivityAt={l.last_activity_at as string}
+                  stagnationCutoffMs={stagnationCutoffMs}
+                  extra={
+                    l.next_callback_at ? (
+                      <span className="font-bold text-violet-700">
+                        📅{" "}
+                        {new Date(l.next_callback_at as string).toLocaleDateString(
+                          "sk-SK",
+                          { day: "2-digit", month: "2-digit" },
                         )}
-                        {l.assigned_to && (
-                          <span>· {userMap.get(l.assigned_to) ?? "?"}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground shrink-0 text-right">
-                      {l.next_callback_at && (
-                        <div className="font-bold text-violet-700">
-                          📅 {new Date(l.next_callback_at).toLocaleDateString("sk-SK", { day: "2-digit", month: "2-digit" })}
-                        </div>
-                      )}
-                      <div>{relTime(l.last_activity_at)}</div>
-                    </div>
-                  </div>
-                </li>
+                      </span>
+                    ) : null
+                  }
+                />
               ))}
             </ul>
           ) : (
             <EmptyState message="Žiadne otvorené obhliadky" />
           )}
-        </Section>
+        </PipelineColumn>
 
-        {/* ────── REALIZÁCIE ────── */}
-        <Section
+        {/* ── REALIZÁCIE ── */}
+        <PipelineColumn
           icon={<Hammer className="w-5 h-5 text-emerald-500" />}
           title="Realizácie"
-          subtitle={`${recentRealizacie?.length ?? 0} otvorených`}
+          count={realizacieActive}
+          delta={realizacieActiveDelta}
           tint="emerald"
+          href="/realizacie"
         >
           {(recentRealizacie?.length ?? 0) > 0 ? (
             <ul className="divide-y">
               {recentRealizacie!.map((l) => (
-                <li key={l.id} className="px-3 py-2 hover:bg-muted/30 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-sm truncate">{l.name}</div>
-                      <div className="text-[10px] text-muted-foreground inline-flex items-center gap-1.5 flex-wrap mt-0.5">
-                        <StatusPill status={l.status as LeadStatus} />
-                        {(l.data as Record<string, string>)?.lokalita && (
-                          <span>📍 {(l.data as Record<string, string>).lokalita}</span>
-                        )}
-                        {l.assigned_to && (
-                          <span>· {userMap.get(l.assigned_to) ?? "?"}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground shrink-0 text-right">
-                      {l.value_estimate != null && (
-                        <div className="font-bold text-emerald-700 tabular-nums">
-                          {l.value_estimate.toLocaleString("sk-SK")} €
-                        </div>
-                      )}
-                      <div>{relTime(l.last_activity_at)}</div>
-                    </div>
-                  </div>
-                </li>
+                <PipelineItem
+                  key={l.id}
+                  leadId={l.id as string}
+                  name={l.name as string}
+                  status={l.status as LeadStatus}
+                  city={(l.data as Record<string, string>)?.lokalita ?? null}
+                  assignedName={
+                    l.assigned_to ? (userMap.get(l.assigned_to as string) ?? null) : null
+                  }
+                  lastActivityAt={l.last_activity_at as string}
+                  stagnationCutoffMs={stagnationCutoffMs}
+                  extra={
+                    l.value_estimate != null ? (
+                      <span className="font-bold text-emerald-700 tabular-nums">
+                        {(l.value_estimate as number).toLocaleString("sk-SK")} €
+                      </span>
+                    ) : null
+                  }
+                />
               ))}
             </ul>
           ) : (
             <EmptyState message="Žiadne otvorené realizácie" />
           )}
-        </Section>
+        </PipelineColumn>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          3) AKTIVITA PODĽA ROLÍ — dôkaz že pracujú všetky 3 role
+          ═══════════════════════════════════════════════════════════════ */}
+      <section className="rounded-2xl border-2 border-slate-200 bg-background overflow-hidden">
+        <header className="px-4 py-3 border-b bg-slate-50 flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="font-extrabold text-sm inline-flex items-center gap-2 text-slate-900">
+            <Users className="w-4 h-4 text-slate-700" aria-hidden />
+            Aktivita podľa rolí · 7d
+          </h2>
+          <span className="text-[10px] text-slate-500 italic">
+            Ak posledná akcia rola staršia než {ROLE_INACTIVE_DAYS} dní →
+            zvýraznené
+          </span>
+        </header>
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x">
+          {(["obchod", "obhliadky", "realizacie"] as const).map((role) => {
+            const stat = roleStats.get(role)!;
+            const isInactive =
+              !stat.lastAt ||
+              new Date(stat.lastAt).getTime() < roleInactiveCutoffMs;
+            return (
+              <div
+                key={role}
+                className={cn(
+                  "p-4 flex items-center gap-3",
+                  isInactive && "bg-rose-50/40",
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-2 h-16 rounded-full",
+                    isInactive ? "bg-rose-500" : "bg-emerald-500",
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={cn(
+                      "text-[10px] uppercase tracking-wider font-black",
+                      isInactive ? "text-rose-800" : "text-slate-700",
+                    )}
+                  >
+                    {roleLabel(role)}
+                    {isInactive && " ⚠️"}
+                  </div>
+                  <div className="text-2xl font-black tabular-nums mt-0.5">
+                    {stat.count7d}
+                    <span className="text-xs font-semibold text-muted-foreground ml-1">
+                      akcií
+                    </span>
+                  </div>
+                  <div
+                    className={cn(
+                      "text-[11px] mt-1",
+                      isInactive
+                        ? "text-rose-700 font-bold"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {stat.lastAt
+                      ? `Posledná: ${relTime(stat.lastAt)}`
+                      : "Za 7 dní žiadna akcia"}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Footer info */}
       <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 inline-block">
@@ -672,53 +855,203 @@ export default async function PrehladPage() {
         . Ako admin tam vidíš všetky záznamy (nielen svoje).
       </div>
 
-      {/* ────── ANALYTIKA — zdroje, delta, agents, hodinový trend ────── */}
+      {/* ═══════════════════════════════════════════════════════════════
+          4) TOP VÝKON — dve rebríčky vedľa seba (obchodáci + realizátori)
+             Obchodáci: podľa REÁLNEHO výkonu (CP + na obhliadku),
+             NIE podľa počtu pridelených leadov (to robí auto-assign).
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Top obchodáci — výkon 30d */}
+        <div className="rounded-2xl border-2 border-violet-200 bg-gradient-to-br from-violet-50/50 to-white p-4">
+          <header className="flex items-center justify-between mb-3">
+            <h3 className="font-extrabold text-sm text-violet-900 inline-flex items-center gap-1.5">
+              🥇 Top obchodáci · 30d
+            </h3>
+            <span className="text-[10px] text-violet-700/70">
+              CP + posun na obhliadku
+            </span>
+          </header>
+          {obchodTopList.length === 0 ? (
+            <div className="text-xs text-muted-foreground italic py-2">
+              Zatiaľ žiadne obchodné akcie za 30d.
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {obchodTopList.map((a, i) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        "font-black tabular-nums w-5",
+                        i === 0
+                          ? "text-amber-600"
+                          : i === 1
+                            ? "text-slate-500"
+                            : i === 2
+                              ? "text-orange-700"
+                              : "text-muted-foreground",
+                      )}
+                    >
+                      {i + 1}.
+                    </span>
+                    <span className="truncate font-bold text-slate-800">
+                      {a.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 text-[10px] font-bold">
+                    <span
+                      className="tabular-nums bg-violet-100 text-violet-800 border border-violet-200 px-1.5 py-0.5 rounded"
+                      title="Odoslané CP"
+                    >
+                      CP {a.cpSent}
+                    </span>
+                    <span
+                      className="tabular-nums bg-sky-100 text-sky-800 border border-sky-200 px-1.5 py-0.5 rounded"
+                      title="Posunuté na obhliadku"
+                    >
+                      OB {a.toInspection}
+                    </span>
+                    <span className="tabular-nums font-black text-slate-900 ml-1">
+                      Σ {a.total}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top realizátori — 30d */}
+        <div className="rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-white p-4">
+          <header className="flex items-center justify-between mb-3">
+            <h3 className="font-extrabold text-sm text-emerald-900 inline-flex items-center gap-1.5">
+              🏗️ Top realizátori · 30d
+            </h3>
+            <span className="text-[10px] text-emerald-700/70">
+              Dokončené + aktívne
+            </span>
+          </header>
+          {realizatorTopList.length === 0 ? (
+            <div className="text-xs text-muted-foreground italic py-2">
+              Zatiaľ žiadne realizácie priradené.
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {realizatorTopList.map((r, i) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        "font-black tabular-nums w-5",
+                        i === 0
+                          ? "text-amber-600"
+                          : i === 1
+                            ? "text-slate-500"
+                            : i === 2
+                              ? "text-orange-700"
+                              : "text-muted-foreground",
+                      )}
+                    >
+                      {i + 1}.
+                    </span>
+                    <span className="truncate font-bold text-slate-800">
+                      {r.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 text-[10px] font-bold">
+                    <span
+                      className="tabular-nums bg-sky-100 text-sky-800 border border-sky-200 px-1.5 py-0.5 rounded"
+                      title="Aktívne realizácie"
+                    >
+                      AKT {r.active}
+                    </span>
+                    <span
+                      className="tabular-nums bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded"
+                      title="Dokončené realizácie"
+                    >
+                      DOK {r.completed}
+                    </span>
+                    {r.m2 > 0 && (
+                      <span
+                        className="tabular-nums bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded"
+                        title="Dokončené m²"
+                      >
+                        {Math.round(r.m2)} m²
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          5) DOKONČENÉ m² — presunuté nižšie (výstup, nie alarm).
+             Ponechané: 7d, tento mesiac.
+             Zrušené: CELKOVO (vanity metrika).
+             Pridané: tento kvartál.
+             Vrátený "IN CONSTRUCTION" disclaimer — feature zatiaľ
+             počíta z realization_at (obchodák dal termín + termín
+             prešiel), nie z fyzicky označeného dokončenia realizátorom.
+          ═══════════════════════════════════════════════════════════════ */}
+      <section className="rounded-2xl border-2 border-amber-300 bg-gradient-to-b from-amber-50/60 to-transparent p-4 relative">
+        <span className="absolute top-3 right-3 text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full border border-amber-400">
+          🚧 In construction
+        </span>
+        <header className="mb-3">
+          <h2 className="font-extrabold text-sm inline-flex items-center gap-2 text-emerald-900">
+            📐 Dokončené m² (realizácie)
+          </h2>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Aktuálne to počíta z leadov s <code className="font-mono">realization_at ≤ dnes</code>{" "}
+            (obchodák dal termín + termín prešiel), nezrušené. Až realizátori
+            začnú v UI označovať fyzické dokončenie, prejdeme na presnejšie
+            zdrojové dáta.
+          </p>
+        </header>
+        <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+          <M2Tile label="Za 7 dní" value={m27d} count={jobs7d} tint="emerald" />
+          <M2Tile
+            label={`Tento mesiac (${monthLabel})`}
+            value={m2Month}
+            count={jobsMonth}
+            tint="emerald"
+          />
+          <M2Tile
+            label={`Tento kvartál (${quarterLabel})`}
+            value={m2Quarter}
+            count={jobsQuarter}
+            tint="emerald"
+            highlighted
+          />
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          6) ANALYTIKA — zdroje + hodinový trend.
+             Zrušené: Zmeny (tempo) delta tile — pri malých číslach
+             neakčná/zavádzajúca.
+          ═══════════════════════════════════════════════════════════════ */}
       <section className="rounded-2xl border-2 border-slate-200 bg-gradient-to-b from-slate-50/60 to-transparent p-4 space-y-4">
         <header className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="font-extrabold text-sm inline-flex items-center gap-2 text-slate-900">
             📊 Analytika (posledných 30 dní)
           </h2>
           <span className="text-[10px] text-slate-500 italic">
-            Zdroje leadov, trend, obchodáci, momentové zmeny
+            Tento mesiac {(thisMonthCount ?? 0)} · minulý{" "}
+            {(lastMonthCount ?? 0)}
           </span>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {/* ZMENY delta */}
-          <div
-            className={cn(
-              "rounded-xl border-2 p-4",
-              momDelta === null
-                ? "bg-zinc-50 border-zinc-200"
-                : momDelta >= 0
-                  ? "bg-emerald-50 border-emerald-300"
-                  : "bg-rose-50 border-rose-300",
-            )}
-          >
-            <div className="text-[10px] uppercase tracking-wider font-extrabold text-slate-700 inline-flex items-center gap-1">
-              {momDelta === null
-                ? "📊 Zmeny"
-                : momDelta >= 0
-                  ? "📈 Zmeny (tempo)"
-                  : "📉 Zmeny (tempo)"}
-            </div>
-            <div
-              className={cn(
-                "text-3xl font-black tabular-nums mt-1 inline-flex items-center gap-2",
-                momDelta === null
-                  ? "text-muted-foreground"
-                  : momDelta >= 0
-                    ? "text-emerald-800"
-                    : "text-rose-800",
-              )}
-            >
-              {momDelta === null ? "—" : `${momDelta >= 0 ? "+" : ""}${momDelta.toFixed(1)}%`}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-1">
-              Tempo {(thisMonthCount ?? 0)}/tento vs {(lastMonthCount ?? 0)}/minulý mesiac
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Zdroje distribúcia */}
           <div className="rounded-xl border bg-background p-4">
             <div className="text-[10px] uppercase tracking-wider font-extrabold text-slate-700 mb-2">
@@ -753,45 +1086,10 @@ export default async function PrehladPage() {
             </div>
           </div>
 
-          {/* Top obchodáci */}
-          <div className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50/40 to-white p-4">
-            <div className="text-[10px] uppercase tracking-wider font-extrabold text-violet-900 mb-2">
-              👥 Top obchodáci · 30d
-            </div>
-            {agentTopList.length === 0 ? (
-              <div className="text-xs text-muted-foreground italic py-2">
-                Zatiaľ nikto neriešil lead.
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {agentTopList.map((a, i) => (
-                  <div key={a.id} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span
-                        className={cn(
-                          "font-black tabular-nums w-4",
-                          i === 0
-                            ? "text-amber-600"
-                            : i === 1
-                              ? "text-slate-500"
-                              : i === 2
-                                ? "text-orange-700"
-                                : "text-muted-foreground",
-                        )}
-                      >
-                        {i + 1}.
-                      </span>
-                      <span className="truncate font-semibold text-slate-800">
-                        {a.name}
-                      </span>
-                    </div>
-                    <span className="tabular-nums font-bold text-violet-900">
-                      {a.total}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Placeholder pre budúce metriky (napr. konverzný pomer CP→won) */}
+          <div className="rounded-xl border border-dashed bg-white/50 p-4 flex items-center justify-center text-[11px] text-muted-foreground italic min-h-[140px]">
+            Pipeline konverzia (CP → won) — dorobíme keď bude reprezentatívna
+            vzorka dát.
           </div>
         </div>
 
@@ -867,148 +1165,52 @@ export default async function PrehladPage() {
         </div>
       </section>
 
-      {/* ────── ACTIVITY LOG — live feed akcií naprieč tímom ────── */}
-      <section className="rounded-2xl border-2 border-sky-200 bg-background overflow-hidden">
-        <header className="px-4 py-3 border-b bg-sky-50/50 flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h2 className="font-extrabold text-base inline-flex items-center gap-2 text-sky-900">
-              📋 Activity log — akcie tímu
-            </h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Kto čo urobil kedy · Realtime · Posledných {activities.length}{" "}
-              akcií.
-            </p>
-          </div>
-          <span className="text-[10px] font-bold text-sky-700 uppercase tracking-wider bg-sky-100 px-2 py-0.5 rounded">
-            🔴 live
-          </span>
-        </header>
-        {activities.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground italic">
-            Zatiaľ žiadne akcie. Ako obchodáci začnú pracovať s leadmi, každá
-            akcia sa objaví tu.
-          </div>
-        ) : (
-          <div className="overflow-auto max-h-[600px] relative">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm border-b">
-                <tr className="text-[10px] uppercase tracking-wider font-bold text-slate-600">
-                  <th className="text-left px-3 py-2 w-24">Čas</th>
-                  <th className="text-left px-3 py-2 w-40">Obchodák</th>
-                  <th className="text-left px-3 py-2">Akcia</th>
-                  <th className="text-left px-3 py-2">Lead</th>
-                  <th className="text-right px-3 py-2 w-28">Kedy</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {activities.map((a) => {
-                  // Meno obchodáka: 1) user_id (kto akciu vykonal),
-                  //                 2) fallback → lead.assigned_to (komu lead patrí)
-                  const explicitUser = a.user_id
-                    ? activityUserMap.get(a.user_id as string)
-                    : null;
-                  const assignedFallback = a.lead_id
-                    ? (activityLeadAssignedMap.get(a.lead_id as string) ?? null)
-                    : null;
-                  const fallbackName = assignedFallback
-                    ? activityUserMap.get(assignedFallback)
-                    : null;
-                  const uName = explicitUser ?? fallbackName ?? null;
-                  const isFallback = !explicitUser && !!fallbackName;
-
-                  const lName = a.lead_id
-                    ? activityLeadMap.get(a.lead_id as string)
-                    : null;
-                  const localized = localizeActivity(
-                    a.type as string,
-                    a.data as Record<string, unknown> | null,
-                  );
-                  const created = new Date(a.created_at as string);
-                  const time = created.toLocaleTimeString("sk-SK", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  });
-                  const dateKey = created.toLocaleDateString("sk-SK", {
-                    day: "2-digit",
-                    month: "2-digit",
-                  });
-                  const rel = formatRelativeSec(created, nowDate);
-                  return (
-                    <tr
-                      key={a.id as string}
-                      className="hover:bg-sky-50/60 transition-colors"
-                    >
-                      <td className="px-3 py-2 whitespace-nowrap tabular-nums">
-                        <div className="text-sm font-black text-slate-900">
-                          {time}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {dateKey}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-sm">
-                        {uName ? (
-                          <span
-                            className={cn(
-                              "font-semibold",
-                              isFallback
-                                ? "text-slate-600 italic"
-                                : "text-slate-900",
-                            )}
-                            title={
-                              isFallback
-                                ? "Priradený obchodák (akcia bola cez server/webhook)"
-                                : "Vykonal akciu"
-                            }
-                          >
-                            {uName}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground italic">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold",
-                            localized.className,
-                          )}
-                        >
-                          {localized.emoji} {localized.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-sm">
-                        {lName ? (
-                          <Link
-                            href={`/agent/leads/${a.lead_id}`}
-                            className="font-semibold text-sky-700 hover:underline decoration-dotted"
-                          >
-                            {lName}
-                          </Link>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground italic">
-                            (lead zmazaný)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <span className="text-xs tabular-nums font-semibold text-muted-foreground">
-                          {rel}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {/* ═══════════════════════════════════════════════════════════════
+          7) ACTIVITY LOG — client wrapper s toggle "aj systémové".
+             Default: iba ľudské akcie (zaplavené webhook eventmi
+             po starom stratili sme reálnu prácu z pohľadu).
+          ═══════════════════════════════════════════════════════════════ */}
+      <ActivityLogClient
+        activities={activities.map<ActivityRow>((a) => {
+          const explicitUser = a.user_id
+            ? activityUserMap.get(a.user_id as string)
+            : null;
+          const assignedFallback = a.lead_id
+            ? (activityLeadAssignedMap.get(a.lead_id as string) ?? null)
+            : null;
+          const fallbackName = assignedFallback
+            ? activityUserMap.get(assignedFallback)
+            : null;
+          const uName = explicitUser ?? fallbackName ?? null;
+          return {
+            id: a.id as string,
+            lead_id: (a.lead_id as string) ?? null,
+            user_id: (a.user_id as string) ?? null,
+            type: a.type as string,
+            data: (a.data as Record<string, unknown> | null) ?? null,
+            created_at: a.created_at as string,
+            user_name: uName ?? null,
+            lead_name: a.lead_id
+              ? (activityLeadMap.get(a.lead_id as string) ?? null)
+              : null,
+            is_fallback_user: !explicitUser && !!fallbackName,
+          };
+        })}
+      />
     </AgentLiveWrapper>
   );
+}
+
+/** SK label pre rolu (používame v Role Activity block) */
+function roleLabel(role: "obchod" | "obhliadky" | "realizacie"): string {
+  switch (role) {
+    case "obchod":
+      return "Obchod";
+    case "obhliadky":
+      return "Obhliadky";
+    case "realizacie":
+      return "Realizácie";
+  }
 }
 
 /**
@@ -1199,6 +1401,169 @@ function StatCard({
     );
   }
   return <div className={cn("rounded-xl border p-3", tintBg)}>{inner}</div>;
+}
+
+/**
+ * PipelineColumn — stĺpec pre pipeline sekciu s COUNT priamo v headeri.
+ * Nahrádza samostatné StatCard tiles + Section (zjednotenie).
+ */
+function PipelineColumn({
+  icon,
+  title,
+  count,
+  delta,
+  tint,
+  href,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  count: number;
+  delta?: number | null;
+  tint: "sky" | "violet" | "emerald";
+  href?: string;
+  children: React.ReactNode;
+}) {
+  const headerBg = {
+    sky: "bg-sky-50 border-sky-200",
+    violet: "bg-violet-50 border-violet-200",
+    emerald: "bg-emerald-50 border-emerald-200",
+  }[tint];
+  const countCls = {
+    sky: "text-sky-800",
+    violet: "text-violet-800",
+    emerald: "text-emerald-800",
+  }[tint];
+  const deltaCls =
+    delta == null
+      ? "bg-zinc-100 text-zinc-500 border-zinc-200"
+      : delta > 0
+        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+        : delta < 0
+          ? "bg-rose-100 text-rose-800 border-rose-300"
+          : "bg-zinc-100 text-zinc-600 border-zinc-200";
+  const deltaText =
+    delta == null ? "—" : delta > 0 ? `+${delta}%` : `${delta}%`;
+  return (
+    <section className="rounded-2xl border bg-background overflow-hidden flex flex-col">
+      <header
+        className={cn(
+          "px-3 py-2.5 border-b flex items-center justify-between gap-2",
+          headerBg,
+        )}
+      >
+        <div className="inline-flex items-center gap-2 min-w-0">
+          {icon}
+          <span className="font-bold truncate">{title}</span>
+          <span
+            className={cn(
+              "text-2xl font-black tabular-nums leading-none ml-1",
+              countCls,
+            )}
+          >
+            · {count}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {delta !== undefined && (
+            <span
+              className={cn(
+                "text-[9px] font-black px-1.5 py-0.5 rounded border tabular-nums",
+                deltaCls,
+              )}
+              title="Δ za posledných 24h vs. denný priemer prior 6d"
+            >
+              24h {deltaText}
+            </span>
+          )}
+          {href && (
+            <Link
+              href={href}
+              className="text-[10px] font-bold text-slate-600 hover:text-slate-900"
+              title="Otvoriť plný zoznam"
+            >
+              →
+            </Link>
+          )}
+        </div>
+      </header>
+      <div className="flex-1 min-h-0 overflow-y-auto max-h-[520px]">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * PipelineItem — jednotný riadok v pipeline zozname.
+ * Ukazuje: názov, status pill, meta info (source/city/user), extra
+ * (kalendár dátum alebo cena), rel-time posledná aktivita, a
+ * STAGNATION indikátor (červená bodka + text) ak last_activity_at
+ * je staršie ako STAGNATION_DAYS.
+ */
+function PipelineItem({
+  leadId,
+  name,
+  status,
+  source,
+  city,
+  assignedName,
+  lastActivityAt,
+  stagnationCutoffMs,
+  extra,
+}: {
+  leadId: string;
+  name: string;
+  status: LeadStatus;
+  source?: string;
+  city?: string | null;
+  assignedName: string | null;
+  lastActivityAt: string;
+  stagnationCutoffMs: number;
+  extra?: React.ReactNode;
+}) {
+  const activityMs = new Date(lastActivityAt).getTime();
+  const isStagnant = activityMs < stagnationCutoffMs;
+  const daysSince = Math.floor((Date.now() - activityMs) / 86400_000);
+  return (
+    <Link
+      href={`/agent/leads/${leadId}`}
+      className={cn(
+        "px-3 py-2 hover:bg-muted/30 transition-colors block border-l-2",
+        isStagnant ? "border-rose-400 bg-rose-50/30" : "border-transparent",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="font-bold text-sm truncate flex items-center gap-1.5">
+            {isStagnant && (
+              <span
+                className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"
+                title={`Stagnuje ${daysSince}d`}
+                aria-label="Stagnuje"
+              />
+            )}
+            {name || <span className="italic text-muted-foreground">bez mena</span>}
+          </div>
+          <div className="text-[10px] text-muted-foreground inline-flex items-center gap-1.5 flex-wrap mt-0.5">
+            <StatusPill status={status} />
+            {source && <span>{source}</span>}
+            {city && <span>📍 {city}</span>}
+            {assignedName && <span>· {assignedName}</span>}
+            {isStagnant && (
+              <span className="text-rose-700 font-bold uppercase tracking-wider text-[9px]">
+                🔴 stagnuje {daysSince}d
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="text-[10px] text-muted-foreground shrink-0 text-right space-y-0.5">
+          {extra}
+          <div>{relTime(lastActivityAt)}</div>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 function Section({
