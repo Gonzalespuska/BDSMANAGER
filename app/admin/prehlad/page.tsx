@@ -306,16 +306,85 @@ export default async function PrehladPage() {
   const leads24h = (leads24hRes.data ?? []).filter(notTest).length;
   const leadsStaleUncalled = (leadsStaleUncalledRes.data ?? []).filter(notTest)
     .length;
-  // Pipeline stats — TENTO MESIAC (reset na 1.). Filter test-user.
-  const { data: leadsQuoteSentAll } = await sb
-    .from("leads")
-    .select("assigned_to")
-    .eq("status", "quote_sent")
-    .gte("last_activity_at", monthStart);
-  const leadsQuoteSent = (leadsQuoteSentAll ?? []).filter(notTest).length;
+  // Pipeline stats — WEEKLY window (posledných 7 dní).
+  // Ku každému číslu ešte spočítame count za posledných 24h, aby sme
+  // vedeli ukázať delta chip "+X %" oproti predchádzajúcim 6 dňom
+  // (denný priemer prior 6d).
+  //
+  // Prečo:
+  //   • Weekly window je pre obchodáka aktuálnejšie ako "od 1. mesiaca"
+  //     — vidí čo sa deje TERAZ, nie starú historiu z 1. júla.
+  //   • Delta chip za 24h je "tempo dnes" — okamžite vidí či pipeline
+  //     zrýchľuje alebo spomaľuje.
+  const [
+    leadsQuoteSent7dRes,
+    leadsQuoteSent24hRes,
+    obhliadkyOpen7dRes,
+    obhliadkyOpen24hRes,
+    realizacieActive7dRes,
+    realizacieActive24hRes,
+  ] = await Promise.all([
+    sb
+      .from("leads")
+      .select("assigned_to")
+      .eq("status", "quote_sent")
+      .gte("last_activity_at", since7),
+    sb
+      .from("leads")
+      .select("assigned_to")
+      .eq("status", "quote_sent")
+      .gte("last_activity_at", since24h),
+    sb
+      .from("leads")
+      .select("assigned_to")
+      .in("status", ["scheduled", "interested", "needs_inspection"])
+      .gte("last_activity_at", since7),
+    sb
+      .from("leads")
+      .select("assigned_to")
+      .in("status", ["scheduled", "interested", "needs_inspection"])
+      .gte("last_activity_at", since24h),
+    sb
+      .from("leads")
+      .select("assigned_to")
+      .in("status", ["in_realization", "won"])
+      .gte("last_activity_at", since7),
+    sb
+      .from("leads")
+      .select("assigned_to")
+      .in("status", ["in_realization", "won"])
+      .gte("last_activity_at", since24h),
+  ]);
 
-  // ─── 2) OBHLIADKY — leady so status "scheduled"/"interested" ─────────
-  // Fetchujeme viac (20) a filter tester → zostane realistický zoznam.
+  const leadsQuoteSent = (leadsQuoteSent7dRes.data ?? []).filter(notTest).length;
+  const leadsQuoteSent24h = (leadsQuoteSent24hRes.data ?? []).filter(notTest).length;
+  const obhliadkyOpen = (obhliadkyOpen7dRes.data ?? []).filter(notTest).length;
+  const obhliadkyOpen24h = (obhliadkyOpen24hRes.data ?? []).filter(notTest).length;
+  const realizacieActive = (realizacieActive7dRes.data ?? []).filter(notTest).length;
+  const realizacieActive24h = (realizacieActive24hRes.data ?? []).filter(notTest).length;
+
+  /**
+   * Denný delta %: porovná count za posledných 24h vs priemerný denný
+   * count za predchádzajúcich 6 dní (weekly - 24h) / 6.
+   *
+   * +100 % = dnes prišlo 2× viac ako denný priemer prior 6d
+   *    0 % = dnes rovnaké ako priemer
+   *  -50 % = dnes polovica priemeru
+   *  null = nedá sa spočítať (prior 6d bolo 0)
+   */
+  function dailyDelta(week: number, last24h: number): number | null {
+    const prior6d = Math.max(0, week - last24h);
+    if (prior6d === 0) return last24h > 0 ? 100 : null;
+    const dailyAvg = prior6d / 6;
+    if (dailyAvg === 0) return last24h > 0 ? 100 : null;
+    return Math.round(((last24h - dailyAvg) / dailyAvg) * 100);
+  }
+
+  const leadsQuoteSentDelta = dailyDelta(leadsQuoteSent, leadsQuoteSent24h);
+  const obhliadkyOpenDelta = dailyDelta(obhliadkyOpen, obhliadkyOpen24h);
+  const realizacieActiveDelta = dailyDelta(realizacieActive, realizacieActive24h);
+
+  // Recent lists — leady/obhliadky/realizacie pre 3 sekcie nižšie
   const { data: recentObhliadkyRaw } = await sb
     .from("leads")
     .select("id, name, status, next_callback_at, last_activity_at, assigned_to, data")
@@ -324,16 +393,6 @@ export default async function PrehladPage() {
     .limit(20);
   const recentObhliadky = (recentObhliadkyRaw ?? []).filter(notTest).slice(0, 10);
 
-  // Count "otvorených" obhliadok — vylúčime test-usera z celkovej sumy
-  const { data: obhliadkyOpenAll } = await sb
-    .from("leads")
-    .select("assigned_to")
-    .in("status", ["scheduled", "interested", "needs_inspection"])
-    .gte("last_activity_at", monthStart);
-  const obhliadkyOpen = (obhliadkyOpenAll ?? []).filter(notTest).length;
-
-  // ─── 3) REALIZÁCIE — leady v realizácii (in_realization) alebo
-  //     už dokončené za tento mesiac (realization_at <= now). ─────────
   const { data: recentRealizacieRaw } = await sb
     .from("leads")
     .select("id, name, status, last_activity_at, value_estimate, assigned_to, data, realization_at")
@@ -343,13 +402,6 @@ export default async function PrehladPage() {
   const recentRealizacie = (recentRealizacieRaw ?? [])
     .filter(notTest)
     .slice(0, 10);
-
-  const { data: realizacieActiveAll } = await sb
-    .from("leads")
-    .select("assigned_to")
-    .in("status", ["in_realization", "won"])
-    .gte("last_activity_at", monthStart);
-  const realizacieActive = (realizacieActiveAll ?? []).filter(notTest).length;
 
   // ─── Resolve assigned user names ──────────────────────────────────────
   const allAssigned = new Set<string>();
@@ -443,34 +495,43 @@ export default async function PrehladPage() {
         />
       </div>
 
-      {/* Pipeline — CP → Obhliadky → Realizácie, v jednom veľkom okne */}
+      {/* Pipeline — CP → Obhliadky → Realizácie, v jednom veľkom okne.
+          Merame WEEKLY (posledných 7 dní). Delta chip = tempo za
+          posledných 24h vs denný priemer prior 6d. */}
       <section className="rounded-2xl border-2 border-sky-200 bg-gradient-to-b from-sky-50/60 to-transparent p-4">
         <header className="mb-3 flex items-center justify-between gap-2 flex-wrap">
           <h2 className="font-extrabold text-sm inline-flex items-center gap-2 text-sky-900">
             🚀 Pipeline — CP → Obhliadky → Realizácie
           </h2>
           <span className="text-[10px] text-sky-800/70 italic">
-            Postup zákazky cez proces
+            Posledných 7 dní · delta chip = tempo dnes vs. denný priemer
+            prior 6d
           </span>
         </header>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <StatCard
             icon={<ClipboardList className="w-4 h-4 text-violet-600" />}
-            label="CP poslané"
+            label="CP poslané · 7d"
             value={leadsQuoteSent ?? 0}
             tint="violet"
+            delta={leadsQuoteSentDelta}
+            deltaLabel="24h vs. prior 6d avg"
           />
           <StatCard
             icon={<ClipboardList className="w-4 h-4 text-violet-600" />}
-            label="Otvorené obhliadky"
+            label="Otvorené obhliadky · 7d"
             value={obhliadkyOpen ?? 0}
             tint="violet"
+            delta={obhliadkyOpenDelta}
+            deltaLabel="24h vs. prior 6d avg"
           />
           <StatCard
             icon={<Hammer className="w-4 h-4 text-emerald-600" />}
-            label="Naplánované realizácie"
+            label="Naplánované realizácie · 7d"
             value={realizacieActive ?? 0}
             tint="emerald"
+            delta={realizacieActiveDelta}
+            deltaLabel="24h vs. prior 6d avg"
           />
         </div>
       </section>
@@ -1062,6 +1123,8 @@ function StatCard({
   value,
   tint,
   href,
+  delta,
+  deltaLabel,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -1069,6 +1132,10 @@ function StatCard({
   tint: "sky" | "violet" | "emerald" | "rose";
   /** Ak zadané, kartička je klikateľná (Link) a otvorí detail. */
   href?: string;
+  /** Percento zmeny (napr. +50, -20). null = žiadny delta chip. */
+  delta?: number | null;
+  /** Tooltip pre delta chip (napr. "24h vs. prior 6d avg"). */
+  deltaLabel?: string;
 }) {
   const tintBg = {
     sky: "bg-sky-50 border-sky-200",
@@ -1076,16 +1143,42 @@ function StatCard({
     emerald: "bg-emerald-50 border-emerald-200",
     rose: "bg-rose-50 border-rose-200",
   }[tint];
+  // Delta chip color: > 0 = green, < 0 = red, = 0 = zinc
+  const deltaCls =
+    delta == null
+      ? "bg-zinc-100 text-zinc-500 border-zinc-200"
+      : delta > 0
+        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+        : delta < 0
+          ? "bg-rose-100 text-rose-800 border-rose-300"
+          : "bg-zinc-100 text-zinc-600 border-zinc-200";
+  const deltaText =
+    delta == null
+      ? "· 0 · 24h"
+      : delta > 0
+        ? `+${delta} %`
+        : `${delta} %`;
   const inner = (
     <>
       <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
         {icon}
         {label}
       </div>
-      <div className="text-2xl font-extrabold tabular-nums mt-1 flex items-center gap-1.5">
-        {value}
+      <div className="text-2xl font-extrabold tabular-nums mt-1 flex items-center gap-1.5 flex-wrap">
+        <span>{value}</span>
+        {delta !== undefined && (
+          <span
+            title={deltaLabel ?? "Δ za posledných 24h"}
+            className={cn(
+              "text-[10px] font-black px-1.5 py-0.5 rounded-md border tabular-nums",
+              deltaCls,
+            )}
+          >
+            {deltaText}
+          </span>
+        )}
         {href && (
-          <span className="text-[11px] font-bold text-sky-600 opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="text-[11px] font-bold text-sky-600 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
             →
           </span>
         )}
