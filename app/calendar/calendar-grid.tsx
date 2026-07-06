@@ -1003,6 +1003,31 @@ function DayModal({
               )}
             </div>
 
+            {/* POZNÁMKA k priradeniu — inline, vyššie ako Potvrdiť.
+                Text sa pošle spolu s obhliadkou/realizáciou (súčasť
+                handoverToInspectionAction/handoverToRealizationAction
+                cez `input` state — rovnaká premenná ako day-note
+                composer). */}
+            <div>
+              <label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block mb-1">
+                📝 Poznámka <span className="normal-case font-normal text-muted-foreground/70">(voliteľná — pošle sa spolu)</span>
+              </label>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    submitAssign();
+                  }
+                }}
+                disabled={assignBusy}
+                rows={2}
+                placeholder="napr. Zavolať vopred, prístup zo strany garáže..."
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-400"
+              />
+            </div>
+
             {/* Error */}
             {assignError && (
               <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-900">
@@ -1010,10 +1035,14 @@ function DayModal({
               </div>
             )}
 
-            {/* Submit */}
+            {/* Submit — POSLEDNÝ krok */}
             <button
               type="button"
-              onClick={submitAssign}
+              onClick={() => {
+                // Zjednodušený UX: v ASSIGN móde je Potvrdiť POSLEDNÝ krok.
+                // Note-textarea je vyššie (viď blok pred týmto buttonom).
+                submitAssign();
+              }}
               disabled={assignBusy || !pickedUserId}
               className={cn(
                 "w-full h-12 rounded-xl font-bold text-white transition-colors inline-flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
@@ -1037,11 +1066,6 @@ function DayModal({
                 </>
               )}
             </button>
-
-            <div className="text-[11px] text-muted-foreground italic">
-              Poznámku pridaj do poľa dole (nižšie sa objaví u obhliadkára /
-              realizatora).
-            </div>
           </section>
         )}
 
@@ -1085,34 +1109,39 @@ function DayModal({
           </section>
         )}
 
-        {/* Poznámky */}
-        <section>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-            Poznámky ({notes.length})
-          </h3>
-          {notes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Žiadne poznámky na tento deň.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {notes.map((n) => (
-                <EditableNoteRow
-                  key={n.id}
-                  note={n}
-                  onDelete={() => removeNote(n.id)}
-                  onSave={(newBody) => {
-                    // optimistic — predpoklad že save prejde
-                    n.body = newBody;
-                  }}
-                />
-              ))}
-            </ul>
-          )}
-        </section>
+        {/* Poznámky (day-notes) — v ASSIGN móde skryté, aby to nemátlo
+            (užívateľ píše poznámku k obhliadke vyššie, nie k dňu). */}
+        {!isAssign && (
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+              Poznámky ({notes.length})
+            </h3>
+            {notes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Žiadne poznámky na tento deň.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {notes.map((n) => (
+                  <EditableNoteRow
+                    key={n.id}
+                    note={n}
+                    onDelete={() => removeNote(n.id)}
+                    onSave={(newBody) => {
+                      // optimistic — predpoklad že save prejde
+                      n.body = newBody;
+                    }}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
 
-      {/* Add note composer */}
+      {/* Add note composer — v ASSIGN móde skryté (poznámka je inline
+          vyššie, súčasť handoveru). */}
+      {!isAssign && (
       <div className="border-t p-3 bg-muted/20">
         {error && (
           <div className="mb-2 text-xs text-destructive">⚠ {error}</div>
@@ -1142,6 +1171,7 @@ function DayModal({
           </button>
         </div>
       </div>
+      )}
       </div>
     </div>
   );
