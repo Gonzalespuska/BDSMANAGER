@@ -91,18 +91,28 @@ function Time24Picker({
   function commit(hOverride?: string, mOverride?: string) {
     const rawHVal = hOverride ?? rawH;
     const rawMVal = mOverride ?? rawM;
-    // Ak sú OBE polia prázdne, nič nezmeníme — pickedTime ostane "".
-    if (!rawHVal && !rawMVal) {
+    // Pad-uj IBA vyplnené pole, druhé nechaj prázdne. Nechceme aby
+    // po napísaní "9" do HH sa MM auto-vyplnilo na "00" — user musí
+    // MM zadať sám (jasne signalizuje že MM je jeho zodpovednosť).
+    const hPadded = rawHVal
+      ? String(
+          Math.max(0, Math.min(23, parseInt(rawHVal, 10) || 0)),
+        ).padStart(2, "0")
+      : "";
+    const mPadded = rawMVal
+      ? String(
+          Math.max(0, Math.min(59, parseInt(rawMVal, 10) || 0)),
+        ).padStart(2, "0")
+      : "";
+    if (hPadded !== rawH) setRawH(hPadded);
+    if (mPadded !== rawM) setRawM(mPadded);
+    // onChange s platným časom LEN keď sú OBE polia vyplnené. Inak
+    // pickedTime ostane "" a submit-button je disabled (validation).
+    if (hPadded && mPadded) {
+      onChange(`${hPadded}:${mPadded}`);
+    } else {
       onChange("");
-      return;
     }
-    const hNum = Math.max(0, Math.min(23, parseInt(rawHVal || "0", 10) || 0));
-    const mNum = Math.max(0, Math.min(59, parseInt(rawMVal || "0", 10) || 0));
-    const hStr = String(hNum).padStart(2, "0");
-    const mStr = String(mNum).padStart(2, "0");
-    if (hStr !== rawH) setRawH(hStr);
-    if (mStr !== rawM) setRawM(mStr);
-    onChange(`${hStr}:${mStr}`);
   }
 
   // Fixná šírka inputu (w-20 = 80px). Nechceme flex-1 lebo box je
@@ -123,22 +133,24 @@ function Time24Picker({
         maxLength={2}
         value={rawH}
         onChange={(e) => {
-          // Iba cifry, max 2. Live clamp na 0-23 — ak by nasledujuca
-          // cifra spravila hodinu > 23, zahodime ju (tzn. napisat "80"
-          // sa nikdy nepodari, ostane len "8").
-          const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+          // Iba cifry, max 2. Živý clamp na 0-23.
+          // slice(-2) = ber POSLEDNÉ 2 cifry (nie prvé). Ak už bolo
+          // "00" a user napíše "8", value je "008" → slice(-2)="08".
+          const digits = e.target.value.replace(/\D/g, "").slice(-2);
           if (digits.length === 2) {
             const num = parseInt(digits, 10);
             if (num > 23) {
-              // Zachovaj iba prvu cifru (napr. "80" → "8")
-              setRawH(digits.slice(0, 1));
+              setRawH(digits.slice(-1));
               return;
             }
           }
           setRawH(digits);
         }}
         onBlur={() => commit()}
+        // Focus AJ click → select all. Bez click by user musel manuálne
+        // selectovať pri druhom vstupe do pola s hotovým "00".
         onFocus={(e) => e.currentTarget.select()}
+        onClick={(e) => e.currentTarget.select()}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
@@ -167,12 +179,12 @@ function Time24Picker({
         maxLength={2}
         value={rawM}
         onChange={(e) => {
-          // Live clamp na 0-59 — napisat "80" sa nepodari, ostane "8".
-          const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+          // Živý clamp na 0-59. slice(-2) = ber posledné 2 cifry.
+          const digits = e.target.value.replace(/\D/g, "").slice(-2);
           if (digits.length === 2) {
             const num = parseInt(digits, 10);
             if (num > 59) {
-              setRawM(digits.slice(0, 1));
+              setRawM(digits.slice(-1));
               return;
             }
           }
@@ -180,6 +192,7 @@ function Time24Picker({
         }}
         onBlur={() => commit()}
         onFocus={(e) => e.currentTarget.select()}
+        onClick={(e) => e.currentTarget.select()}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
