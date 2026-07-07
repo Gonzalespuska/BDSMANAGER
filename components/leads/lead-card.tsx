@@ -48,7 +48,14 @@ import {
  *
  * Po hovore agent klikne výsledok (✅ záujem / ❌ nezáujem / 📵 nedvíha / 📅 callback)
  */
-export function LeadCard({ lead: initialLead }: { lead: Lead }) {
+export function LeadCard({
+  lead: initialLead,
+  isAdmin = false,
+}: {
+  lead: Lead;
+  /** Admin má prístup k "Won" statusu v pickeri. */
+  isAdmin?: boolean;
+}) {
   const router = useRouter();
   const [lead, setLead] = React.useState(initialLead);
   const [busy, setBusy] = React.useState(false);
@@ -250,6 +257,7 @@ export function LeadCard({ lead: initialLead }: { lead: Lead }) {
                 leadId={lead.id}
                 status={lead.status}
                 onChange={(s) => setLead({ ...lead, status: s })}
+                isAdmin={isAdmin}
               />
               {lead.call_attempts > 0 && (
                 <span

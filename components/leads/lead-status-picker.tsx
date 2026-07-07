@@ -67,10 +67,15 @@ export function LeadStatusPicker({
   leadId,
   status,
   onChange,
+  isAdmin = false,
 }: {
   leadId: string;
   status: LeadStatus;
   onChange?: (newStatus: LeadStatus) => void;
+  /** Admin môže manuálne nastaviť "Won". Obchodákom je táto možnosť
+   * skrytá — Won sa auto-nastaví keď prejde realization_at (viď
+   * agent/page.tsx filter). */
+  isAdmin?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -168,7 +173,7 @@ export function LeadStatusPicker({
             direction === "down" ? "top-full mt-1" : "bottom-full mb-1",
           )}
         >
-          {STATUSES.map((s) => {
+          {STATUSES.filter((s) => s !== "won" || isAdmin).map((s) => {
             const isActive = s === current;
             return (
               <button

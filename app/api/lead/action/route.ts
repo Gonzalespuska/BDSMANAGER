@@ -236,6 +236,21 @@ export async function POST(request: NextRequest) {
             { status: 400 },
           );
         }
+        // ADMIN-ONLY: manuálny prechod na "won".
+        // Won sa AUTO-nastaví keď realization_at prejde (agent/page.tsx
+        // filter). Obchodák tento status nesmie sám nastaviť aby sa
+        // predišlo nafukovaniu čísel.
+        if (body.new_status === "won" && user.role !== "admin") {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "won_admin_only",
+              message:
+                "Status 'Won' môže nastaviť iba admin. Automaticky sa nastaví keď prejde termín realizácie.",
+            },
+            { status: 403 },
+          );
+        }
         const { error } = await admin
           .from("leads")
           .update({ status: body.new_status, last_activity_at: nowIso })
