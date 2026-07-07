@@ -151,6 +151,23 @@ export function GeneratorClient({
   const [adminMode, setAdminMode] = React.useState(false);
   const [bulkM2] = React.useState<string>(initialM2);
   const [busy, setBusy] = React.useState(false);
+  // Edit-before-send modal state — user klikne malé tužka tlačidlo,
+  // otvorí sa modal s pre-fillnutym textom, kde si môže doplniť
+  // vlastný text pred odoslaním.
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editBody, setEditBody] = React.useState("");
+  const [editPayload, setEditPayload] = React.useState<{
+    subject: string;
+    bodyText: string;
+    pdfBase64: string;
+    filename: string;
+    quoteStateSnapshot: SavedQuoteState;
+    input: {
+      agent_name: string;
+      agent_email: string;
+      agent_phone?: string;
+    };
+  } | null>(null);
   // Lokalita zákazky = miesto realizácie (na transport), NIE home adresa zákazníka.
   // Necháme prázdne aj keď lead má lokalitu vo formulári — agent si po telefonáte
   // explicitne potvrdí kam ide robiť. Pôvodnú hodnotu z leadu ponúkneme ako
@@ -602,6 +619,153 @@ export function GeneratorClient({
       downloadBlob(blob, filename);
     } catch (e) {
       alert(`PDF chyba: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Zostaví telo emailu, PDF, subject a snapshot. Volá sa z:
+   *   • handleSendEmail() — priamy send
+   *   • handleOpenEditor() — otvorí modal s tymto ako default
+   */
+  async function preparePayload(recipient: string): Promise<{
+    subject: string;
+    bodyText: string;
+    pdfBase64: string;
+    filename: string;
+    quoteStateSnapshot: SavedQuoteState;
+    input: Awaited<ReturnType<typeof buildPdfInput>>["input"];
+  } | null> {
+    const { generator, input } = await buildPdfInput();
+    const { blob, filename } = generator(input);
+    const subject = `EPOXIDOVO.SK – Cenová ponuka`;
+    const accusative =
+      floorType && FLOOR_TYPE_ACCUSATIVE[floorType]
+        ? FLOOR_TYPE_ACCUSATIVE[floorType]
+        : input.floor_type_label.toLowerCase();
+    const signatureLines = [
+      input.agent_name,
+      input.agent_phone ? formatPhoneIntl(input.agent_phone) : null,
+      "EPOXIDOVO s. r. o.",
+      input.agent_email,
+      "www.epoxidovo.sk",
+    ].filter(Boolean);
+    const bodyText = `Dobrý deň prajeme,
+
+Na základe nášho telefonátu Vám v prílohe posielam ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu.
+
+Upozorňujeme, že ide o orientačné ceny — presná cenová ponuka bude vyčíslená až po obhliadke. V závislosti od stavu podkladu sa cena môže líšiť o niekoľko percent (viac alebo menej).
+
+V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
+
+S pozdravom,
+${signatureLines.join("\n")}`;
+    const arrayBuffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const pdfBase64 = btoa(binary);
+    const quoteStateSnapshot: SavedQuoteState = {
+      version: (savedQuote?.version ?? 0) + 1,
+      sent_at: new Date().toISOString(),
+      sent_to: recipient,
+      subject,
+      agent_id: undefined,
+      state: {
+        floorType,
+        saleMode,
+        lines,
+        lokalita,
+        manualKm,
+        customerName,
+        customerEmail,
+        jednofarebnaVariant,
+        materialQtys,
+        discountEnabled,
+        discountAmount,
+        discountLabel,
+      },
+      snapshot: { total, subtotal },
+    };
+    return {
+      subject,
+      bodyText,
+      pdfBase64,
+      filename,
+      quoteStateSnapshot,
+      input,
+    };
+  }
+
+  /**
+   * Klik na malú tužku "Upraviť pred poslaním" — vygeneruje payload
+   * (PDF + text) a otvorí modal s editovatelnym textom. Email sa NEPOSIELA
+   * kým user neklikne "Poslať" v modáli.
+   */
+  async function handleOpenEditor() {
+    const recipient = customerEmail.trim();
+    if (!recipient || !recipient.includes("@")) {
+      alert("Email zákazníka chýba alebo nie je validný.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = await preparePayload(recipient);
+      if (!payload) return;
+      setEditPayload(payload);
+      setEditBody(payload.bodyText);
+      setEditOpen(true);
+    } catch (e) {
+      alert(`Chyba: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Skutočné odoslanie po editácii — volané z modálového „Poslať" button-u. */
+  async function handleSendEdited() {
+    if (!editPayload) return;
+    setBusy(true);
+    try {
+      const recipient = customerEmail.trim();
+      const sendRes = await fetch("/api/quote/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: leadContext?.id?.startsWith("demo-")
+            ? null
+            : leadContext?.id ?? null,
+          to_email: recipient,
+          to_name: customerName.trim() || "Zákazník",
+          subject: editPayload.subject,
+          body_text: editBody,
+          pdf_base64: editPayload.pdfBase64,
+          pdf_filename: editPayload.filename,
+          agent_email: editPayload.input.agent_email,
+          agent_name: editPayload.input.agent_name,
+          quote_state: editPayload.quoteStateSnapshot,
+        }),
+      });
+      const sendJson = (await sendRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!sendRes.ok || !sendJson.ok) {
+        alert(`❌ Odoslanie zlyhalo: ${sendJson.error ?? "unknown"}`);
+        setBusy(false);
+        return;
+      }
+      setEditOpen(false);
+      setEditPayload(null);
+      alert(
+        `✅ Cenová ponuka odoslaná zákazníkovi na ${recipient}.\n\n📎 PDF v prílohe.`,
+      );
+      router.push("/agent?tab=kontakt");
+    } catch (e) {
+      alert(`Chyba: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
       setBusy(false);
     }
@@ -1210,8 +1374,98 @@ ${signatureLines.join("\n")}`;
             <Mail className="w-4 h-4 mr-1.5" aria-hidden />
             {isResend ? "Preposlať upravenú ponuku" : "Pošli email s ponukou"}
           </Button>
+          {/* Malé tlačidlo vpravo — otvorí modal na doplnenie textu
+              PRED odoslaním. Užitočné keď obchodák chce pridať
+              individuálnu poznámku ("dohodli sme sa na X", "kontaktoval
+              ma Váš syn", atd.) namiesto generickeho textu. */}
+          <Button
+            type="button"
+            onClick={handleOpenEditor}
+            disabled={
+              busy ||
+              total <= 0 ||
+              !customerEmail.trim() ||
+              !customerEmail.includes("@")
+            }
+            variant="outline"
+            className="min-w-[44px] px-3 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+            title="Upraviť text pred odoslaním"
+          >
+            ✏️
+          </Button>
         </div>
       </div>
+      )}
+
+      {/* Edit-before-send modal */}
+      {editOpen && editPayload && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditOpen(false);
+          }}
+        >
+          <div className="bg-background rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <header className="px-5 py-3 border-b flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+                  Upraviť email pred odoslaním
+                </div>
+                <h2 className="font-extrabold text-base">
+                  {editPayload.subject}
+                </h2>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  📎 {editPayload.filename} · Komu:{" "}
+                  <strong>{customerEmail}</strong>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditOpen(false)}
+                className="p-1.5 rounded-md hover:bg-muted"
+                aria-label="Zavrieť"
+              >
+                <X className="w-4 h-4" aria-hidden />
+              </button>
+            </header>
+            <div className="flex-1 overflow-auto p-5">
+              <label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block mb-1.5">
+                📝 Telo emailu
+              </label>
+              <textarea
+                value={editBody}
+                onChange={(e) => setEditBody(e.target.value)}
+                rows={16}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                placeholder="Text emailu..."
+              />
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Uprav si text ako chceš — signatúra, oslovenie, cokolvek. PDF
+                s cenovou ponukou sa priloží automaticky.
+              </p>
+            </div>
+            <footer className="px-5 py-3 border-t bg-muted/30 flex items-center gap-2 justify-end">
+              <Button
+                type="button"
+                onClick={() => setEditOpen(false)}
+                variant="outline"
+                size="sm"
+              >
+                Zrušiť
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSendEdited}
+                disabled={busy || !editBody.trim()}
+                className="bg-emerald-600 hover:bg-emerald-700"
+                size="sm"
+              >
+                <Mail className="w-4 h-4 mr-1.5" aria-hidden />
+                Poslať
+              </Button>
+            </footer>
+          </div>
+        </div>
       )}
     </div>
   );
