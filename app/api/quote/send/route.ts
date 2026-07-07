@@ -81,8 +81,7 @@ ${bodyHtml}
 <!-- Signature — brand block -->
 <div style="margin-top: 32px; padding-top: 20px; border-top: 2px solid #e2e8f0;">
   <div style="font-size: 15px; margin-bottom: 12px;">S pozdravom,</div>
-  <div style="font-family: 'Impact', 'Helvetica Neue', sans-serif; font-weight: 900; font-size: 32px; letter-spacing: 1px; background: linear-gradient(90deg, #38bdf8 0%, #0ea5e9 50%, #0284c7 100%); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 4px; line-height: 1;">EPOXIDOVO.SK</div>
-  <div style="height: 3px; width: 60px; background: linear-gradient(90deg, #38bdf8, #0284c7); border-radius: 2px; margin-bottom: 16px;"></div>
+  <div style="margin-bottom: 16px;"><img src="https://app.najcrm.sk/epoxidovo-logo.png" alt="EPOXIDOVO.SK" width="240" style="display: block; max-width: 100%; height: auto; border: 0;"></div>
   <div style="font-size: 15px; font-weight: 700; color: #0f172a;">${escapeHtml(agentName)}</div>
   ${phoneLine ? `<div style="font-size: 14px; color: #475569; margin-top: 4px; font-variant-numeric: tabular-nums;">${escapeHtml(phoneLine.trim())}</div>` : ""}
   <div style="font-size: 14px; margin-top: 4px;"><a href="mailto:${escapeHtml(emailLine.trim())}" style="color: #0284c7; text-decoration: none;">${escapeHtml(emailLine.trim())}</a></div>
