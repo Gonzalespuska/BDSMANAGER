@@ -7,6 +7,23 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { dashboardPathForRole, type AppUserRole } from "@/lib/auth";
 import { consume } from "@/lib/rate-limit";
 
+/**
+ * Zdieľané „demo/test" role-emaily — nemajú reálnu inbox, používajú sa
+ * na preview role-viewu. Zadanie tohto emailu na /login → skip OTP,
+ * rovno session cookies + redirect na jeho dashboard.
+ *
+ * BEZPEČNOSŤ: adresy vidieť z DB (musia mať public.users záznam). Kto
+ * pozná email, zaloguje sa — čo je akceptovateľné pre interné shared
+ * demo účty, ale NIKDY sem nesmie ísť admin ani reálny obchodák.
+ *
+ * Ak sa neskôr toto usmerní, staci to disablovať vymazaním emailu z
+ * tejto sady.
+ */
+const INSTANT_LOGIN_EMAILS = new Set([
+  "obhliadky@epoxidovo.sk",
+  "realizacie@epoxidovo.sk",
+]);
+
 // Rate limit: 5 OTP requestov za 15 minút na IP (chráni SMTP kvótu + spam).
 // Verify: 10 pokusov za 5 minút na IP (chráni pred brute-force OTP).
 async function getClientIpFromHeaders(): Promise<string> {
@@ -92,6 +109,78 @@ export async function sendOtpAction(formData: FormData) {
     }
     console.error("[sendOtp] whitelist lookup error:", e);
     redirect(`/login?error=send_failed&email=${encodeURIComponent(email)}${testQuery}`);
+  }
+
+  // ── Instant login pre demo shared emaily (obhliadky@, realizacie@) ──
+  // Preskočíme OTP → generujeme magic-link server-side → OTP token
+  // spálime priamo cez verifyOtp() → session cookies sedia → redirect
+  // na dashboard danej role.
+  if (INSTANT_LOGIN_EMAILS.has(email)) {
+    try {
+      const admin = createAdminClient();
+      const { data: linkData, error: linkErr } =
+        await admin.auth.admin.generateLink({
+          type: "magiclink",
+          email,
+        });
+      const emailOtp = linkData?.properties?.email_otp;
+      if (linkErr || !emailOtp) {
+        console.error(
+          "[instant-login] generateLink failed:",
+          linkErr?.message ?? "no email_otp",
+        );
+        redirect(
+          `/login?error=send_failed&email=${encodeURIComponent(email)}${testQuery}`,
+        );
+      }
+
+      const supabase = await createClient();
+      const { data: verifyData, error: verifyErr } =
+        await supabase.auth.verifyOtp({
+          email,
+          token: emailOtp,
+          type: "email",
+        });
+      if (verifyErr || !verifyData?.user) {
+        console.error(
+          "[instant-login] verifyOtp failed:",
+          verifyErr?.message ?? "no user",
+        );
+        redirect(
+          `/login?error=send_failed&email=${encodeURIComponent(email)}${testQuery}`,
+        );
+      }
+
+      // Načítaj rolu → správny dashboard
+      const { data: appUser } = await admin
+        .from("users")
+        .select("role")
+        .eq("auth_id", verifyData.user.id)
+        .maybeSingle();
+      const role = (appUser?.role ?? "obhliadky") as AppUserRole;
+
+      // Update last_login_at (best-effort)
+      await admin
+        .from("users")
+        .update({ last_login_at: new Date().toISOString() })
+        .eq("auth_id", verifyData.user.id);
+
+      redirect(dashboardPathForRole(role));
+    } catch (e) {
+      // redirect() hodí NEXT_REDIRECT — musí prejsť ďalej
+      if (
+        typeof e === "object" &&
+        e !== null &&
+        "digest" in e &&
+        String((e as { digest: unknown }).digest).startsWith("NEXT_REDIRECT")
+      ) {
+        throw e;
+      }
+      console.error("[instant-login] unexpected error:", e);
+      redirect(
+        `/login?error=send_failed&email=${encodeURIComponent(email)}${testQuery}`,
+      );
+    }
   }
 
   const supabase = await createClient();

@@ -136,6 +136,31 @@ export default async function LoginPage({
             <SendOtpSubmit />
           </form>
 
+          {/* Skratky pre role-preview demo účty — klik prefillne email */}
+          <div className="border-t pt-4 mt-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+              🎭 Preview iných rolí (bez OTP)
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="/login?email=obhliadky%40epoxidovo.sk"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-900 px-2.5 py-1 text-[11px] font-bold transition-colors"
+              >
+                🔍 Obhliadkar
+              </a>
+              <a
+                href="/login?email=realizacie%40epoxidovo.sk"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 px-2.5 py-1 text-[11px] font-bold transition-colors"
+              >
+                🔨 Realizátor
+              </a>
+            </div>
+            <p className="text-[10px] text-muted-foreground/70 mt-2 leading-snug">
+              Klikni + „Poslať kód" → automaticky ťa prihlási bez OTP kódu.
+              Slúži na náhľad ako vidí appku daná rola.
+            </p>
+          </div>
+
         </div>
 
         <p className="mt-6 text-center text-[10px] text-muted-foreground/70 uppercase tracking-wider font-bold">
