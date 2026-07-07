@@ -28,6 +28,27 @@ export const dynamic = "force-dynamic";
  * Klik na kartu → detail obhliadky (formulár na zápis výsledku).
  */
 export default async function ObhliadkyDashboard() {
+  try {
+    return await renderDashboard();
+  } catch (e) {
+    console.error("[obhliadky/page] render failed:", e);
+    return (
+      <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-6 space-y-2">
+        <div className="font-black text-rose-900">
+          Chyba pri načítaní Obhliadky
+        </div>
+        <div className="text-sm text-rose-800 font-mono break-all">
+          {e instanceof Error ? e.message : String(e)}
+        </div>
+        <div className="text-xs text-rose-700">
+          Nahlás mi túto chybu (screenshot). Idem opraviť.
+        </div>
+      </div>
+    );
+  }
+}
+
+async function renderDashboard() {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
 

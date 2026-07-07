@@ -15,11 +15,23 @@ export default async function ObhliadkyLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentAppUser();
+  let user;
+  try {
+    user = await getCurrentAppUser();
+  } catch (e) {
+    console.error("[obhliadky/layout] getCurrentAppUser threw:", e);
+    redirect("/login");
+  }
   if (!user) redirect("/login");
 
   const selfPaused = user.capacity === 0;
-  const notifications = await loadNotifications(user.id);
+  let notifications;
+  try {
+    notifications = await loadNotifications(user.id);
+  } catch (e) {
+    console.error("[obhliadky/layout] loadNotifications threw:", e);
+    notifications = [];
+  }
   return (
     <AppShell user={user} selfPaused={selfPaused} notifications={notifications}>
       {children}
