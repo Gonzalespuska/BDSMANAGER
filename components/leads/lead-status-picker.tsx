@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STATUS_META, type LeadStatus } from "@/lib/types/lead";
+import { toast } from "@/components/ui/toast";
 
 // Picker zobrazuje iba 6 high-level statusov ktoré matchujú tab kategórie:
 //   Nový → Kontakt → Nedvíha → Otvorené → Ukončené / Archivované
@@ -129,12 +130,16 @@ export function LeadStatusPicker({
       if (!r.ok || !json.ok) {
         setCurrent(prev);
         onChange?.(prev);
-        alert(`Chyba: ${json.error ?? `HTTP ${r.status}`}`);
+        toast.error(`Chyba: ${json.error ?? `HTTP ${r.status}`}`);
+      } else {
+        // Toast: "Status zmenený → NOVÉ" (auto-dismiss 3s cez toast.success)
+        const newMeta = STATUS_META[newStatus];
+        toast.success(`Status zmenený → ${newMeta.label}`);
       }
     } catch (e) {
       setCurrent(prev);
       onChange?.(prev);
-      alert(`Chyba: ${e instanceof Error ? e.message : "network"}`);
+      toast.error(`Chyba: ${e instanceof Error ? e.message : "network"}`);
     }
   }
 
