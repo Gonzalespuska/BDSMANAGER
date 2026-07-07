@@ -781,8 +781,23 @@ function DayModal({
         setAssignError(res.error);
         return;
       }
+      // Po vytvoreni obhliadky NEBERIEME usera na lead-profile —
+      // ostava na kalendari, kde uz vidi novy zaznam na danom dni.
+      // Prejdeme na cisty /calendar URL (bez assign params) a
+      // refreshneme aby sa nova calendar_note nacitala.
       onClose();
-      router.push(`/agent/leads/${assignLead.id}`);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("assign");
+      url.searchParams.delete("lead");
+      url.searchParams.delete("city");
+      url.searchParams.delete("manual");
+      // Zachovaj mesiac (m=YYYY-MM) — ak user prehliadal iny mesiac,
+      // ostane tam. Ak nie je set, defaultne aktualny.
+      router.replace(
+        url.pathname +
+          (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""),
+      );
+      router.refresh();
     } catch (err) {
       console.error("[submitAssign] EXCEPTION:", err);
       setAssignBusy(false);
