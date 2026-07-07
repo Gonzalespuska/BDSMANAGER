@@ -66,7 +66,10 @@ www.epoxidovo.sk`;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: `${agent.name} (EPOXIDOVO) <noreply@najcrm.sk>`,
+      from: (process.env.QUOTE_EMAIL_FROM ?? "EPOXIDOVO <noreply@najcrm.sk>").replace(
+        /^[^<]+/,
+        `${agent.name} (EPOXIDOVO) `,
+      ),
       to,
       reply_to: agent.email,
       subject: `TEST · Ako vyzerá signature od ${agent.name}`,
