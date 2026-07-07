@@ -135,11 +135,13 @@ export async function sendOtpAction(formData: FormData) {
       }
 
       const supabase = await createClient();
+      // type MUSÍ matchovať generateLink type ("magiclink") — "email" je
+      // pre signInWithOtp flow a s magic-link tokenom nesedí.
       const { data: verifyData, error: verifyErr } =
         await supabase.auth.verifyOtp({
           email,
           token: emailOtp,
-          type: "email",
+          type: "magiclink",
         });
       if (verifyErr || !verifyData?.user) {
         console.error(
