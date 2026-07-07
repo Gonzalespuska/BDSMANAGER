@@ -15,7 +15,8 @@ const STATUSES: LeadStatus[] = [
   "phone_revealed",
   "no_answer",
   "interested",
-  "inspected",
+  "needs_inspection", // Obhliadka — priradený obhliadkárovi, termín ešte pred
+  "inspected", // Obhliadnutý — termín uplynul / obhliadka hotová
   "won",
   "archived",
 ];
@@ -54,7 +55,7 @@ const STATUS_TEXT: Record<LeadStatus, string> = {
   interested: "CP",
   quote_sent: "CP poslaná",
   not_interested: "Nezáujem",
-  needs_inspection: "Na obhliadku",
+  needs_inspection: "Obhliadka",
   inspected: "Obhliadnutý",
   in_realization: "V realizácii",
   won: "Ukončené",
