@@ -158,7 +158,7 @@ export async function AppShell({
 
       <header className="border-b bg-background sticky top-0 z-10">
         {/* Header — kompaktnejší na mobile (menšia logika + hidden CRM subtitle). */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 md:py-4 flex items-center justify-between gap-2 md:gap-3">
+        <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-3 sm:px-6 py-2 md:py-4 flex items-center justify-between gap-2 md:gap-3">
           <Link
             href={homeHref}
             className="hover:opacity-80 transition-opacity min-w-0"
@@ -189,7 +189,7 @@ export async function AppShell({
         {/* Secondary nav — na mobile horizontal scroll (jedna línia),
             od md+ sa tab-y môžu zabaliť do druhého riadku aby Admin nezmizol
             za pravou hranou. Admin má rose tint. */}
-        <nav className="max-w-7xl mx-auto pb-2 md:pb-3 flex items-center gap-1.5 md:gap-2 md:flex-wrap overflow-x-auto md:overflow-visible scrollbar-hide px-3 sm:px-6 pr-6">
+        <nav className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] mx-auto pb-2 md:pb-3 flex items-center gap-1.5 md:gap-2 md:flex-wrap overflow-x-auto md:overflow-visible scrollbar-hide px-3 sm:px-6 pr-6">
           {visibleTabs.map((tabId) => {
             const def = NAV_TAB_DEFS[tabId];
             // „In building" — VŠETCI (aj admin) vidia iba blanknuté disabled
@@ -233,7 +233,7 @@ export async function AppShell({
           // zachovaný — žiadne h-screen/overflow-hidden gymnastiky.
           wide
             ? "max-w-none px-3 sm:px-4 md:px-6 py-2 md:py-3 pb-6"
-            : "max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8 pb-6",
+            : "max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] px-3 sm:px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8 pb-6",
         )}
       >
         {children}

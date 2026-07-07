@@ -444,7 +444,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
           )}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-2 gap-4">
           {leads.map((lead) => (
             <LeadCard key={lead.id} lead={lead} isAdmin={isAdmin} />
           ))}

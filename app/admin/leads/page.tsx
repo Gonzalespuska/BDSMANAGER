@@ -195,7 +195,7 @@ export default async function AdminLeadsPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
             Nepridelené ({unassigned.length})
           </h2>
-          <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2 grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {unassigned.map((l) => (
               <LeadCardMini key={l.id} lead={l} />
             ))}
@@ -218,7 +218,7 @@ export default async function AdminLeadsPage() {
               ({agentLeads.length})
             </span>
           </h2>
-          <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2 grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {agentLeads.map((l) => (
               <LeadCardMini key={l.id} lead={l} />
             ))}

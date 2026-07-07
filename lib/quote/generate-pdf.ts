@@ -5,6 +5,11 @@ import jsPDF from "jspdf";
 import { formatEur, type QuoteLineCalc } from "@/lib/data/materials";
 import { formatPhoneIntl } from "@/lib/phone-format";
 import { ROBOTO_REGULAR_BASE64, ROBOTO_BOLD_BASE64 } from "./fonts";
+import {
+  EPOXIDOVO_LOGO_BASE64,
+  EPOXIDOVO_LOGO_WIDTH,
+  EPOXIDOVO_LOGO_HEIGHT,
+} from "./logo-base64";
 
 /**
  * Register Roboto Regular + Bold do jsPDF VFS aby PDF podporovalo
@@ -116,14 +121,22 @@ export function generateQuotePdf(input: PdfQuoteInput): {
   const subtotalBeforeDiscount = input.total + discount;
   const finalTotal = Math.max(0, subtotalBeforeDiscount - discount);
 
-  // ─── Header — EPOXIDOVO branding ────────────────────────────────────
-  doc.setFontSize(24);
-  doc.setFont("Roboto", "bold");
-  doc.text("EPOXIDOVO", left, y);
-  doc.setFontSize(10);
+  // ─── Header — EPOXIDOVO logo (image) + tagline ─────────────────────
+  // Logo aspect 360x133 = 2.7:1. Vykreslime 45mm sirku → 16.6mm vysku.
+  const logoW = 45;
+  const logoH = (logoW * EPOXIDOVO_LOGO_HEIGHT) / EPOXIDOVO_LOGO_WIDTH;
+  doc.addImage(
+    `data:image/png;base64,${EPOXIDOVO_LOGO_BASE64}`,
+    "PNG",
+    left,
+    y - 4,
+    logoW,
+    logoH,
+  );
+  doc.setFontSize(9);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(120);
-  doc.text("Epoxidové a polyuretánové podlahy na mieru", left, y + 6);
+  doc.text("Epoxidové a polyuretánové podlahy na mieru", left, y + logoH);
   doc.setTextColor(0);
 
   doc.setFontSize(11);
@@ -362,12 +375,17 @@ export function generateQuotePdf(input: PdfQuoteInput): {
   }
   doc.setTextColor(0);
 
-  // EPOXIDOVO branding — vpravo
-  doc.setFontSize(14);
-  doc.setFont("Roboto", "bold");
-  doc.setTextColor(14, 165, 233); // sky-500
-  doc.text("EPOXIDOVO s. r. o.", right, footerY + 1, { align: "right" });
-  doc.setTextColor(0);
+  // EPOXIDOVO logo (image) — vpravo, menší
+  const footerLogoW = 35;
+  const footerLogoH = (footerLogoW * EPOXIDOVO_LOGO_HEIGHT) / EPOXIDOVO_LOGO_WIDTH;
+  doc.addImage(
+    `data:image/png;base64,${EPOXIDOVO_LOGO_BASE64}`,
+    "PNG",
+    right - footerLogoW,
+    footerY - 3,
+    footerLogoW,
+    footerLogoH,
+  );
 
   doc.setFontSize(9);
   doc.setFont("Roboto", "normal");
