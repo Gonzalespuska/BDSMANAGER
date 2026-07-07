@@ -3,6 +3,7 @@
 import jsPDF from "jspdf";
 
 import { formatEur, type QuoteLineCalc } from "@/lib/data/materials";
+import { formatPhoneIntl } from "@/lib/phone-format";
 import { ROBOTO_REGULAR_BASE64, ROBOTO_BOLD_BASE64 } from "./fonts";
 
 /**
@@ -350,7 +351,10 @@ export function generateQuotePdf(input: PdfQuoteInput): {
   doc.setFontSize(9);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(80);
-  const agentContact = [input.agent_phone, input.agent_email]
+  const agentContact = [
+    input.agent_phone ? formatPhoneIntl(input.agent_phone) : null,
+    input.agent_email,
+  ]
     .filter(Boolean)
     .join("  ·  ");
   if (agentContact) {

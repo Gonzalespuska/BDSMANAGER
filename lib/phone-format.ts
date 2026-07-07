@@ -33,3 +33,38 @@ export function formatPhoneSK(raw: string | null | undefined): string {
   // Fallback — nič sme neuznali, vráť pôvodný trimmovaný
   return String(raw).trim();
 }
+
+/**
+ * Medzinárodný formát: "+421 950 890 098" (SK) / "+420 605 123 456" (CZ).
+ * Používa sa v email signatúre + PDF footer — profesionálnejší vzhľad
+ * ako lokálne "0950 890 098".
+ *
+ * Rovnaké robustné parsovanie ako formatPhoneSK.
+ */
+export function formatPhoneIntl(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const cleaned = String(raw).replace(/[^\d+]/g, "");
+  let digits = cleaned;
+  // Normalizuj na 0XXXXXXXXX najprv (rovnako ako formatPhoneSK)
+  let country: "+421" | "+420" = "+421"; // default SK
+  if (digits.startsWith("+421")) {
+    digits = "0" + digits.slice(4);
+    country = "+421";
+  } else if (digits.startsWith("+420")) {
+    digits = "0" + digits.slice(4);
+    country = "+420";
+  } else if (digits.startsWith("421") && digits.length >= 12) {
+    digits = "0" + digits.slice(3);
+    country = "+421";
+  } else if (digits.startsWith("420") && digits.length >= 12) {
+    digits = "0" + digits.slice(3);
+    country = "+420";
+  }
+  // Musíme mať 0XXXXXXXXX
+  if (/^0\d{9}$/.test(digits)) {
+    // Odstrániť úvodnú nulu a poskladať: +421 XXX XXX XXX
+    const rest = digits.slice(1); // 9 číslic
+    return `${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6, 9)}`;
+  }
+  return String(raw).trim();
+}

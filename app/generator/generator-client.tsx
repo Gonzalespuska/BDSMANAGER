@@ -44,6 +44,7 @@ import {
   HQ_NAME,
 } from "@/lib/data/transport";
 import { cn } from "@/lib/utils";
+import { formatPhoneIntl } from "@/lib/phone-format";
 
 interface LineState {
   enabled: boolean;
@@ -628,7 +629,7 @@ export function GeneratorClient({
 
       const signatureLines = [
         input.agent_name,
-        input.agent_phone || null,
+        input.agent_phone ? formatPhoneIntl(input.agent_phone) : null,
         "EPOXIDOVO s. r. o.",
         input.agent_email,
         "www.epoxidovo.sk",
