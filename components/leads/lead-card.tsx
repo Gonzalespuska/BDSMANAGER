@@ -986,19 +986,37 @@ function QuickEmailButton({
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [text, setText] = React.useState("");
+  const [me, setMe] = React.useState<{
+    name: string;
+    email: string;
+    phone: string | null;
+  } | null>(null);
+
+  // Fetch prihláseného usera pri otvorení modálu — chceme jeho meno/tel/email
+  // do signatúry (nie hardcoded "Tim EPOXIDOVO").
+  React.useEffect(() => {
+    if (!open || me) return;
+    fetch("/api/user/me")
+      .then((r) => r.json())
+      .then((data) => setMe(data))
+      .catch(() => setMe({ name: "", email: "info@epoxidovo.sk", phone: null }));
+  }, [open, me]);
 
   const defaultBody = React.useMemo(() => {
-    return `Dobrý deň${leadName ? " " + leadName.split(" ")[0] : ""},
+    const first = leadName ? " " + leadName.split(" ")[0] : "";
+    const agentName = me?.name || "Obchodák EPOXIDOVO";
+    const agentPhone = me?.phone || "";
+    const agentEmail = me?.email || "info@epoxidovo.sk";
+    return `Dobrý deň${first},
 
 posielam Vám cenovú ponuku ktorú sme spolu prebrali. V prípade otázok ma neváhajte kontaktovať.
 
----
 S pozdravom,
-Tím EPOXIDOVO.SK
-📞 +421 918 823 124
-✉️ info@epoxidovo.sk
-🌐 epoxidovo.sk`;
-  }, [leadName]);
+${agentName}${agentPhone ? "\n" + agentPhone : ""}
+EPOXIDOVO s. r. o.
+${agentEmail}
+www.epoxidovo.sk`;
+  }, [leadName, me]);
 
   React.useEffect(() => {
     if (open) setText(defaultBody);
@@ -1020,13 +1038,13 @@ Tím EPOXIDOVO.SK
         error?: string;
       };
       if (!res.ok || !json.ok) {
-        alert("Chyba: " + (json.error ?? `HTTP ${res.status}`));
+        toast.error("Chyba: " + (json.error ?? `HTTP ${res.status}`));
       } else {
         setOpen(false);
-        alert("✅ Email s CP odoslaný.");
+        toast.success(`✉️ CP preposlaná zákazníkovi (${email})`);
       }
     } catch (e) {
-      alert("Sieťová chyba: " + (e instanceof Error ? e.message : "?"));
+      toast.error("Sieťová chyba: " + (e instanceof Error ? e.message : "?"));
     } finally {
       setBusy(false);
     }

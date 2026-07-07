@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentAppUser } from "@/lib/auth";
+import { buildHtmlFromPlainText } from "@/lib/email/build-html";
 
 /**
  * POST /api/quote/resend
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
         bcc: user.email,
         subject,
         text: body.body_text,
+        html: buildHtmlFromPlainText(body.body_text, user.email),
         attachments: [
           {
             filename: lastQuote.pdf_filename ?? "ponuka.pdf",
