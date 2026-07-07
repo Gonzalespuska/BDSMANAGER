@@ -156,6 +156,8 @@ export function GeneratorClient({
   // vlastný text pred odoslaním.
   const [editOpen, setEditOpen] = React.useState(false);
   const [editBody, setEditBody] = React.useState("");
+  const [editSubject, setEditSubject] = React.useState("");
+  const [editSubjectFocus, setEditSubjectFocus] = React.useState(false);
   const [editPayload, setEditPayload] = React.useState<{
     subject: string;
     bodyText: string;
@@ -717,6 +719,7 @@ ${signatureLines.join("\n")}`;
       if (!payload) return;
       setEditPayload(payload);
       setEditBody(payload.bodyText);
+      setEditSubject(payload.subject);
       setEditOpen(true);
     } catch (e) {
       alert(`Chyba: ${e instanceof Error ? e.message : "unknown"}`);
@@ -740,7 +743,7 @@ ${signatureLines.join("\n")}`;
             : leadContext?.id ?? null,
           to_email: recipient,
           to_name: customerName.trim() || "Zákazník",
-          subject: editPayload.subject,
+          subject: editSubject.trim() || editPayload.subject,
           body_text: editBody,
           pdf_base64: editPayload.pdfBase64,
           pdf_filename: editPayload.filename,
@@ -1406,23 +1409,53 @@ ${signatureLines.join("\n")}`;
           }}
         >
           <div className="bg-background rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <header className="px-5 py-3 border-b flex items-center justify-between gap-3">
-              <div>
+            <header className="px-5 py-3 border-b flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
                   Upraviť email pred odoslaním
                 </div>
-                <h2 className="font-extrabold text-base">
-                  {editPayload.subject}
-                </h2>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  📎 {editPayload.filename} · Komu:{" "}
-                  <strong>{customerEmail}</strong>
+                {/* Editovateľný subject — inline input. Klik/focus =
+                    žltá border + tooltip-hint. */}
+                <label className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground/70 block mt-1.5">
+                  Predmet emailu
+                </label>
+                <input
+                  type="text"
+                  value={editSubject}
+                  onChange={(e) => setEditSubject(e.target.value)}
+                  onFocus={() => setEditSubjectFocus(true)}
+                  onBlur={() => setEditSubjectFocus(false)}
+                  placeholder={editPayload.subject}
+                  className={cn(
+                    "w-full font-extrabold text-base bg-transparent px-1.5 py-1 rounded-md border-2 border-transparent transition-colors -ml-1.5",
+                    "hover:border-slate-300 focus:outline-none focus:border-emerald-400 focus:bg-emerald-50/40",
+                    editSubjectFocus && "border-emerald-400 bg-emerald-50/40",
+                  )}
+                  title="Klik → uprav predmet"
+                />
+                {/* Príloha — klik na názov otvorí PDF v novej záložke
+                    (preview pred odoslaním). */}
+                <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                  <a
+                    href={`data:application/pdf;base64,${editPayload.pdfBase64}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:border-sky-400 font-semibold transition-colors"
+                    title="Otvoriť PDF v novej záložke"
+                  >
+                    📎 {editPayload.filename}
+                    <span className="text-[10px] opacity-70">↗</span>
+                  </a>
+                  <span>·</span>
+                  <span>
+                    Komu: <strong>{customerEmail}</strong>
+                  </span>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setEditOpen(false)}
-                className="p-1.5 rounded-md hover:bg-muted"
+                className="p-1.5 rounded-md hover:bg-muted shrink-0"
                 aria-label="Zavrieť"
               >
                 <X className="w-4 h-4" aria-hidden />
