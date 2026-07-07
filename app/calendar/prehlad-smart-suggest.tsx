@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Hammer,
   MapPin,
+  RefreshCw,
   Ruler,
   Sparkles,
 } from "lucide-react";
@@ -64,6 +65,7 @@ export function PrehladSmartSuggest() {
 
 function ObhliadkaSuggestBar() {
   const [city, setCity] = React.useState("");
+  const [attempt, setAttempt] = React.useState(0);
   const [suggestion, setSuggestion] = React.useState<Suggestion | null>(null);
 
   React.useEffect(() => {
@@ -71,11 +73,16 @@ function ObhliadkaSuggestBar() {
       setSuggestion(null);
       return;
     }
-    // 🚧 Placeholder — zatiaľ deterministický "návrh" z hash mesta.
-    // Reálna logika príde po SQL migrácii 10_role_handoff — query nad
-    // priradenými obhliadkami (assignments) + geo-agregácia podľa smeru.
-    const t = setTimeout(() => setSuggestion(fakeSuggest(city, "obhliadka")), 300);
+    const t = setTimeout(
+      () => setSuggestion(fakeSuggest(city, "obhliadka", 0, attempt)),
+      300,
+    );
     return () => clearTimeout(t);
+  }, [city, attempt]);
+
+  // Reset attempt keď user zmení mesto — začni od najlepšieho
+  React.useEffect(() => {
+    setAttempt(0);
   }, [city]);
 
   return (
@@ -99,7 +106,12 @@ function ObhliadkaSuggestBar() {
             className="h-9 pl-8 border-violet-200 bg-white focus-visible:ring-violet-400"
           />
         </div>
-        <SuggestionBadge suggestion={suggestion} tint="violet" />
+        <SuggestionBadge
+          suggestion={suggestion}
+          tint="violet"
+          attempt={attempt}
+          onReroll={() => setAttempt((v) => v + 1)}
+        />
       </div>
     </div>
   );
@@ -108,6 +120,7 @@ function ObhliadkaSuggestBar() {
 function RealizaciaSuggestBar() {
   const [city, setCity] = React.useState("");
   const [m2, setM2] = React.useState("");
+  const [attempt, setAttempt] = React.useState(0);
   const [suggestion, setSuggestion] = React.useState<Suggestion | null>(null);
 
   React.useEffect(() => {
@@ -116,10 +129,17 @@ function RealizaciaSuggestBar() {
       return;
     }
     const t = setTimeout(
-      () => setSuggestion(fakeSuggest(city, "realizacia", parseFloat(m2) || 0)),
+      () =>
+        setSuggestion(
+          fakeSuggest(city, "realizacia", parseFloat(m2) || 0, attempt),
+        ),
       300,
     );
     return () => clearTimeout(t);
+  }, [city, m2, attempt]);
+
+  React.useEffect(() => {
+    setAttempt(0);
   }, [city, m2]);
 
   return (
@@ -157,7 +177,12 @@ function RealizaciaSuggestBar() {
             className="h-9 pl-8 border-emerald-200 bg-white focus-visible:ring-emerald-400 tabular-nums"
           />
         </div>
-        <SuggestionBadge suggestion={suggestion} tint="emerald" />
+        <SuggestionBadge
+          suggestion={suggestion}
+          tint="emerald"
+          attempt={attempt}
+          onReroll={() => setAttempt((v) => v + 1)}
+        />
       </div>
     </div>
   );
@@ -175,9 +200,13 @@ type Suggestion = {
 function SuggestionBadge({
   suggestion,
   tint,
+  attempt,
+  onReroll,
 }: {
   suggestion: Suggestion | null;
   tint: "violet" | "emerald";
+  attempt: number;
+  onReroll: () => void;
 }) {
   if (!suggestion) {
     return (
@@ -190,6 +219,12 @@ function SuggestionBadge({
     violet: "bg-violet-100 border-violet-300 text-violet-900",
     emerald: "bg-emerald-100 border-emerald-300 text-emerald-900",
   }[tint];
+  const rerollBg = {
+    violet: "bg-violet-200/70 hover:bg-violet-300 text-violet-900",
+    emerald: "bg-emerald-200/70 hover:bg-emerald-300 text-emerald-900",
+  }[tint];
+  // Rank prefix — 1./2./3. návrh podľa attempt
+  const rank = attempt === 0 ? "🥇" : attempt === 1 ? "🥈" : attempt === 2 ? "🥉" : `#${attempt + 1}`;
   return (
     <div
       className={cn(
@@ -198,9 +233,11 @@ function SuggestionBadge({
       )}
       title={suggestion.reason}
     >
-      <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden />
-      <div>
-        <div className="font-extrabold inline-flex items-center gap-1.5">
+      <span className="text-sm mt-0.5 shrink-0" aria-hidden>
+        {rank}
+      </span>
+      <div className="min-w-0">
+        <div className="font-extrabold inline-flex items-center gap-1.5 flex-wrap">
           {suggestion.when}
           {suggestion.time && (
             <span className="tabular-nums bg-white/70 px-1.5 py-0.5 rounded text-[11px]">
@@ -212,6 +249,21 @@ function SuggestionBadge({
           {suggestion.reason}
         </div>
       </div>
+      {/* Reroll button — zákazník povedal že tento termín mu nevyhovuje.
+          Klik → 2. najlepší návrh (attempt++). Vždy dostupný. */}
+      <button
+        type="button"
+        onClick={onReroll}
+        className={cn(
+          "shrink-0 self-center inline-flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors text-[10px] font-black uppercase tracking-wider",
+          rerollBg,
+        )}
+        title="Zákazníkovi termín nevyhovuje → daj ďalší návrh"
+        aria-label="Ďalší návrh"
+      >
+        <RefreshCw className="w-3 h-3" aria-hidden />
+        Ďalší
+      </button>
     </div>
   );
 }
@@ -247,12 +299,16 @@ function fakeSuggest(
   city: string,
   kind: "obhliadka" | "realizacia",
   m2 = 0,
+  attempt = 0,
 ): Suggestion {
   const c = city.trim().toLowerCase();
-  // deterministic hash → day of month + hour
+  // deterministic hash → day of month + hour; attempt posunie o ďalšie dni
   let h = 0;
   for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) | 0;
-  const dayOffset = (Math.abs(h) % 12) + 1;
+  // Každý attempt = posun o 2-4 dni + iný prevCity + iný prevHour
+  const baseOffset = (Math.abs(h) % 12) + 1;
+  const attemptShift = attempt * (3 + (Math.abs(h) % 3));
+  const dayOffset = baseOffset + attemptShift;
   const d = new Date();
   d.setDate(d.getDate() + dayOffset);
   const when = d.toLocaleDateString("sk-SK", {
@@ -262,11 +318,10 @@ function fakeSuggest(
   });
 
   if (kind === "obhliadka") {
-    // Simuluj predošlú obhliadku v inom meste — vypočítaj presný čas
-    const prevCities = ["Martin", "Bratislava", "Košice", "Nitra"];
-    const prevCity = prevCities[Math.abs(h) % prevCities.length];
-    const prevHour = 13 + (Math.abs(h) % 3); // 13, 14 alebo 15
-    const prevEnd = prevHour * 60 + 30; // + 30 min obhliadka
+    const prevCities = ["Martin", "Bratislava", "Košice", "Nitra", "Žilina", "Prešov"];
+    const prevCity = prevCities[Math.abs(h + attempt * 7) % prevCities.length];
+    const prevHour = 10 + ((Math.abs(h) + attempt * 2) % 6); // 10..15
+    const prevEnd = prevHour * 60 + 30;
     const travel = TRAVEL_MIN[c] ?? 60;
     const startMin = prevEnd + travel;
     const startH = Math.floor(startMin / 60);
@@ -278,21 +333,23 @@ function fakeSuggest(
       when,
       time,
       reason,
-      confidence: "medium",
+      // Prvý návrh = high, ďalšie = medium/low
+      confidence: attempt === 0 ? "high" : attempt === 1 ? "medium" : "low",
     };
   }
-  // realizacia — realizácia trvá celý deň, nemá konkrétny čas, iba dátum
-  const daysNeeded = m2 > 100 ? 2 : m2 > 60 ? 1 : 1;
+  const daysNeeded = m2 > 100 ? 2 : 1;
+  const teamNames = ["A", "B", "C", "D"];
+  const teamName = teamNames[attempt % teamNames.length];
   const teamNote =
     m2 <= 25
-      ? `Tím A má voľné okno v ${city} — dá sa spojiť s inou garážou tento deň`
+      ? `Tím ${teamName} má voľné okno v ${city} — dá sa spojiť s inou garážou tento deň`
       : m2 <= 60
-        ? `Tím B je v smere ${city} — 1-denná realizácia sedí`
-        : `Realizácia potrebuje ${daysNeeded} deň${daysNeeded > 1 ? "i" : ""} — Tím C má voľno`;
+        ? `Tím ${teamName} je v smere ${city} — 1-denná realizácia sedí`
+        : `Realizácia potrebuje ${daysNeeded} deň${daysNeeded > 1 ? "i" : ""} — Tím ${teamName} má voľno`;
   return {
     when,
     time: null,
     reason: teamNote,
-    confidence: m2 > 0 ? "medium" : "low",
+    confidence: attempt === 0 && m2 > 0 ? "high" : "medium",
   };
 }
