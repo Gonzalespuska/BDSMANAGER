@@ -158,9 +158,6 @@ export function GeneratorClient({
   const [editBody, setEditBody] = React.useState("");
   const [editSubject, setEditSubject] = React.useState("");
   const [editSubjectFocus, setEditSubjectFocus] = React.useState(false);
-  // PDF preview modal — iframe s blob URL. Blob URL sa vytvorí na
-  // klik "otvor preview" a revoke-ne pri zatvorení modálu.
-  const [pdfPreviewUrl, setPdfPreviewUrl] = React.useState<string | null>(null);
   const [editPayload, setEditPayload] = React.useState<{
     subject: string;
     bodyText: string;
@@ -1403,59 +1400,6 @@ ${signatureLines.join("\n")}`;
       </div>
       )}
 
-      {/* PDF preview iframe modal — poverchový cez edit modal.
-          Používame <object> s <embed> fallbackom — spoľahlivejšie ako
-          čistý <iframe> pri blob: URL v niektorých browseroch. */}
-      {pdfPreviewUrl && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              URL.revokeObjectURL(pdfPreviewUrl);
-              setPdfPreviewUrl(null);
-            }
-          }}
-        >
-          <div className="bg-background rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
-            <header className="px-4 py-2 border-b flex items-center justify-between gap-2">
-              <div className="text-sm font-bold">📎 Preview PDF prílohy</div>
-              <div className="flex items-center gap-1">
-                <a
-                  href={pdfPreviewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] font-bold px-2 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100"
-                  title="Otvoriť v novej záložke — ak preview nižšie nefunguje"
-                >
-                  Otvoriť v novej záložke ↗
-                </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    URL.revokeObjectURL(pdfPreviewUrl);
-                    setPdfPreviewUrl(null);
-                  }}
-                  className="p-1.5 rounded-md hover:bg-muted"
-                  aria-label="Zavrieť preview"
-                >
-                  <X className="w-4 h-4" aria-hidden />
-                </button>
-              </div>
-            </header>
-            {/* Wrapper zabezpecuje ze <iframe> vyplni celu vysku
-                cez flex-1 minimalne (bez toho <object> defaultuje na
-                150px height a content sa nezobrazi). */}
-            <div className="flex-1 min-h-0 w-full bg-slate-100 relative">
-              <iframe
-                src={pdfPreviewUrl}
-                title="PDF preview"
-                className="absolute inset-0 w-full h-full border-0"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Edit-before-send modal */}
       {editOpen && editPayload && (
         <div
@@ -1495,8 +1439,9 @@ ${signatureLines.join("\n")}`;
                   <button
                     type="button"
                     onClick={() => {
-                      // Blob URL namiesto data: URL — data: URLs sú v niektorých
-                      // browseroch zablokované pre PDF preview.
+                      // Blob URL v novom tabe — jediná spoľahlivá cesta
+                      // ako zobrazit PDF cez vsetky browsere (Safari,
+                      // iOS Safari blokuju blob v iframe/object).
                       const byteChars = atob(editPayload.pdfBase64);
                       const byteNumbers = new Array(byteChars.length);
                       for (let i = 0; i < byteChars.length; i++) {
@@ -1505,16 +1450,22 @@ ${signatureLines.join("\n")}`;
                       const blob = new Blob([new Uint8Array(byteNumbers)], {
                         type: "application/pdf",
                       });
-                      // Revoke previous URL to avoid memory leaks
-                      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
                       const url = URL.createObjectURL(blob);
-                      setPdfPreviewUrl(url);
+                      const win = window.open(url, "_blank");
+                      if (!win) {
+                        // Pop-up blocker → user musi klik-nut este raz
+                        alert(
+                          "Prehliadač zablokoval nové okno. Skús kliknúť ešte raz alebo povoľ pop-upy pre app.najcrm.sk.",
+                        );
+                      }
+                      // Revoke po 60s aby browser nestratil odkaz predtým než sa načíta
+                      setTimeout(() => URL.revokeObjectURL(url), 60_000);
                     }}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:border-sky-400 font-semibold transition-colors"
-                    title="Zobraziť PDF preview"
+                    title="Otvoriť PDF v novom tabe"
                   >
                     📎 {editPayload.filename}
-                    <span className="text-[10px] opacity-70">👁</span>
+                    <span className="text-[10px] opacity-70">↗</span>
                   </button>
                   <span>·</span>
                   <span>
