@@ -32,7 +32,13 @@ export default async function ObhliadkyDashboard() {
 
   const sb = createAdminClient();
 
-  // Primary query — needs_inspection status (po SQL migrácii 10)
+  // STRICT scope — iba obhliadky ktoré obchodník EXPLICITNE priradil tomuto
+  // obhliadkárovi (`inspection_by = user.id`). Žiadne fallbacky, žiadne
+  // proxy — inak by tu nabehli náhodné staré `scheduled` leady z celej DB.
+  //
+  // Admin bez view-as vidí VŠETKY needs_inspection (dispatcher view).
+  // Admin viewing-as-obhliadky sa scopne tiež (user.id je admin ID → 0
+  // results — čo je správne, admin nie je reálny obhliadkár).
   const baseQuery = sb
     .from("leads")
     .select("*")
@@ -41,24 +47,8 @@ export default async function ObhliadkyDashboard() {
     .limit(100);
   const scopedQuery =
     user.role === "admin" ? baseQuery : baseQuery.eq("inspection_by", user.id);
-  const { data: leadsRaw, error: needsErr } = await scopedQuery;
-
-  // Fallback pre pre-migration DB
-  let fallbackLeads: Lead[] = [];
-  if (needsErr || (leadsRaw?.length ?? 0) === 0) {
-    const { data } = await sb
-      .from("leads")
-      .select("*")
-      .in("status", ["scheduled", "needs_inspection"])
-      .order("next_callback_at", { ascending: true })
-      .limit(100);
-    fallbackLeads = (data ?? []) as Lead[];
-  }
-
-  const leads = ((leadsRaw ?? []) as Lead[]).length > 0
-    ? (leadsRaw as Lead[])
-    : fallbackLeads;
-  const showLegacyProxy = fallbackLeads.length > 0 && (leadsRaw?.length ?? 0) === 0;
+  const { data: leadsRaw } = await scopedQuery;
+  const leads = (leadsRaw ?? []) as Lead[];
 
   // Get dátum z lead-u — prefer inspection_at, fallback next_callback_at
   function getDate(l: Lead): Date | null {
@@ -106,15 +96,6 @@ export default async function ObhliadkyDashboard() {
           </p>
         </div>
       </header>
-
-      {/* Pre-migration proxy warning — malý, nevoluje */}
-      {showLegacyProxy && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-900">
-          🚧 Zobrazujem legacy (scheduled). Po spustení{" "}
-          <code>10_role_handoff.sql</code> sa zobrazí iba to čo ti obchodák
-          explicitne priradí.
-        </div>
-      )}
 
       {leads.length === 0 ? (
         <div className="rounded-xl border bg-background p-12 text-center">
