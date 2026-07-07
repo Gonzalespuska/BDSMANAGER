@@ -1,10 +1,11 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Package, Printer } from "lucide-react";
+import { ArrowLeft, Package } from "lucide-react";
 
 import { getCurrentAppUser, getRealUserRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OrderPrintView } from "./order-print-view";
+import { PrintButton } from "./print-button";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -79,17 +80,7 @@ export default async function OrderDetailPage({
               <span>🏭 {(order.supplier as string) ?? "Sika"}</span>
             </div>
           </div>
-          <a
-            href="#print"
-            onClick={(e) => {
-              e.preventDefault();
-              window.print();
-            }}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 text-sm font-bold transition-colors shadow"
-          >
-            <Printer className="w-4 h-4" />
-            Tlačiť / PDF
-          </a>
+          <PrintButton />
         </div>
       </header>
 
