@@ -155,7 +155,7 @@ export const STATUS_META: Record<
     pill: "bg-emerald-600 text-white",
   },
   won: {
-    label: "🏆 UKONČENÉ",
+    label: "🏆 WON",
     pill: "bg-green-700 text-white",
   },
   lost: {

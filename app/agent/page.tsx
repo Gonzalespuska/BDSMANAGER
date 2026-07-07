@@ -28,7 +28,7 @@ const TABS = [
   // (dátum obhliadky uplynul → automaticky sem)
   { id: "obhliadnute_hotove", label: "✔️ Obhliadnuté" },
   { id: "archivovane", label: "📦 Archivované" },
-  { id: "ukoncene", label: "🏆 Ukončené" },
+  { id: "ukoncene", label: "🏆 Won" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -179,7 +179,18 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       }
 
       case "ukoncene": {
-        let q = supabase.from("leads").select("*").eq("status", "won");
+        // Won = manuálne 'won' status ALEBO (bol v realizácii s
+        // realization_at v minulosti a stále je in_realization =
+        // nebol odstranený).
+        // Ak obchodák "vymazal" z realizácie (napr. status → lost/archived),
+        // NIE je won.
+        const nowIso = new Date().toISOString();
+        let q = supabase
+          .from("leads")
+          .select("*")
+          .or(
+            `status.eq.won,and(status.eq.in_realization,realization_at.lte.${nowIso})`,
+          );
         if (!isAdmin) q = q.eq("assigned_to", user.id);
         return q.order("last_activity_at", { ascending: false }).limit(200);
       }
@@ -266,11 +277,15 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       if (!isAdmin) q = q.eq("assigned_to", user.id);
       return q;
     })(),
+    // "Won" count — status=won ALEBO in_realization s realization_at v minulosti
     (() => {
+      const nowIso = new Date().toISOString();
       let q = supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
-        .eq("status", "won");
+        .or(
+          `status.eq.won,and(status.eq.in_realization,realization_at.lte.${nowIso})`,
+        );
       if (!isAdmin) q = q.eq("assigned_to", user.id);
       return q;
     })(),
@@ -413,7 +428,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
             {!searchMode && tab === "otvorene" && "Žiadna poslaná cenová ponuka. Po odoslaní CP z generátora sa lead presunie sem."}
             {!searchMode && tab === "obhliadnute" && "Žiadne leady na obhliadke. Priradenie z kalendára s termínom v BUDÚCNOSTI sa zobrazí tu. Po prejdení termínu sa automaticky presunie do Obhliadnuté."}
             {!searchMode && tab === "obhliadnute_hotove" && "Žiadne obhliadnuté leady. Sem sa automaticky presunú leady, ktorých obhliadka bola naplánovaná a jej termín uplynul."}
-            {!searchMode && tab === "ukoncene" && "Žiadne ukončené dealy. Po podpise / dodaní označ lead ako 'Ukončené'."}
+            {!searchMode && tab === "ukoncene" && "Žiadne won leady. Sem sa automaticky presunú realizácie, ktorých termín prešiel a neboli zrušené — alebo manuálne cez status Won."}
             {!searchMode && tab === "archivovane" && "Žiadne archivované leady. Po neúspešnom kontakte / 3× nezdvihol sa lead presunie sem."}
           </p>
           {!searchMode && process.env.NODE_ENV !== "production" && (

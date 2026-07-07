@@ -58,7 +58,7 @@ const STATUS_TEXT: Record<LeadStatus, string> = {
   needs_inspection: "Obhliadka",
   inspected: "Obhliadnutý",
   in_realization: "V realizácii",
-  won: "Ukončené",
+  won: "Won",
   lost: "Stratený",
   archived: "Archivované",
 };

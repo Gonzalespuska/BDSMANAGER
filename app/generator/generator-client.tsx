@@ -158,6 +158,9 @@ export function GeneratorClient({
   const [editBody, setEditBody] = React.useState("");
   const [editSubject, setEditSubject] = React.useState("");
   const [editSubjectFocus, setEditSubjectFocus] = React.useState(false);
+  // PDF preview modal — iframe s blob URL. Blob URL sa vytvorí na
+  // klik "otvor preview" a revoke-ne pri zatvorení modálu.
+  const [pdfPreviewUrl, setPdfPreviewUrl] = React.useState<string | null>(null);
   const [editPayload, setEditPayload] = React.useState<{
     subject: string;
     bodyText: string;
@@ -1400,6 +1403,41 @@ ${signatureLines.join("\n")}`;
       </div>
       )}
 
+      {/* PDF preview iframe modal — poverchový cez edit modal */}
+      {pdfPreviewUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              URL.revokeObjectURL(pdfPreviewUrl);
+              setPdfPreviewUrl(null);
+            }
+          }}
+        >
+          <div className="bg-background rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+            <header className="px-4 py-2 border-b flex items-center justify-between gap-2">
+              <div className="text-sm font-bold">📎 Preview PDF prílohy</div>
+              <button
+                type="button"
+                onClick={() => {
+                  URL.revokeObjectURL(pdfPreviewUrl);
+                  setPdfPreviewUrl(null);
+                }}
+                className="p-1.5 rounded-md hover:bg-muted"
+                aria-label="Zavrieť preview"
+              >
+                <X className="w-4 h-4" aria-hidden />
+              </button>
+            </header>
+            <iframe
+              src={pdfPreviewUrl}
+              className="flex-1 w-full border-0"
+              title="PDF preview"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Edit-before-send modal */}
       {editOpen && editPayload && (
         <div
@@ -1436,16 +1474,30 @@ ${signatureLines.join("\n")}`;
                 {/* Príloha — klik na názov otvorí PDF v novej záložke
                     (preview pred odoslaním). */}
                 <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
-                  <a
-                    href={`data:application/pdf;base64,${editPayload.pdfBase64}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Blob URL namiesto data: URL — data: URLs sú v niektorých
+                      // browseroch zablokované pre PDF preview.
+                      const byteChars = atob(editPayload.pdfBase64);
+                      const byteNumbers = new Array(byteChars.length);
+                      for (let i = 0; i < byteChars.length; i++) {
+                        byteNumbers[i] = byteChars.charCodeAt(i);
+                      }
+                      const blob = new Blob([new Uint8Array(byteNumbers)], {
+                        type: "application/pdf",
+                      });
+                      // Revoke previous URL to avoid memory leaks
+                      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+                      const url = URL.createObjectURL(blob);
+                      setPdfPreviewUrl(url);
+                    }}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:border-sky-400 font-semibold transition-colors"
-                    title="Otvoriť PDF v novej záložke"
+                    title="Zobraziť PDF preview"
                   >
                     📎 {editPayload.filename}
-                    <span className="text-[10px] opacity-70">↗</span>
-                  </a>
+                    <span className="text-[10px] opacity-70">👁</span>
+                  </button>
                   <span>·</span>
                   <span>
                     Komu: <strong>{customerEmail}</strong>

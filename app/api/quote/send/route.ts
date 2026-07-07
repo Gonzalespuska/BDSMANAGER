@@ -245,7 +245,12 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
         if (
           leadRow &&
-          !["won", "lost", "archived"].includes(leadRow.status)
+          // Neprepisujeme finalne statusy ani vyssie kroky pipeline.
+          // needs_inspection / in_realization su vyssie ako quote_sent —
+          // nechceme downgrade po poslani novej upraveny CP.
+          !["won", "lost", "archived", "needs_inspection", "in_realization", "inspected"].includes(
+            leadRow.status,
+          )
         ) {
           const existingData =
             (leadRow.data as Record<string, unknown> | null) ?? {};
