@@ -1442,25 +1442,16 @@ ${signatureLines.join("\n")}`;
                 </button>
               </div>
             </header>
-            <object
-              data={pdfPreviewUrl}
-              type="application/pdf"
-              className="flex-1 w-full"
-            >
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-3">
-                <div className="text-sm text-muted-foreground">
-                  Tvoj prehliadač nevie zobraziť PDF priamo v okne.
-                </div>
-                <a
-                  href={pdfPreviewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold"
-                >
-                  Otvoriť PDF v novej záložke ↗
-                </a>
-              </div>
-            </object>
+            {/* Wrapper zabezpecuje ze <iframe> vyplni celu vysku
+                cez flex-1 minimalne (bez toho <object> defaultuje na
+                150px height a content sa nezobrazi). */}
+            <div className="flex-1 min-h-0 w-full bg-slate-100 relative">
+              <iframe
+                src={pdfPreviewUrl}
+                title="PDF preview"
+                className="absolute inset-0 w-full h-full border-0"
+              />
+            </div>
           </div>
         </div>
       )}
