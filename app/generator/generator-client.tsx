@@ -1403,7 +1403,9 @@ ${signatureLines.join("\n")}`;
       </div>
       )}
 
-      {/* PDF preview iframe modal — poverchový cez edit modal */}
+      {/* PDF preview iframe modal — poverchový cez edit modal.
+          Používame <object> s <embed> fallbackom — spoľahlivejšie ako
+          čistý <iframe> pri blob: URL v niektorých browseroch. */}
       {pdfPreviewUrl && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
@@ -1417,23 +1419,48 @@ ${signatureLines.join("\n")}`;
           <div className="bg-background rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
             <header className="px-4 py-2 border-b flex items-center justify-between gap-2">
               <div className="text-sm font-bold">📎 Preview PDF prílohy</div>
-              <button
-                type="button"
-                onClick={() => {
-                  URL.revokeObjectURL(pdfPreviewUrl);
-                  setPdfPreviewUrl(null);
-                }}
-                className="p-1.5 rounded-md hover:bg-muted"
-                aria-label="Zavrieť preview"
-              >
-                <X className="w-4 h-4" aria-hidden />
-              </button>
+              <div className="flex items-center gap-1">
+                <a
+                  href={pdfPreviewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold px-2 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100"
+                  title="Otvoriť v novej záložke — ak preview nižšie nefunguje"
+                >
+                  Otvoriť v novej záložke ↗
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    URL.revokeObjectURL(pdfPreviewUrl);
+                    setPdfPreviewUrl(null);
+                  }}
+                  className="p-1.5 rounded-md hover:bg-muted"
+                  aria-label="Zavrieť preview"
+                >
+                  <X className="w-4 h-4" aria-hidden />
+                </button>
+              </div>
             </header>
-            <iframe
-              src={pdfPreviewUrl}
-              className="flex-1 w-full border-0"
-              title="PDF preview"
-            />
+            <object
+              data={pdfPreviewUrl}
+              type="application/pdf"
+              className="flex-1 w-full"
+            >
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-3">
+                <div className="text-sm text-muted-foreground">
+                  Tvoj prehliadač nevie zobraziť PDF priamo v okne.
+                </div>
+                <a
+                  href={pdfPreviewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold"
+                >
+                  Otvoriť PDF v novej záložke ↗
+                </a>
+              </div>
+            </object>
           </div>
         </div>
       )}

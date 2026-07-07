@@ -24,6 +24,9 @@ const CSP = [
   `img-src 'self' data: https://*.supabase.co`,
   `font-src 'self' data:`,
   `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} ${APP_HOST}`,
+  // blob: pre PDF preview modal (generator client — iframe s Blob URL)
+  `frame-src 'self' blob:`,
+  `object-src 'self' blob:`,
   `frame-ancestors 'self'`,
   `base-uri 'self'`,
   `form-action 'self'`,
