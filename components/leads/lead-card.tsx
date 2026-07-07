@@ -165,7 +165,8 @@ export function LeadCard({
       toast.error(`Chyba: ${result.error}`);
     } else {
       toast.success(
-        `📵 ${lead.name || "Lead"} presunutý do Nezdvíhali${reminderHours ? ` — pripomienka o ${reminderHours}h` : ""}`,
+        `📵 ${lead.name || "Lead"} → Nezdvíhali${reminderHours ? ` (pripomienka o ${reminderHours}h)` : ""}`,
+        { href: "/agent?tab=nedovolany" },
       );
       router.refresh();
     }
@@ -186,7 +187,9 @@ export function LeadCard({
       setLeaving(false);
       toast.error(`Chyba: ${result.error}`);
     } else {
-      toast.success(`📦 ${lead.name || "Lead"} archivovaný`);
+      toast.success(`📦 ${lead.name || "Lead"} → Archivované`, {
+        href: "/agent?tab=archivovane",
+      });
       router.refresh();
     }
   }
@@ -202,7 +205,9 @@ export function LeadCard({
       setLeaving(false);
       toast.error(`Chyba: ${result.error}`);
     } else {
-      toast.success(`✅ ${lead.name || "Lead"} presunutý do Kontakt`);
+      toast.success(`✅ ${lead.name || "Lead"} → Kontakt`, {
+        href: "/agent?tab=kontakt",
+      });
       router.refresh();
     }
   }
@@ -259,6 +264,7 @@ export function LeadCard({
                 status={lead.status}
                 onChange={(s) => setLead({ ...lead, status: s })}
                 isAdmin={isAdmin}
+                leadName={lead.name}
               />
               {lead.call_attempts > 0 && (
                 <span

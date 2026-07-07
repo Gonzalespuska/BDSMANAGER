@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, Info, XCircle, Loader2, X } from "lucide-react";
+import { CheckCircle2, Info, XCircle, Loader2, X, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,6 +25,8 @@ type ToastItem = {
   variant: ToastVariant;
   message: string;
   timeout?: number; // ms; ignoruje sa pri "loading"
+  /** Ak zadané, celý toast je klikateľný — klik navigate. */
+  href?: string;
 };
 
 const EVENT = "app-toast";
@@ -38,20 +40,43 @@ function nextId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+type ToastOpts = { timeout?: number; href?: string };
+
 export const toast = {
-  success(message: string, timeout = 3000) {
+  success(message: string, opts?: ToastOpts | number) {
     const id = nextId();
-    emit({ id, variant: "success", message, timeout });
+    const o = typeof opts === "number" ? { timeout: opts } : (opts ?? {});
+    emit({
+      id,
+      variant: "success",
+      message,
+      timeout: o.timeout ?? 3000,
+      href: o.href,
+    });
     return id;
   },
-  error(message: string, timeout = 5000) {
+  error(message: string, opts?: ToastOpts | number) {
     const id = nextId();
-    emit({ id, variant: "error", message, timeout });
+    const o = typeof opts === "number" ? { timeout: opts } : (opts ?? {});
+    emit({
+      id,
+      variant: "error",
+      message,
+      timeout: o.timeout ?? 5000,
+      href: o.href,
+    });
     return id;
   },
-  info(message: string, timeout = 3000) {
+  info(message: string, opts?: ToastOpts | number) {
     const id = nextId();
-    emit({ id, variant: "info", message, timeout });
+    const o = typeof opts === "number" ? { timeout: opts } : (opts ?? {});
+    emit({
+      id,
+      variant: "info",
+      message,
+      timeout: o.timeout ?? 3000,
+      href: o.href,
+    });
     return id;
   },
   loading(message: string) {
@@ -130,28 +155,46 @@ function ToastCard({
       cls: "bg-slate-50 border-slate-300 text-slate-900",
     },
   }[item.variant];
-  return (
-    <div
-      className={cn(
-        "pointer-events-auto min-w-[240px] max-w-sm inline-flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl border-2 shadow-lg text-sm font-semibold",
-        // Slide-in animation
-        "animate-in slide-in-from-right-4 fade-in duration-200",
-        meta.cls,
-      )}
-      role="status"
-    >
+  const clickable = !!item.href && item.variant !== "loading";
+  const className = cn(
+    "pointer-events-auto min-w-[240px] max-w-sm inline-flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl border-2 shadow-lg text-sm font-semibold",
+    "animate-in slide-in-from-right-4 fade-in duration-200",
+    meta.cls,
+    clickable && "cursor-pointer hover:shadow-xl hover:brightness-95 transition-all no-underline",
+  );
+  const inner = (
+    <>
       <div className="shrink-0 mt-0.5">{meta.icon}</div>
       <div className="flex-1 min-w-0 leading-snug">{item.message}</div>
+      {clickable && (
+        <ArrowRight className="w-4 h-4 shrink-0 mt-0.5 opacity-70" aria-hidden />
+      )}
       {item.variant !== "loading" && (
         <button
           type="button"
-          onClick={onClose}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }}
           className="shrink-0 -mr-1 p-0.5 rounded-md hover:bg-black/10 transition-colors"
           aria-label="Zavrieť notifikáciu"
         >
           <X className="w-3.5 h-3.5" aria-hidden />
         </button>
       )}
+    </>
+  );
+  if (clickable) {
+    return (
+      <a href={item.href} className={className} role="status">
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <div className={className} role="status">
+      {inner}
     </div>
   );
 }

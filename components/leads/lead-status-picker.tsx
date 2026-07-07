@@ -64,11 +64,29 @@ const STATUS_TEXT: Record<LeadStatus, string> = {
   archived: "Archivované",
 };
 
+/** Mapping status → target tab v /agent — pouzivame v toast href. */
+const STATUS_TO_TAB: Partial<Record<LeadStatus, string>> = {
+  new: "novy",
+  phone_revealed: "kontakt",
+  no_answer: "nedovolany",
+  scheduled: "otvorene",
+  interested: "otvorene",
+  quote_sent: "otvorene",
+  needs_inspection: "obhliadnute",
+  inspected: "obhliadnute_hotove",
+  in_realization: "ukoncene",
+  won: "ukoncene",
+  lost: "archivovane",
+  not_interested: "archivovane",
+  archived: "archivovane",
+};
+
 export function LeadStatusPicker({
   leadId,
   status,
   onChange,
   isAdmin = false,
+  leadName,
 }: {
   leadId: string;
   status: LeadStatus;
@@ -77,6 +95,8 @@ export function LeadStatusPicker({
    * skrytá — Won sa auto-nastaví keď prejde realization_at (viď
    * agent/page.tsx filter). */
   isAdmin?: boolean;
+  /** Meno leadu — použije sa v toaste ("František Pavlík → NOVÉ"). */
+  leadName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -132,9 +152,12 @@ export function LeadStatusPicker({
         onChange?.(prev);
         toast.error(`Chyba: ${json.error ?? `HTTP ${r.status}`}`);
       } else {
-        // Toast: "Status zmenený → NOVÉ" (auto-dismiss 3s cez toast.success)
+        // Toast: "František Pavlík → 🆕 NOVÉ" (klik ide na tab)
         const newMeta = STATUS_META[newStatus];
-        toast.success(`Status zmenený → ${newMeta.label}`);
+        const namePart = leadName?.trim() || "Lead";
+        const tab = STATUS_TO_TAB[newStatus];
+        const href = tab ? `/agent?tab=${tab}` : undefined;
+        toast.success(`${namePart} → ${newMeta.label}`, { href });
       }
     } catch (e) {
       setCurrent(prev);
