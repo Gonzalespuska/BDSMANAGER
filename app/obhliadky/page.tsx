@@ -199,7 +199,10 @@ export default async function ObhliadkyDashboard() {
 // ────────────────────────────────────────────────────────────────────────
 
 function ObhliadkaCard({ lead }: { lead: Lead }) {
-  const data = (lead.data ?? {}) as Record<string, string>;
+  const rawData = lead.data;
+  const data = (
+    rawData && typeof rawData === "object" ? rawData : {}
+  ) as Record<string, string>;
   const date = (() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anyL = lead as any;
@@ -217,9 +220,8 @@ function ObhliadkaCard({ lead }: { lead: Lead }) {
     : null;
 
   const note =
-    data.inspection_note ||
-    data.agent_note ||
-    (lead.data as Record<string, unknown>).inspection_note as string | undefined ||
+    (data as Record<string, string | undefined>).inspection_note ||
+    (data as Record<string, string | undefined>).agent_note ||
     "";
 
   return (
