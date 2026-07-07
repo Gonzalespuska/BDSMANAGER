@@ -81,7 +81,7 @@ ${bodyHtml}
 <!-- Signature — brand block -->
 <div style="margin-top: 32px; padding-top: 20px; border-top: 2px solid #e2e8f0;">
   <div style="font-size: 15px; margin-bottom: 12px;">S pozdravom,</div>
-  <div style="margin-bottom: 16px;"><img src="https://app.najcrm.sk/epoxidovo-logo.png" alt="EPOXIDOVO.SK" width="240" style="display: block; max-width: 100%; height: auto; border: 0;"></div>
+  <div style="margin-bottom: 12px;"><img src="https://app.najcrm.sk/epoxidovo-logo.png" alt="EPOXIDOVO.SK" width="180" height="66" style="display: block; width: 180px; height: 66px; border: 0;"></div>
   <div style="font-size: 15px; font-weight: 700; color: #0f172a;">${escapeHtml(agentName)}</div>
   ${phoneLine ? `<div style="font-size: 14px; color: #475569; margin-top: 4px; font-variant-numeric: tabular-nums;">${escapeHtml(phoneLine.trim())}</div>` : ""}
   <div style="font-size: 14px; margin-top: 4px;"><a href="mailto:${escapeHtml(emailLine.trim())}" style="color: #0284c7; text-decoration: none;">${escapeHtml(emailLine.trim())}</a></div>
