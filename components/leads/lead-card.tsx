@@ -30,6 +30,7 @@ import {
 } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
 import { formatPhoneSK } from "@/lib/phone-format";
+import { toast } from "@/components/ui/toast";
 import {
   archiveLeadAction,
   changeStatusInlineAction,
@@ -154,7 +155,6 @@ export function LeadCard({
   }
 
   async function handleMissedCall(reminderHours?: number) {
-    // Skry kartu okamžite — nechceme mihot novej stavovky pred presunom
     setLeaving(true);
     const result = await callLeadAction(
       "missed_call",
@@ -162,9 +162,11 @@ export function LeadCard({
     );
     if (!result.ok) {
       setLeaving(false);
-      alert(`Chyba: ${result.error}`);
+      toast.error(`Chyba: ${result.error}`);
     } else {
-      // Server-state refresh → lead sa objaví v Nezdvíhali tab-u
+      toast.success(
+        `📵 ${lead.name || "Lead"} presunutý do Nezdvíhali${reminderHours ? ` — pripomienka o ${reminderHours}h` : ""}`,
+      );
       router.refresh();
     }
   }
@@ -182,8 +184,9 @@ export function LeadCard({
     const result = await callLeadAction("archive");
     if (!result.ok) {
       setLeaving(false);
-      alert(`Chyba: ${result.error}`);
+      toast.error(`Chyba: ${result.error}`);
     } else {
+      toast.success(`📦 ${lead.name || "Lead"} archivovaný`);
       router.refresh();
     }
   }
@@ -197,8 +200,9 @@ export function LeadCard({
     const result = await callLeadAction("contact");
     if (!result.ok) {
       setLeaving(false);
-      alert(`Chyba: ${result.error}`);
+      toast.error(`Chyba: ${result.error}`);
     } else {
+      toast.success(`✅ ${lead.name || "Lead"} presunutý do Kontakt`);
       router.refresh();
     }
   }
@@ -230,22 +234,19 @@ export function LeadCard({
               ? "bg-green-600"
               : "bg-zinc-400";
 
-  // Ak sme aktuálne presúvaní do iného tabu, ukáž iba tenký spinner
-  // placeholder — nechceme aby na moment blikla nová stavovka.
-  if (leaving) {
-    return (
-      <article className="relative rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/40 p-4 opacity-70 transition-opacity">
-        <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-semibold italic">
-          <span className="inline-block w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-          Presúvam…
-        </div>
-      </article>
-    );
-  }
-
   return (
     <>
-      <article className="relative rounded-2xl border bg-background shadow-sm hover:shadow-md transition-shadow overflow-hidden flex">
+      <article
+        className={cn(
+          "relative rounded-2xl border bg-background shadow-sm hover:shadow-md overflow-hidden flex",
+          // Plynulá zmena: keď je 'leaving', karta pomaly zmizne
+          // (fade + shrink) — namiesto placeholder blikance.
+          "transition-all duration-300",
+          leaving
+            ? "opacity-0 scale-[0.98] translate-x-2 pointer-events-none"
+            : "opacity-100 scale-100 translate-x-0",
+        )}
+      >
         {/* Left accent strip — farba podľa statusu */}
         <div className={cn("w-1.5 shrink-0", accentColor)} aria-hidden />
 

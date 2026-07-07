@@ -45,6 +45,7 @@ import {
 } from "@/lib/data/transport";
 import { cn } from "@/lib/utils";
 import { formatPhoneIntl } from "@/lib/phone-format";
+import { toast } from "@/components/ui/toast";
 
 interface LineState {
   enabled: boolean;
@@ -763,9 +764,7 @@ ${signatureLines.join("\n")}`;
       }
       setEditOpen(false);
       setEditPayload(null);
-      alert(
-        `✅ Cenová ponuka odoslaná zákazníkovi na ${recipient}.\n\n📎 PDF v prílohe.`,
-      );
+      toast.success(`✉️ CP odoslaná zákazníkovi na ${recipient}`);
       router.push("/agent?tab=kontakt");
     } catch (e) {
       alert(`Chyba: ${e instanceof Error ? e.message : "unknown"}`);
@@ -883,18 +882,13 @@ ${signatureLines.join("\n")}`;
       }
 
       // ✅ Odoslané cez Resend s PDF prílohou
-      setTimeout(() => {
-        alert(
-          `✅ Cenová ponuka odoslaná zákazníkovi na ${recipient}.\n\n` +
-            `📎 PDF v prílohe.\n` +
-            `📬 Kópia ti prišla do Inboxu (BCC).\n` +
-            `↩️ Ak zákazník odpovie, mail príde priamo tebe.`,
-        );
-        router.push("/agent?tab=kontakt");
-      }, 100);
+      toast.success(`✉️ CP odoslaná zákazníkovi na ${recipient} · 📎 PDF v prílohe`);
+      setTimeout(() => router.push("/agent?tab=kontakt"), 400);
       return; // send flow ends here — legacy Gmail compose flow bol odstránený
     } catch (e) {
-      alert(`Email chyba: ${e instanceof Error ? e.message : "unknown"}`);
+      toast.error(
+        `Email chyba: ${e instanceof Error ? e.message : "unknown"}`,
+      );
     } finally {
       setBusy(false);
     }

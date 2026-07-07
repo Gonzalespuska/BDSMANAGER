@@ -23,6 +23,7 @@ import { NavPillClient } from "./nav-pill-client";
 import { ProfileMenu } from "./profile-menu";
 import { NotificationsBell } from "./notifications-bell";
 import { ImpersonationBanner } from "./impersonation-banner";
+import { Toaster } from "./ui/toast";
 import { RoleViewDropdown } from "./role-view-dropdown";
 
 /** Definícia každej navigačnej dlaždice — href, label, ikona. */
@@ -145,6 +146,9 @@ export async function AppShell({
 
   return (
     <div className="flex flex-col bg-muted/30 min-h-screen">
+      {/* Global toast notifikacie (top-right) — dostupné z každého client
+          komponentu cez `import { toast } from "@/components/ui/toast"`. */}
+      <Toaster />
       {impersonatedName && <ImpersonationBanner userName={impersonatedName} />}
       {isDev && (
         <div className="bg-amber-100 border-b border-amber-200 text-amber-900 text-[11px] font-medium px-4 py-1.5 text-center">
