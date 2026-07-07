@@ -172,7 +172,27 @@ async function applyViewAsOverride(user: AppUser): Promise<AppUser> {
   if (user.role !== "admin") return user;
   try {
     const { cookies } = await import("next/headers");
-    const viewAsCookie = (await cookies()).get("view_as_role")?.value;
+    const cookieStore = await cookies();
+
+    // 1) PER-USER impersonation — cookie 'view_as_user_id' obsahuje
+    //    konkrétne user_id (napr. Leo). Ak set, celý user objekt sa
+    //    prepíše na cieľového user-a (admin vidí presne to čo Leo).
+    const viewAsUserId = cookieStore.get("view_as_user_id")?.value;
+    if (viewAsUserId) {
+      const admin = createAdminClient();
+      const { data: target } = await admin
+        .from("users")
+        .select("id, auth_id, email, name, role, active, capacity")
+        .eq("id", viewAsUserId)
+        .maybeSingle();
+      if (target && target.active) {
+        return target as AppUser;
+      }
+    }
+
+    // 2) PER-ROLE impersonation — cookie 'view_as_role' iba prepise rolu
+    //    (pre generický pohľad "ako obchod" bez konkrétneho user-a).
+    const viewAsCookie = cookieStore.get("view_as_role")?.value;
     const validRoles = [
       "obchod",
       "obhliadky",
@@ -181,19 +201,28 @@ async function applyViewAsOverride(user: AppUser): Promise<AppUser> {
       "skolenie",
     ];
     if (viewAsCookie && validRoles.includes(viewAsCookie)) {
-      // Vrátime rovnaký user objekt ale s prepísanou rolou.
-      // Aj "office" už je v AppUserRole (view-as simulácia, nie DB rola).
       return {
         ...user,
         role: viewAsCookie as AppUser["role"],
-        // Poznač že je to fake role (pre UI badge "View as")
       } as AppUser;
     }
   } catch {
-    // cookies() môže failnúť v niektorých context (RSC bez requestu)
     return user;
   }
   return user;
+}
+
+/**
+ * Vráti user_id ktorého admin impersonuje (view_as_user_id cookie).
+ * Používa sa v UI banneri "🕶 Prezeráš ako Leo Hrisenko × zavrieť".
+ */
+export async function getViewAsUserId(): Promise<string | null> {
+  try {
+    const { cookies } = await import("next/headers");
+    return (await cookies()).get("view_as_user_id")?.value ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**

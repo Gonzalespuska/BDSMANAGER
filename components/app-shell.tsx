@@ -22,6 +22,7 @@ import type { Notification } from "@/lib/notifications";
 import { NavPillClient } from "./nav-pill-client";
 import { ProfileMenu } from "./profile-menu";
 import { NotificationsBell } from "./notifications-bell";
+import { ImpersonationBanner } from "./impersonation-banner";
 import { RoleViewDropdown } from "./role-view-dropdown";
 
 /** Definícia každej navigačnej dlaždice — href, label, ikona. */
@@ -126,6 +127,16 @@ export async function AppShell({
     ? viewAsCookie
     : null) as "obchod" | "obhliadky" | "realizacie" | "office" | null;
 
+  // Per-user impersonation banner — admin videl "ako Leo Hrisenko"
+  // s tlacidlom "Späť na Admin".
+  const viewAsUserId = (await cookies()).get("view_as_user_id")?.value ?? null;
+  const impersonatedName =
+    isRealAdmin && viewAsUserId
+      ? // user objekt sa uz prepisal na Leo v getCurrentAppUser →
+        // pouzijeme jeho meno pre banner
+        user.name || user.email
+      : null;
+
   const isAdmin = user.role === "admin";
   const isDev = process.env.NODE_ENV !== "production";
   // Nav sa filtruje podľa user.role — ktorá už môže byť view-as override
@@ -134,6 +145,7 @@ export async function AppShell({
 
   return (
     <div className="flex flex-col bg-muted/30 min-h-screen">
+      {impersonatedName && <ImpersonationBanner userName={impersonatedName} />}
       {isDev && (
         <div className="bg-amber-100 border-b border-amber-200 text-amber-900 text-[11px] font-medium px-4 py-1.5 text-center">
           ⚡ DEV mode · auth bypass aktívny (prihlásený ako bootstrap admin). Vypne sa v produkcii.

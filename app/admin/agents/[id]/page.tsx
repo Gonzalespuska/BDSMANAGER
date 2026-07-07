@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 import { HomeCityEditor } from "./home-city-editor";
 import { PayoutEditor } from "./payout-editor";
+import { ImpersonateButton } from "./impersonate-button";
 import { PermissionsCard } from "./permissions-card";
 import { PhoneEditor } from "./phone-editor";
 
@@ -271,7 +272,7 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
           {initials(agent.name || agent.email)}
         </div>
         <div className="flex-1 min-w-0 space-y-2">
-          {/* Riadok 1: meno + 24h badge */}
+          {/* Riadok 1: meno + 24h badge + impersonate button */}
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-extrabold tracking-tight leading-none">
               {agent.name || (
@@ -286,6 +287,12 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
                 24h+ neaktívny
               </span>
             )}
+            <div className="ml-auto">
+              <ImpersonateButton
+                userId={agent.id as string}
+                userName={(agent.name as string) || (agent.email as string) || "obchodník"}
+              />
+            </div>
           </div>
 
           {/* Riadok 2: email */}
