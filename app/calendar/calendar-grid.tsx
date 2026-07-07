@@ -29,6 +29,18 @@ import {
 } from "./actions";
 import { ManualAssignModal } from "./manual-assign-modal";
 
+/**
+ * Format Date → "YYYY-MM-DD" v LOKÁLNOM timezone.
+ *
+ * Prečo nie toISOString().slice(0,10): toISOString je vždy UTC. V SK
+ * (UTC+2) sa lokálny 9.7. 00:00 stane 8.7. 22:00 UTC → slice(0,10)
+ * vráti "2026-07-08" namiesto "2026-07-09" (off-by-one). Toto trápilo
+ * userov kliknutím na deň → modal ukázal predchádzajúci deň.
+ */
+function toLocalIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** Normalizuj mesto pre case + diacritics insensitive match. */
 function normalizeCity(s: string): string {
   return s
@@ -326,7 +338,7 @@ export function CalendarGrid({
   const firstDayWeekday = (firstOfMonth.getDay() + 6) % 7; // 0=Po
   const totalCells = Math.ceil((firstDayWeekday + daysInMonth) / 7) * 7;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = toLocalIsoDate(new Date());
 
   function prevMonth() {
     const d = new Date(year, monthIdx - 2, 1);
@@ -346,7 +358,7 @@ export function CalendarGrid({
   for (let i = 0; i < totalCells; i++) {
     const dayOffset = i - firstDayWeekday;
     const d = new Date(year, monthIdx - 1, 1 + dayOffset);
-    const iso = d.toISOString().slice(0, 10);
+    const iso = toLocalIsoDate(d);
     cells.push({
       date: iso,
       dayOfMonth: d.getDate(),
@@ -1684,7 +1696,7 @@ function QuickDatePicker({
   }, [open]);
 
   const d = new Date(value + "T00:00:00");
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = toLocalIsoDate(new Date());
   const label = d.toLocaleDateString("sk-SK", {
     weekday: "short",
     day: "numeric",
@@ -1700,7 +1712,7 @@ function QuickDatePicker({
     const off = i - firstDayWeekday;
     const cd = new Date(vy, vm - 1, 1 + off);
     return {
-      iso: cd.toISOString().slice(0, 10),
+      iso: toLocalIsoDate(cd),
       dom: cd.getDate(),
       inMonth: cd.getMonth() === vm - 1,
     };
@@ -1784,7 +1796,7 @@ function QuickDatePicker({
           <button
             type="button"
             onClick={() => {
-              const today = new Date().toISOString().slice(0, 10);
+              const today = toLocalIsoDate(new Date());
               setViewMonth(today.slice(0, 7));
               pick(today);
             }}
