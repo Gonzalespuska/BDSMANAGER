@@ -203,74 +203,76 @@ function commonOptional(floor_type: FloorType): Material[] {
 
 export const MATERIALS: Material[] = [
   // ═══ JEDNOFAREBNÁ ════════════════════════════════════════════════════
+  // Ceny prepočítané na 52 % maržu podľa reálnych Peto (Sika) partnerských
+  // cien materiálu + odhad práce. Zdroj cien: .epoxidovo-sika/CENNIK-MASTER.md
   {
     id: "jednofarebna-uprava",
     floor_type: "jednofarebna",
     name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    price_per_sqm: 6,
+    price_per_sqm: 8, // bolo 6 → 8 (kotúče Sika + práca brusiča)
     optional: false,
   },
-  // Penetrácia — variant Epoxid
+  // Penetrácia — variant Epoxid (Sikafloor-01 Primer 3,24 €/kg × 0,35 kg/m² = 1,13)
   {
     id: "jednofarebna-penetracia-epoxid",
     floor_type: "jednofarebna",
     name: "Penetrácia",
     unit: "area",
-    price_per_sqm: 8,
+    price_per_sqm: 12, // bolo 8 → 12
     optional: false,
     variant: "epoxid",
   },
-  // Penetrácia — variant Polyuretán
+  // Penetrácia — variant Polyuretán (Sikafloor-150 Plus 7,41 €/kg × 0,5 = 3,71)
   {
     id: "jednofarebna-penetracia-polyuretan",
     floor_type: "jednofarebna",
     name: "Penetrácia",
     unit: "area",
-    price_per_sqm: 9,
+    price_per_sqm: 12, // bolo 9 → 12
     optional: false,
     variant: "polyuretan",
   },
-  // Farebný náter — variant Epoxid (264 Plus)
-  // Cieľ: 6 + 8 + 30 = 50 €/m² bez laku
+  // Farebný náter — variant Epoxid (Sikafloor-264 Plus RAL 5,78 €/kg × 1,5 = 8,67)
+  // Cieľ: 8 + 12 + 48 = 68 €/m² bez laku (52 % marža)
   {
     id: "jednofarebna-farebny-epoxid",
     floor_type: "jednofarebna",
     name: "Farebný náter",
     unit: "area",
-    price_per_sqm: 30,
+    price_per_sqm: 48, // bolo 30 → 48
     optional: false,
     variant: "epoxid",
   },
-  // Farebný náter — variant Polyuretán
-  // Cieľ: 6 + 9 + 56 + 9 = 80 €/m² s lakom
+  // Farebný náter — variant Polyuretán (Sikafloor-3000 RAL 11,00 €/kg × 1,3 = 14,30)
+  // Cieľ: 8 + 12 + 60 + 10 = 90 €/m² s lakom (52 % marža)
   {
     id: "jednofarebna-farebny-polyuretan",
     floor_type: "jednofarebna",
     name: "Farebný náter",
     unit: "area",
-    price_per_sqm: 56,
+    price_per_sqm: 60, // bolo 56 → 60
     optional: false,
     variant: "polyuretan",
   },
-  // Vrchný lak — variant Epoxid (default VYPNUTÝ — 264 je sám o sebe finál)
+  // Vrchný lak — variant Epoxid (Sikafloor-304W Matt 20,48 €/kg × 0,18 = 3,69)
   {
     id: "jednofarebna-lak-epoxid",
     floor_type: "jednofarebna",
     name: "Vrchný lak",
     unit: "area",
-    price_per_sqm: 6,
+    price_per_sqm: 13, // bolo 6 → 13
     optional: false,
     default_enabled: false,
     variant: "epoxid",
   },
-  // Vrchný lak — variant Polyuretán (default ZAPNUTÝ)
+  // Vrchný lak — variant Polyuretán (Sikafloor-3310 RAL 7,15 €/kg × 0,4 = 2,86)
   {
     id: "jednofarebna-lak-polyuretan",
     floor_type: "jednofarebna",
     name: "Vrchný lak",
     unit: "area",
-    price_per_sqm: 9,
+    price_per_sqm: 10, // bolo 9 → 10
     optional: false,
     default_enabled: true,
     variant: "polyuretan",
@@ -278,12 +280,14 @@ export const MATERIALS: Material[] = [
   ...commonOptional("jednofarebna"),
 
   // ═══ CHIPSOVÁ ════════════════════════════════════════════════════════
+  // Cieľ: 8 + 12 + 76 = 96 €/m² (52 % marža vs. reálny naklad ~46 €/m²)
+  // Materiál: Sikafloor-01 primer + 264 Plus báza + chipsy + broadcast piesok
   {
     id: "chipsova-uprava",
     floor_type: "chipsova",
     name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    price_per_sqm: 6,
+    price_per_sqm: 8, // bolo 6 → 8
     optional: false,
   },
   {
@@ -291,16 +295,17 @@ export const MATERIALS: Material[] = [
     floor_type: "chipsova",
     name: "Penetrácia",
     unit: "area",
-    price_per_sqm: 7,
+    price_per_sqm: 12, // bolo 7 → 12
     optional: false,
   },
   {
     id: "chipsova-farebny",
     floor_type: "chipsova",
-    name: "Farebný náter",
+    name: "Farebný náter s chipsmi",
     unit: "area",
-    // TODO: potvrdiť cenu — obsahuje odhad ceny chipov + piesku
-    price_per_sqm: 26,
+    // 264 Plus RAL (1,5 kg × 5,78 = 8,67) + chipsy (~10 €/m²) + piesok
+    // + náročná práca full-broadcast + zbrúsenie zvyškov + vysávanie
+    price_per_sqm: 76, // bolo 26 → 76 (chipsová bola v strate)
     optional: false,
   },
   // Vrchný lak — pri chipsovej sa NEDÁVA (rozhodnutie 2026-06-26)
@@ -345,12 +350,14 @@ export const MATERIALS: Material[] = [
   ...commonOptional("mramorova"),
 
   // ═══ METALICKÁ (Topstone EP11 + EP02 báza, EP22 Plus vrch) ════════════
+  // Cieľ: 8 + 18 + 110 + 24 = 160 €/m² (52 % marža vs. reálny naklad ~77 €/m²)
+  // Zdroj cien: Topstone faktúra 0000000352 (metalická podlaha 42,42 €/m² materiál)
   {
     id: "metalicka-uprava",
     floor_type: "metalicka",
     name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    price_per_sqm: 6,
+    price_per_sqm: 8, // bolo 6 → 8
     optional: false,
   },
   {
@@ -358,24 +365,27 @@ export const MATERIALS: Material[] = [
     floor_type: "metalicka",
     name: "Penetrácia",
     unit: "area",
-    price_per_sqm: 14, // EP02 báza 2×
+    // Topstone EP02 RAL 7035 (0,93 kg × 7,56 = 7,03 €/m² materiál, 2 vrstvy)
+    price_per_sqm: 18, // bolo 14 → 18
     optional: false,
   },
   {
     id: "metalicka-farebny",
     floor_type: "metalicka",
-    name: "Farebný náter",
+    name: "Farebný náter (metalická báza)",
     unit: "area",
-    // Topstone EP11 metalic — finálna predajná cena (vrát. marže a DPH)
-    price_per_sqm: 90,
+    // Topstone EP11 (1,22 kg × 17,00 = 20,74 €/m²) + pigment 0,59 + akcelerátor 0,47
+    // Práca metalickej (mix pigmentov, 3D efekt): +35 €/m²
+    price_per_sqm: 110, // bolo 90 → 110
     optional: false,
   },
   {
     id: "metalicka-lak",
     floor_type: "metalicka",
-    name: "Vrchný lak",
+    name: "Vrchný lak (UV stabilný)",
     unit: "area",
-    price_per_sqm: 19, // Topstone EP22 Plus — povinný
+    // Topstone EP22 Plus (1,19 kg × 9,79 = 11,65 €/m² materiál, 2 vrstvy)
+    price_per_sqm: 24, // bolo 19 → 24
     optional: false,
     default_enabled: true,
   },
