@@ -375,27 +375,25 @@ export function generateQuotePdf(input: PdfQuoteInput): {
   }
   doc.setTextColor(0);
 
-  // EPOXIDOVO logo (image) — vpravo, menší
-  const footerLogoW = 35;
-  const footerLogoH = (footerLogoW * EPOXIDOVO_LOGO_HEIGHT) / EPOXIDOVO_LOGO_WIDTH;
-  doc.addImage(
-    `data:image/png;base64,${EPOXIDOVO_LOGO_BASE64}`,
-    "PNG",
-    right - footerLogoW,
-    footerY - 3,
-    footerLogoW,
-    footerLogoH,
-  );
-
-  doc.setFontSize(9);
-  doc.setFont("Roboto", "normal");
+  // Pravá strana footera — iba text (IČO, DIČ, web). Logo je už v hlavičke,
+  // v spodku ho dávať znova bolo overlap-katastrofa: obrázok sa
+  // prekrýval s riadkom „IČO ... · DIČ ...", ktorý má identickú Y
+  // pozíciu, a hneď pod ním doc.text vypisoval „www.epoxidovo.sk"
+  // duplikátne k tomu čo obrázok už kreslil (wordmark už obsahuje
+  // „EPOXIDOVO.SK"). Preto len tri čisté riadky:
+  doc.setFontSize(11);
+  doc.setFont("Roboto", "bold");
+  doc.setTextColor(14, 165, 233); // sky-500 — brand highlight
+  doc.text("EPOXIDOVO s. r. o.", right, footerY, { align: "right" });
   doc.setTextColor(80);
-  doc.text("IČO 56 966 237  ·  DIČ 2122509813", right, footerY + 6, {
+  doc.setFont("Roboto", "normal");
+  doc.setFontSize(9);
+  doc.text("IČO 56 966 237  ·  DIČ 2122509813", right, footerY + 5.5, {
     align: "right",
   });
   doc.setFont("Roboto", "bold");
   doc.setTextColor(14, 165, 233);
-  doc.text("www.epoxidovo.sk", right, footerY + 11, { align: "right" });
+  doc.text("www.epoxidovo.sk", right, footerY + 10.5, { align: "right" });
   doc.setTextColor(0);
   doc.setFont("Roboto", "normal");
 
