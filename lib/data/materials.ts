@@ -203,76 +203,86 @@ function commonOptional(floor_type: FloorType): Material[] {
 
 export const MATERIALS: Material[] = [
   // ═══ JEDNOFAREBNÁ ════════════════════════════════════════════════════
-  // Ceny prepočítané na 52 % maržu podľa reálnych Peto (Sika) partnerských
-  // cien materiálu + odhad práce. Zdroj cien: .epoxidovo-sika/CENNIK-MASTER.md
+  // Ceny prepočítané na 52 % maržu podľa OPRAVENÝCH SPOTRIEB (Sika TDS + Peto).
+  // Zdroj cien: .epoxidovo-sika/CENNIK-MASTER.md
+  //
+  // OPRAVENÉ SPOTREBY (potvrdené Sika TDS + Peto zákazky):
+  //   Sikafloor-01 Primer:    0,35 kg/m²  (Sika TDS 0,3–0,4)
+  //   Sikafloor-150 Plus:     0,50 kg/m²  (Peto ES-24 penetrácia)
+  //   Sikafloor-151:          0,50 kg/m²  (Sika TDS 0,4–0,6)  ← BOLO 0,35, oprava
+  //   Sikafloor-264 Plus:     1,40 kg/m²  (Sika TDS 2 vrstvy) ← BOLO 1,50
+  //   Sikafloor-3000:         1,30 kg/m²  (Sika TDS priemer)
+  //   Sikafloor-3310 top:     0,20 kg/m²  (Sika TDS 0,15–0,25) ← BOLO 0,40, HRUBÁ CHYBA
+  //   Sikafloor-304W Matt:    0,18 kg/m²  (Sika TDS 0,15–0,18)
   {
     id: "jednofarebna-uprava",
     floor_type: "jednofarebna",
     name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    price_per_sqm: 8, // bolo 6 → 8 (kotúče Sika + práca brusiča)
+    price_per_sqm: 8, // kotúče 0,50 € + práca ~4 € = 4,50 náklad → 8 € (44 % marža)
     optional: false,
   },
-  // Penetrácia — variant Epoxid (Sikafloor-01 Primer 3,24 €/kg × 0,35 kg/m² = 1,13)
+  // Penetrácia — variant Epoxid (Sikafloor-01 Primer 3,24 €/kg × 0,35 = 1,13 náklad)
   {
     id: "jednofarebna-penetracia-epoxid",
     floor_type: "jednofarebna",
     name: "Penetrácia",
     unit: "area",
-    price_per_sqm: 12, // bolo 8 → 12
+    price_per_sqm: 12,
     optional: false,
     variant: "epoxid",
   },
-  // Penetrácia — variant Polyuretán (Sikafloor-150 Plus 7,41 €/kg × 0,5 = 3,71)
+  // Penetrácia — variant Polyuretán (Sikafloor-150 Plus 7,41 €/kg × 0,50 = 3,71 náklad)
   {
     id: "jednofarebna-penetracia-polyuretan",
     floor_type: "jednofarebna",
     name: "Penetrácia",
     unit: "area",
-    price_per_sqm: 12, // bolo 9 → 12
+    price_per_sqm: 12,
     optional: false,
     variant: "polyuretan",
   },
-  // Farebný náter — variant Epoxid (Sikafloor-264 Plus RAL 5,78 €/kg × 1,5 = 8,67)
-  // Cieľ: 8 + 12 + 48 = 68 €/m² bez laku (52 % marža)
+  // Farebný náter — variant Epoxid (Sikafloor-264 Plus 5,78 €/kg × 1,40 = 8,09 náklad)
+  // Cieľ: 8 + 12 + 48 = 68 €/m² bez laku (materiál 9,72 + práca 22 = 31,72 → 53 % marža)
   {
     id: "jednofarebna-farebny-epoxid",
     floor_type: "jednofarebna",
     name: "Farebný náter",
     unit: "area",
-    price_per_sqm: 48, // bolo 30 → 48
+    price_per_sqm: 48,
     optional: false,
     variant: "epoxid",
   },
-  // Farebný náter — variant Polyuretán (Sikafloor-3000 RAL 11,00 €/kg × 1,3 = 14,30)
-  // Cieľ: 8 + 12 + 60 + 10 = 90 €/m² s lakom (52 % marža)
+  // Farebný náter — variant Polyuretán (Sikafloor-3000 11,00 €/kg × 1,30 = 14,30 náklad)
+  // Cieľ: 8 + 12 + 60 + 10 = 90 €/m² s lakom (materiál 19,94 + práca 22 = 41,94 → 53 % marža)
   {
     id: "jednofarebna-farebny-polyuretan",
     floor_type: "jednofarebna",
     name: "Farebný náter",
     unit: "area",
-    price_per_sqm: 60, // bolo 56 → 60
+    price_per_sqm: 60,
     optional: false,
     variant: "polyuretan",
   },
-  // Vrchný lak — variant Epoxid (Sikafloor-304W Matt 20,48 €/kg × 0,18 = 3,69)
+  // Vrchný lak — variant Epoxid (Sikafloor-304W Matt 20,48 €/kg × 0,18 = 3,69 náklad)
   {
     id: "jednofarebna-lak-epoxid",
     floor_type: "jednofarebna",
     name: "Vrchný lak",
     unit: "area",
-    price_per_sqm: 13, // bolo 6 → 13
+    price_per_sqm: 13,
     optional: false,
     default_enabled: false,
     variant: "epoxid",
   },
-  // Vrchný lak — variant Polyuretán (Sikafloor-3310 RAL 7,15 €/kg × 0,4 = 2,86)
+  // Vrchný lak — variant Polyuretán (Sikafloor-3310 7,15 €/kg × 0,20 = 1,43 náklad)
+  // POZOR: spotreba 0,20 (NIE 0,40 ako som mal predtým) — Sika TDS 0,15–0,25 kg/m²
   {
     id: "jednofarebna-lak-polyuretan",
     floor_type: "jednofarebna",
     name: "Vrchný lak",
     unit: "area",
-    price_per_sqm: 10, // bolo 9 → 10
+    price_per_sqm: 10,
     optional: false,
     default_enabled: true,
     variant: "polyuretan",

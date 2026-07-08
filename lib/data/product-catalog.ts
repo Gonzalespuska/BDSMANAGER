@@ -1,12 +1,27 @@
 /**
  * Cenník materiálov pre režim "Iba materiál + doprava".
  *
- * Náklady (`cost_per_package`, `cost_per_kg`) sú vrátane DPH. Predajná cena
- * sa počíta s maržou `MARZA_MATERIAL` (35 %).
+ * Náklady (`cost_per_package`, `cost_per_kg`) sú vrátane DPH (SK 23 %).
+ * Predajná cena sa počíta s maržou `MARZA_MATERIAL` (35 %).
  *
- * Zdroje:
- *   - SIKA — slovenský oficiálny cenník Q2 2026 (vrátane SK DPH)
- *   - TOPSTONE / BETON-ACE — CZ cenník, vrátane CZ DPH (prepočítané)
+ * Zdroje (Q3 2026 — aktualizované podľa reálnych partnerských cien):
+ *   - SIKA — Peto Noga (peter@sk.sika.com) partnerský cenník + reálne faktúry
+ *     (proforma 3364713 z 03.06.2026). Ceny bez DPH prepočítané × 1,23.
+ *     Zdroj: .epoxidovo-sika/CENNIK-MASTER.md
+ *   - TOPSTONE / BETON-ACE — faktúra 0000000352 z 01.07.2026, CZK × 25,3 CZK/EUR × 1,23
+ *
+ * Spotreby (podľa Sika TDS + reálnych Peto zákaziek — poznámky pri každom produkte):
+ *   Sikafloor-150 Plus:  0,50 kg/m²   (penetrácia)
+ *   Sikafloor-151:       0,50 kg/m²   (primer + scratch coat)
+ *   Sikafloor-01 Primer: 0,35 kg/m²
+ *   Sikafloor-03 Primer: 0,15 kg/m²
+ *   Sikafloor-264 Plus:  1,40 kg/m²   (2 vrstvy nosná)
+ *   Sikafloor-3000:      1,30 kg/m²
+ *   Sikafloor-3310:      0,20 kg/m²   (top-coat)
+ *   Sikafloor-304W Matt: 0,18 kg/m²
+ *   Topstone EP02:       0,93 kg/m²   (2 vrstvy penetrácia)
+ *   Topstone EP11 báza:  1,22 kg/m²
+ *   Topstone EP22 Plus:  1,19 kg/m²   (2 vrstvy top-coat)
  */
 
 import type { FloorType } from "./materials";
@@ -91,10 +106,11 @@ const SIKA: Product[] = [
     id: "sika-150plus-25",
     brand: "sika",
     name: "Sikafloor-150 Plus (25 kg)",
-    desc: "2K epoxidový primer + samonivel — pod 264, 264 Plus, 2510W",
+    desc: "2K epoxidový primer + samonivel — pod 264, 264 Plus, 2510W · spotreba 0,50 kg/m²",
     package_size_kg: 25,
-    cost_per_package: 363,
-    cost_per_kg: 14.55,
+    // Peto: 7,41 €/kg bez DPH × 1,23 = 9,11 €/kg s DPH → 228 €/bal
+    cost_per_package: 228,
+    cost_per_kg: 9.11,
     sell_by: "package",
     role: "primer",
     floor_types: ["jednofarebna", "chipsova", "mramorova", "metalicka"],
@@ -113,10 +129,11 @@ const SIKA: Product[] = [
     id: "sika-150plus-10",
     brand: "sika",
     name: "Sikafloor-150 Plus (10 kg)",
-    desc: "2K epoxidový primer + samonivel — menšie balenie",
+    desc: "2K epoxidový primer + samonivel — menšie balenie · spotreba 0,50 kg/m² · DRAHŠIE per kg",
     package_size_kg: 10,
-    cost_per_package: 182,
-    cost_per_kg: 18.2,
+    // Peto: 9,60 €/kg bez DPH × 1,23 = 11,81 €/kg s DPH → 118 €/bal
+    cost_per_package: 118,
+    cost_per_kg: 11.81,
     sell_by: "package",
     role: "primer",
     floor_types: ["jednofarebna", "chipsova", "mramorova", "metalicka"],
@@ -134,11 +151,12 @@ const SIKA: Product[] = [
   {
     id: "sika-151-30",
     brand: "sika",
-    name: "Sikafloor-151",
-    desc: "Multifunkčný 2K epoxidový primer + výlevka",
+    name: "Sikafloor-151 (30 kg)",
+    desc: "Multifunkčný 2K epox primer + scratch coat / výlevka · spotreba 0,50 kg/m² (0,4–0,6)",
     package_size_kg: 30,
-    cost_per_package: 272,
-    cost_per_kg: 9.1,
+    // Peto: 4,80 €/kg bez DPH × 1,23 = 5,90 €/kg s DPH → 177 €/bal
+    cost_per_package: 177,
+    cost_per_kg: 5.9,
     sell_by: "package",
     role: "primer",
     floor_types: ["jednofarebna", "chipsova", "mramorova", "metalicka"],
@@ -154,11 +172,12 @@ const SIKA: Product[] = [
   {
     id: "sika-01-primer-10",
     brand: "sika",
-    name: "Sika-01 Primer",
-    desc: "1K MS-polymér primer — POZOR: NIE JE kompatibilný s EP nátermi (iba pre PU systémy)",
+    name: "Sikafloor-01 Primer (10 kg)",
+    desc: "2K epoxidový primer — najekonomickejší primer pre hladké podklady · spotreba 0,35 kg/m²",
     package_size_kg: 10,
-    cost_per_package: 61,
-    cost_per_kg: 6.15,
+    // Peto: 3,24 €/kg bez DPH × 1,23 = 3,99 €/kg s DPH → 40 €/bal
+    cost_per_package: 40,
+    cost_per_kg: 3.99,
     sell_by: "package",
     role: "primer",
     // MS-polymér NEPOUŽÍVAŤ pod EP hlavný náter (user explicitne požaduje).
@@ -172,11 +191,12 @@ const SIKA: Product[] = [
   {
     id: "sika-03-primer-10",
     brand: "sika",
-    name: "Sika-03 Primer",
-    desc: "2K epoxidový primer pre vlhký podklad + chemicky odolné systémy",
+    name: "Sikafloor-03 Primer (10 kg)",
+    desc: "2K primer pre nasiakavé podklady (sadra, cement, drevo, OSB) · spotreba 0,15 kg/m²",
     package_size_kg: 10,
-    cost_per_package: 68,
-    cost_per_kg: 6.8,
+    // Peto: 3,60 €/kg bez DPH × 1,23 = 4,43 €/kg s DPH → 44 €/bal
+    cost_per_package: 44,
+    cost_per_kg: 4.43,
     sell_by: "package",
     role: "primer",
     compatible_with: [
@@ -192,11 +212,12 @@ const SIKA: Product[] = [
   {
     id: "sika-264plus-kg",
     brand: "sika",
-    name: "Sikafloor-264 Plus",
-    desc: "2K epoxid pre priemysel + garáže (vylepšená 264 — vyšší lesk + odolnosť)",
+    name: "Sikafloor-264 Plus RAL 7032/7035 (30 kg, na kg)",
+    desc: "2K epoxid pre priemysel + garáže · spotreba 1,40 kg/m² (2 vrstvy)",
     package_size_kg: null,
     cost_per_package: null,
-    cost_per_kg: 11.0,
+    // Peto: 5,78 €/kg bez DPH × 1,23 = 7,11 €/kg s DPH
+    cost_per_kg: 7.11,
     sell_by: "kg",
     role: "main",
     floor_types: ["jednofarebna", "chipsova", "mramorova"],
@@ -204,14 +225,13 @@ const SIKA: Product[] = [
   {
     id: "sika-264-30",
     brand: "sika",
-    name: "Sikafloor-264 (30 kg)",
-    desc: "Štandardný 2K epoxid — RAL 7032/7035 báza",
+    name: "Sikafloor-264 Plus PASTEL (30 kg)",
+    desc: "Pastelové odtiene +6 % nad RAL 7032/35 · spotreba 1,40 kg/m²",
     package_size_kg: 30,
-    // TODO: potvrdiť cenu — odhad podľa Sika cenník 2026 (~5,30 €/kg base)
-    cost_per_package: 159,
-    cost_per_kg: 5.3,
+    // Peto: 6,10 €/kg bez DPH × 1,23 = 7,50 €/kg s DPH → 225 €/bal
+    cost_per_package: 225,
+    cost_per_kg: 7.5,
     sell_by: "package",
-    note: "TODO potvrdiť cenu",
     role: "main",
     floor_types: ["jednofarebna", "chipsova"],
   },
@@ -244,28 +264,31 @@ const SIKA: Product[] = [
     role: "main",
     floor_types: ["jednofarebna"],
   },
-  // Sikafloor-3310 (chemická odolnosť)
+  // Sikafloor-3310 — PU vrchný lak (NIE main, per Sika systémová schéma)
   {
     id: "sika-3310-kg",
     brand: "sika",
-    name: "Sikafloor-3310",
-    desc: "Chemicky + mechanicky odolný epoxid — food industry / labs",
+    name: "Sikafloor-3310 RAL 7032/7035 (20 kg, na kg)",
+    desc: "PU vrchný lak k Sikafloor-3000 systému · spotreba 0,20 kg/m² (Sika TDS)",
     package_size_kg: null,
     cost_per_package: null,
-    cost_per_kg: 13.5,
+    // Peto: 7,15 €/kg bez DPH × 1,23 = 8,79 €/kg s DPH
+    cost_per_kg: 8.79,
     sell_by: "kg",
-    role: "main",
+    role: "topcoat",
     floor_types: ["jednofarebna"],
+    compatible_with: ["sika-3000-20", "sika-3000fx-20"],
   },
   // Polyuretánové
   {
     id: "sika-3000-20",
     brand: "sika",
-    name: "Sikafloor-3000 (20 kg)",
-    desc: "Polyuretán — pružnosť, vyšší komfort, UV stabilita",
+    name: "Sikafloor-3000 RAL 7032/7035 (20 kg)",
+    desc: "PU báza — pružnosť, UV stabilita · spotreba 1,30 kg/m²",
     package_size_kg: 20,
-    cost_per_package: 416,
-    cost_per_kg: 20.8,
+    // Peto: 11,00 €/kg bez DPH × 1,23 = 13,53 €/kg s DPH → 271 €/bal
+    cost_per_package: 271,
+    cost_per_kg: 13.53,
     sell_by: "package",
     role: "main",
     floor_types: ["jednofarebna"],
@@ -273,14 +296,16 @@ const SIKA: Product[] = [
   {
     id: "sika-3000fx-20",
     brand: "sika",
-    name: "Sikafloor-3000FX (20 kg)",
-    desc: "Polyuretán s flexibilitou — preklenutie trhlín do 0,8 mm",
+    name: "Sikafloor-3000 FX (20 kg)",
+    desc: "PU s Marble/Metallic FX efektom · spotreba 1,30 kg/m²",
     package_size_kg: 20,
-    cost_per_package: 462,
-    cost_per_kg: 23.1,
+    // Peto cenník: 11,88 €/kg bez DPH, faktúra 12,20 €/kg bez DPH — použijeme
+    // faktúrne (reálne účtované) × 1,23 = 15,01 €/kg s DPH → 300 €/bal
+    cost_per_package: 300,
+    cost_per_kg: 15.01,
     sell_by: "package",
     role: "main",
-    floor_types: ["jednofarebna"],
+    floor_types: ["jednofarebna", "metalicka"],
   },
 
   // ═══ VRCHNÉ LAKY (krok 3, voliteľné) ════════════════════════════════
@@ -288,13 +313,14 @@ const SIKA: Product[] = [
   {
     id: "sika-3306w-15",
     brand: "sika",
-    name: "Sikafloor-3306W (14,98 kg)",
-    desc: "PU mat lak — POZOR: pre metalicú/mramorovú používame Topstone EP22, tento iba pre jednofarebnú/chipsovú",
-    package_size_kg: 14.98,
-    cost_per_package: 300,
-    cost_per_kg: 20.0,
+    name: "Sikafloor-304W Matt (7,5 kg)",
+    desc: "PU vodou-riediteľný mat lak (Sika 2026: 3306W = náhrada 304W) · spotreba 0,18 kg/m²",
+    package_size_kg: 7.5,
+    // Peto cenník: 20,48 €/kg bez DPH, faktúra 21,63 €/kg bez DPH — použijeme
+    // faktúrne × 1,23 = 26,60 €/kg s DPH → 200 €/bal
+    cost_per_package: 200,
+    cost_per_kg: 26.6,
     sell_by: "package",
-    note: "TODO potvrdiť cenu",
     role: "topcoat",
     // User explicit: pri metalickej + mramorovej sa dáva Topstone EP22 Plus,
     // NIE Sika PU lak. Sika PU je iba pre jednofarebné + chipsové.
@@ -309,13 +335,13 @@ const SIKA: Product[] = [
   {
     id: "sika-tc442w-10",
     brand: "sika",
-    name: "Sikafloor-TC 442W (10 kg)",
-    desc: "Transparent PU lak — iba jednofarebná/chipsová (pre metalicú/mramorovú je Topstone EP22)",
+    name: "Sikafloor-TC 442W clear (10 kg)",
+    desc: "Transparent PU lak clear · spotreba 0,15 kg/m²",
     package_size_kg: 10,
-    cost_per_package: 215,
-    cost_per_kg: 21.5,
+    // Peto: 19,25 €/kg bez DPH × 1,23 = 23,68 €/kg s DPH → 237 €/bal
+    cost_per_package: 237,
+    cost_per_kg: 23.68,
     sell_by: "package",
-    note: "TODO potvrdiť cenu",
     role: "topcoat",
     compatible_with: [
       "sika-264plus-kg",
@@ -327,13 +353,13 @@ const SIKA: Product[] = [
   {
     id: "sika-tc446w-10",
     brand: "sika",
-    name: "Sikafloor-TC 446W (10 kg)",
-    desc: "Transparent PU lak — iba jednofarebná/chipsová (pre metalicú/mramorovú je Topstone EP22)",
+    name: "Sikafloor-TC 442W RAL 7032/7035 (10 kg)",
+    desc: "Transparent PU lak farebný · spotreba 0,15 kg/m²",
     package_size_kg: 10,
-    cost_per_package: 230,
-    cost_per_kg: 23.0,
+    // Peto: 23,10 €/kg bez DPH × 1,23 = 28,41 €/kg s DPH → 284 €/bal
+    cost_per_package: 284,
+    cost_per_kg: 28.41,
     sell_by: "package",
-    note: "TODO potvrdiť cenu",
     role: "topcoat",
     compatible_with: [
       "sika-264plus-kg",
@@ -347,11 +373,12 @@ const SIKA: Product[] = [
   {
     id: "sika-level-30-25",
     brand: "sika",
-    name: "Sikafloor Level-30 (25 kg)",
-    desc: "Cementová samonivelačná stierka 4–30 mm (40 MPa)",
+    name: "Sikafloor Level-30 (25 kg vrece)",
+    desc: "Cementová samonivelačná stierka 4–30 mm (40 MPa) · spotreba 1,8 kg/m²/mm",
     package_size_kg: 25,
-    cost_per_package: 46,
-    cost_per_kg: 1.85,
+    // Peto: 0,97 €/kg bez DPH × 1,23 = 1,19 €/kg s DPH → 30 €/vrece
+    cost_per_package: 30,
+    cost_per_kg: 1.19,
     sell_by: "package",
     role: "additive",
   },
@@ -414,14 +441,16 @@ const TOPSTONE: Product[] = [
   {
     id: "ba-ep11-metalic-20",
     brand: "betonace",
-    name: "EP11 Metalic BA (Topstone)",
+    name: "Topstone EP11 Metalic BA (20 kg sud)",
     // Rovnaká metalická báza sa používa pre metalickú aj mramorovú podlahu —
-    // podľa faktúry od Betonace. Pre mramor sa navrch aplikujú farebné pole
-    // v inom RAL odtieni, ale samotná báza je tá istá.
-    desc: "Metalická báza pre metalickú aj mramorovú podlahu (top stupeň)",
+    // podľa faktúry od Betonace 0000000352. Pre mramor sa navrch aplikujú
+    // farebné pole v inom RAL odtieni, ale samotná báza je tá istá.
+    desc: "2K epox metalická liata stierka pre 3D efekt / mramor · spotreba 1,22 kg/m²",
     package_size_kg: 20,
-    cost_per_package: 662,
-    cost_per_kg: 33.0,
+    // Faktúra: 430 CZK/kg × (25,3 CZK/EUR)⁻¹ = 17,00 €/kg bez DPH × 1,23 = 20,91 €/kg s DPH
+    // → 418 €/sud
+    cost_per_package: 418,
+    cost_per_kg: 20.91,
     sell_by: "package",
     role: "main",
     floor_types: ["metalicka", "mramorova"],
@@ -430,27 +459,81 @@ const TOPSTONE: Product[] = [
   {
     id: "ba-ep22plus-20",
     brand: "betonace",
-    name: "EP22 Plus číra",
-    desc: "Číry epoxidový lak pre mramor / metalic / chips",
+    name: "Topstone EP22 Plus číra (20 kg sud)",
+    desc: "Číry PU vrchný lak pre mramor / metalic / chips (2 vrstvy) · spotreba 1,19 kg/m² total",
     package_size_kg: 20,
-    cost_per_package: 378,
-    cost_per_kg: 18.9,
+    // Faktúra: 247,62 CZK/kg = 9,79 €/kg bez DPH × 1,23 = 12,04 €/kg s DPH → 241 €/sud
+    cost_per_package: 241,
+    cost_per_kg: 12.04,
     sell_by: "package",
     role: "topcoat",
     compatible_with: ["ba-ep11-metalic-20", "ba-ep02-rals-25"],
   },
-  // ═══ DOPLNKY ═════════════════════════════════════════════════════════
+  // ═══ PENETRÁCIE Topstone ═════════════════════════════════════════════
+  {
+    id: "ba-ep02-rals-25",
+    brand: "betonace",
+    name: "Topstone EP02 RAL 7035 (25 kg vrece)",
+    desc: "2K epox penetrácia RAL 7035 (šedá) pre metalic/mramor · spotreba 0,93 kg/m² (2 vrstvy)",
+    package_size_kg: 25,
+    // Faktúra: 191,24 CZK/kg = 7,56 €/kg bez DPH × 1,23 = 9,30 €/kg s DPH → 232 €/vrece
+    cost_per_package: 232,
+    cost_per_kg: 9.3,
+    sell_by: "package",
+    role: "primer",
+    floor_types: ["metalicka", "mramorova"],
+    compatible_with: ["ba-ep11-metalic-20"],
+  },
+  {
+    id: "ba-ep01-primer",
+    brand: "betonace",
+    name: "Topstone EP01 Primer",
+    desc: "2K epox univerzálna penetrácia · TODO: cena chýba, zatiaľ použi EP02",
+    package_size_kg: null,
+    cost_per_package: null,
+    cost_per_kg: 0,
+    sell_by: "kg",
+    note: "TODO cenu od Betonace",
+    role: "primer",
+  },
+  // ═══ BOOSTERY / AKCELERÁTORY ═════════════════════════════════════════
+  {
+    id: "ba-akcelerator-5",
+    brand: "betonace",
+    name: "Topstone Akcelerátor (5 kg kanister)",
+    desc: "Booster pre EP01/EP02 penetrácie — zrýchľuje vytvrdnutie z ~24h na 4–6h · spotreba 0,04 kg/m²",
+    package_size_kg: 5,
+    // Faktúra: 318,90 CZK/kg = 12,60 €/kg bez DPH × 1,23 = 15,50 €/kg s DPH → 78 €/kanister
+    cost_per_package: 78,
+    cost_per_kg: 15.5,
+    sell_by: "package",
+    role: "additive",
+    floor_types: ["metalicka", "mramorova"],
+  },
+  // ═══ DOPRAVA / PALETA ════════════════════════════════════════════════
+  {
+    id: "ba-paleta-euro",
+    brand: "betonace",
+    name: "EUR paleta 1200×800 (za ks)",
+    desc: "Paletné za dopravu (2 ks / štandardná zákazka)",
+    package_size_kg: null,
+    // Faktúra: 280 CZK/ks = 11,07 €/ks bez DPH × 1,23 = 13,62 €/ks s DPH
+    cost_per_package: 14,
+    cost_per_kg: 0,
+    sell_by: "package",
+    role: "additive",
+  },
+  // ═══ CHIPSY ═════════════════════════════════════════════════════════
   {
     id: "stavekon-chipy-kg",
     brand: "stavekon",
     name: "Chipy STAVEKON",
-    desc: "Farebné PVC vločky — chipsový systém",
+    desc: "Farebné PVC vločky — chipsový systém · spotreba 0,20 kg/m² (full broadcast)",
     package_size_kg: null,
-    // TODO: potvrdiť cenu — chýbajú údaje od dodávateľa
     cost_per_package: null,
     cost_per_kg: 0,
     sell_by: "kg",
-    note: "TODO doplniť cenu",
+    note: "TODO cena od dodávateľa (odhad 50 €/kg = 10 €/m²)",
     role: "additive",
     floor_types: ["chipsova"],
   },
