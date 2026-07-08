@@ -59,13 +59,15 @@ export function SettingsClient({
   return (
     <div className="space-y-4">
       {/* Tabs */}
-      <div className="border-b flex gap-1 -mb-px">
+      <div className="border-b flex gap-1 -mb-px flex-wrap">
         <TabLink id="materials" active={activeTab} label="Materiály & cenník" count={materials.length} />
-        <TabLink id="global" active={activeTab} label="Globálne (marže, DPH, doprava)" count={settings.length} />
+        <TabLink id="markups" active={activeTab} label="Marže materiálov" count={settings.filter(s => s.key.startsWith("markup.")).length} />
+        <TabLink id="global" active={activeTab} label="Ostatné (DPH, doprava, min. zákazka)" count={settings.filter(s => !s.key.startsWith("markup.")).length} />
       </div>
 
       {activeTab === "materials" && <MaterialsTab materials={materials} />}
-      {activeTab === "global" && <GlobalTab settings={settings} />}
+      {activeTab === "markups" && <MarkupsTab settings={settings.filter(s => s.key.startsWith("markup.") || s.key === "margin.material")} />}
+      {activeTab === "global" && <GlobalTab settings={settings.filter(s => !s.key.startsWith("markup.") && s.key !== "margin.material")} />}
     </div>
   );
 }
@@ -366,6 +368,232 @@ function GlobalTab({ settings }: { settings: SettingView[] }) {
         <SettingRow key={s.key} setting={s} />
       ))}
     </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MATERIAL MARKUPS TAB (per-role marže — %)
+// ══════════════════════════════════════════════════════════════════════
+
+const MARKUP_META: Record<
+  string,
+  { icon: string; label: string; examples: string; color: string }
+> = {
+  "markup.primer": {
+    icon: "🧴",
+    label: "Penetrácie / Primery",
+    examples:
+      "Sikafloor-01, -03, -150 Plus, -151, -156, -161 · Topstone EP02",
+    color: "sky",
+  },
+  "markup.main": {
+    icon: "🎨",
+    label: "Hlavné farebné nátery",
+    examples:
+      "Sikafloor-264 Plus, -3000, -3000FX, -392, -262AS N · Topstone EP11 metalic",
+    color: "violet",
+  },
+  "markup.topcoat": {
+    icon: "✨",
+    label: "Vrchné laky",
+    examples:
+      "Sikafloor-3310, -304W Matt, -305W, -TC 442W · Topstone EP22 Plus",
+    color: "emerald",
+  },
+  "markup.additive": {
+    icon: "🎯",
+    label: "Doplnky",
+    examples:
+      "Sikafloor Level-30, Chipy STAVEKON, Kremičitý piesok, Sika CLN 50, Topstone Akcelerátor",
+    color: "amber",
+  },
+  "markup.transport": {
+    icon: "🚚",
+    label: "Doprava / paletné",
+    examples: "EUR paleta 1200×800, doprava (Ostrava → SK, Bratislava, …)",
+    color: "slate",
+  },
+  "margin.material": {
+    icon: "🌐",
+    label: "Fallback globálna marža",
+    examples:
+      "Ak niektorá per-role marža vyššie nie je nastavená, použije sa táto ako fallback.",
+    color: "rose",
+  },
+};
+
+function MarkupsTab({ settings }: { settings: SettingView[] }) {
+  if (settings.length === 0) {
+    return (
+      <div className="rounded-lg border-2 border-dashed border-slate-200 p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Marže per rola nie sú v DB. Pusti SQL migráciu{" "}
+          <code className="font-mono font-bold">26_material_markups.sql</code>{" "}
+          v Supabase SQL editore.
+        </p>
+        <a
+          href="https://supabase.com/dashboard/project/wzcehdynanuuzztfrqyi/sql/new"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block mt-3 text-sky-700 hover:text-sky-800 underline font-bold text-sm"
+        >
+          Otvoriť SQL editor →
+        </a>
+      </div>
+    );
+  }
+
+  // Zoradenie podľa MARKUP_META poradia (primer → main → topcoat → additive → transport → globálna)
+  const order = [
+    "markup.primer",
+    "markup.main",
+    "markup.topcoat",
+    "markup.additive",
+    "markup.transport",
+    "margin.material",
+  ];
+  const sorted = [...settings].sort(
+    (a, b) => order.indexOf(a.key) - order.indexOf(b.key),
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border-2 border-sky-200 bg-sky-50/60 p-4 text-sm">
+        <div className="font-bold text-sky-900 mb-1">
+          💡 Ako fungujú marže na materiáli
+        </div>
+        <div className="text-sky-800 leading-snug space-y-1">
+          <div>
+            <strong>Predajná cena</strong> = <strong>Nákup</strong> ÷ (1 −
+            marža). Napr. marža 37 % → náklad 100 € → predaj 158,73 €
+            (58,73 € zisk).
+          </div>
+          <div>
+            Per-role marže nižšie sa aplikujú na materiál podľa jeho role
+            (primer/main/topcoat/additive/transport). Fallback globálna
+            marža sa použije len ak per-role nie je nastavená.
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {sorted.map((s) => (
+          <MarkupCard key={s.key} setting={s} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MarkupCard({ setting }: { setting: SettingView }) {
+  const meta = MARKUP_META[setting.key] ?? {
+    icon: "⚙️",
+    label: setting.label,
+    examples: setting.description ?? "",
+    color: "slate",
+  };
+
+  const rawValue =
+    typeof setting.value === "number"
+      ? setting.value
+      : typeof setting.value === "string"
+        ? parseFloat(setting.value)
+        : parseFloat(String(setting.value));
+
+  // Zobrazujeme v UI ako percent (37 % namiesto 0.37)
+  const percentInit = isFinite(rawValue) ? (rawValue * 100).toFixed(0) : "37";
+  const [percent, setPercent] = React.useState(percentInit);
+  const [pending, setPending] = React.useState(false);
+
+  const pctNum = parseFloat(percent);
+  const validPct = isFinite(pctNum) && pctNum >= 0 && pctNum < 100;
+  const sellMultiplier = validPct ? 1 / (1 - pctNum / 100) : null;
+
+  const colorClasses: Record<string, { border: string; bg: string; text: string; ring: string }> = {
+    sky: { border: "border-sky-300", bg: "bg-sky-50", text: "text-sky-900", ring: "focus:ring-sky-400" },
+    violet: { border: "border-violet-300", bg: "bg-violet-50", text: "text-violet-900", ring: "focus:ring-violet-400" },
+    emerald: { border: "border-emerald-300", bg: "bg-emerald-50", text: "text-emerald-900", ring: "focus:ring-emerald-400" },
+    amber: { border: "border-amber-300", bg: "bg-amber-50", text: "text-amber-900", ring: "focus:ring-amber-400" },
+    slate: { border: "border-slate-300", bg: "bg-slate-50", text: "text-slate-900", ring: "focus:ring-slate-400" },
+    rose: { border: "border-rose-300", bg: "bg-rose-50", text: "text-rose-900", ring: "focus:ring-rose-400" },
+  };
+  const c = colorClasses[meta.color] ?? colorClasses.slate;
+
+  return (
+    <form
+      action={async (fd) => {
+        setPending(true);
+        try {
+          await saveSettingAction(fd);
+        } finally {
+          setPending(false);
+        }
+      }}
+      className={cn(
+        "rounded-xl border-2 p-4 space-y-3 bg-background",
+        c.border,
+      )}
+    >
+      <input type="hidden" name="key" value={setting.key} />
+      {/* Value je uložená ako fraction (0.37), nie percent (37) */}
+      <input
+        type="hidden"
+        name="value"
+        value={validPct ? (pctNum / 100).toString() : "0.37"}
+      />
+
+      <div className="flex items-start gap-3">
+        <div className={cn("shrink-0 text-3xl leading-none")}>{meta.icon}</div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-sm">{meta.label}</div>
+          <code className="text-[10px] text-muted-foreground font-mono">
+            {setting.key}
+          </code>
+          <div className="text-[11px] text-muted-foreground italic mt-1 leading-snug">
+            {meta.examples}
+          </div>
+        </div>
+      </div>
+
+      <div className={cn("rounded-lg px-3 py-2.5", c.bg)}>
+        <div className="flex items-baseline gap-1.5">
+          <label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+            Marža
+          </label>
+          <input
+            type="number"
+            step="1"
+            min="0"
+            max="99"
+            value={percent}
+            onChange={(e) => setPercent(e.target.value)}
+            className={cn(
+              "w-16 rounded-md border-2 bg-white px-2 py-1 text-lg font-black text-right tabular-nums focus:outline-none focus:ring-2",
+              c.border,
+              c.ring,
+            )}
+          />
+          <span className={cn("text-lg font-black", c.text)}>%</span>
+        </div>
+        {sellMultiplier && (
+          <div className="text-[11px] text-muted-foreground mt-1.5 tabular-nums">
+            Predaj = Nákup × <strong>{sellMultiplier.toFixed(3)}</strong>
+            {" "}(napr. 100 € nákup → <strong>{(100 * sellMultiplier).toFixed(2)} €</strong> predaj)
+          </div>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={pending || !validPct}
+        className={cn(
+          "w-full rounded-lg py-2 text-sm font-bold text-white transition-colors",
+          "bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed",
+        )}
+      >
+        {pending ? "Ukladám…" : `Uložiť ${percent} %`}
+      </button>
+    </form>
   );
 }
 
