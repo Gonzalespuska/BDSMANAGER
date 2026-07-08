@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { MapPin, Phone, Ruler, StickyNote } from "lucide-react";
 
 import { formatPhoneSK } from "@/lib/phone-format";
@@ -9,13 +9,15 @@ import type { Lead } from "@/lib/types/lead";
 /**
  * ObhliadkaCard — jedna karta v /obhliadky dashbore.
  *
- * MUSÍ byť client komponent lebo phone link má `onClick={e =>
- * e.stopPropagation()}` (aby klik na telefón nespustil route na detail).
- * V RSC (server) sa inline event handler nedá priradiť native `<a>` —
- * Next 14 hodí runtime error „Event handlers cannot be passed to Client
- * Component props" a stránka spadne s digest.
+ * MUSÍ byť client komponent lebo:
+ *   1. Celá karta je klikateľná → navigate na detail cez router.push()
+ *      Nemôžeme použiť <Link> lebo phone link je <a href="tel:...">
+ *      a nested <a> v <a> je INVALID HTML (hydration error).
+ *   2. Phone link volá e.stopPropagation() aby klik na telefón nespustil
+ *      route na detail.
  */
 export function ObhliadkaCard({ lead }: { lead: Lead }) {
+  const router = useRouter();
   const rawData = lead.data;
   const data = (
     rawData && typeof rawData === "object" ? rawData : {}
@@ -43,9 +45,17 @@ export function ObhliadkaCard({ lead }: { lead: Lead }) {
 
   return (
     <li>
-      <Link
-        href={`/obhliadky/${lead.id}`}
-        className="block rounded-xl border-2 border-violet-200 bg-background p-4 hover:border-violet-400 hover:bg-violet-50/30 transition-all shadow-sm hover:shadow-md"
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => router.push(`/obhliadky/${lead.id}`)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            router.push(`/obhliadky/${lead.id}`);
+          }
+        }}
+        className="block rounded-xl border-2 border-violet-200 bg-background p-4 hover:border-violet-400 hover:bg-violet-50/30 transition-all shadow-sm hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-400"
       >
         <div className="flex items-start justify-between gap-3 flex-wrap">
           {/* LEFT — meno + telefón */}
@@ -113,7 +123,7 @@ export function ObhliadkaCard({ lead }: { lead: Lead }) {
             </div>
           </div>
         )}
-      </Link>
+      </div>
     </li>
   );
 }
