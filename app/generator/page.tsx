@@ -112,11 +112,38 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
     phone: agentPhone,
   };
 
+  // ─── Load per-role material markups z /admin/settings ──────────────
+  // Ak DB má key `markup.primer`/`markup.main`/`markup.topcoat`/... , generator
+  // ich použije na výpočet predaja materiálu podľa role produktu. Fallback:
+  // MARZA_MATERIAL_PER_ROLE z pricing.ts (0.37 pre všetko).
+  let materialMarkups: Record<string, number> = {};
+  try {
+    const sb = createAdminClient();
+    const { data: settings } = await sb
+      .from("app_settings")
+      .select("key, value")
+      .or("key.like.markup.%,key.eq.margin.material");
+    for (const s of settings ?? []) {
+      const key = s.key as string;
+      const raw = s.value;
+      const num = typeof raw === "number" ? raw : parseFloat(String(raw));
+      if (isFinite(num) && num >= 0 && num < 1) {
+        materialMarkups[key] = num;
+      }
+    }
+  } catch (e) {
+    console.warn("[generator] settings fetch failed:", e);
+  }
+
   // ─── Demo mock leads (no DB needed) ──────────────────────────────────
   if (params.demo && DEMO_LEADS[params.demo]) {
     leadContext = DEMO_LEADS[params.demo];
     return (
-      <GeneratorClient leadContext={leadContext} agentInfo={agentInfo} />
+      <GeneratorClient
+        leadContext={leadContext}
+        agentInfo={agentInfo}
+        materialMarkups={materialMarkups}
+      />
     );
   }
 
@@ -170,6 +197,7 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
       leadContext={leadContext}
       agentInfo={agentInfo}
       savedQuote={savedQuote}
+      materialMarkups={materialMarkups}
     />
   );
 }

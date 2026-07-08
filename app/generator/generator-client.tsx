@@ -99,11 +99,15 @@ export function GeneratorClient({
   leadContext,
   agentInfo,
   savedQuote,
+  materialMarkups,
 }: {
   leadContext?: LeadContext | null;
   agentInfo?: { name: string; email: string; phone?: string | null };
   /** Ak lead už má odoslanú CP a otvárame ju cez ?resend=1 — pre-fillneme state. */
   savedQuote?: SavedQuoteState | null;
+  /** Per-role marže z /admin/settings (`markup.primer/main/topcoat/additive/transport`).
+   *  Ak niektorá chýba, fallback = MARZA_MATERIAL_PER_ROLE (default 0.37). */
+  materialMarkups?: Record<string, number>;
 }) {
   const router = useRouter();
   const isResend = !!savedQuote;
@@ -215,24 +219,34 @@ export function GeneratorClient({
     Record<string, string>
   >(savedQuote?.state.materialQtys ?? {});
 
-  // Subtotal pre material mode — pre každý produkt:
-  //   ks balenia × cena/balenie  ALEBO  kg × cena/kg
-  // Aplikuje sa MARZA_MATERIAL na predaj.
+  // Subtotal pre material mode — pre každý produkt aplikujeme jeho per-role
+  // maržu (`markup.primer` / `markup.main` / `markup.topcoat` / `markup.additive`
+  // z /admin/settings). Ak per-role nie je v DB, fallback = MARZA_MATERIAL.
   const materialOnlySubtotal = React.useMemo(() => {
     if (saleMode !== "material") return 0;
-    let cost = 0;
+    let sell = 0;
     for (const p of PRODUCT_CATALOG) {
       const qty = parseFloat(materialQtys[p.id] ?? "") || 0;
       if (qty <= 0) continue;
-      // Skip produktov bez ceny — nepočítame odhady
+      let cost = 0;
       if (p.sell_by === "package" && p.cost_per_package !== null) {
-        cost += qty * p.cost_per_package;
+        cost = qty * p.cost_per_package;
       } else if (p.sell_by === "kg" && p.cost_per_kg > 0) {
-        cost += qty * p.cost_per_kg;
+        cost = qty * p.cost_per_kg;
+      } else {
+        continue; // produkt bez ceny — TODO
       }
+      // Per-role marža z DB, fallback global 0.37
+      const roleKey = `markup.${p.role}`;
+      const perRoleMarza = materialMarkups?.[roleKey];
+      const marza =
+        typeof perRoleMarza === "number" && perRoleMarza >= 0 && perRoleMarza < 1
+          ? perRoleMarza
+          : (materialMarkups?.["margin.material"] ?? MARZA_MATERIAL);
+      sell += applyMargin(cost, marza);
     }
-    return applyMargin(cost, MARZA_MATERIAL);
-  }, [saleMode, materialQtys]);
+    return sell;
+  }, [saleMode, materialQtys, materialMarkups]);
   // ref na prvý m² input — aby sme po výbere lokality skočili na neho
   const firstM2Ref = React.useRef<HTMLInputElement | null>(null);
   function focusFirstM2() {
@@ -1164,6 +1178,7 @@ ${signatureLines.join("\n")}`;
           floorType={floorType}
           materialQtys={materialQtys}
           setMaterialQtys={setMaterialQtys}
+          materialMarkups={materialMarkups}
         />
       )}
 
@@ -2107,10 +2122,12 @@ function MaterialCatalog({
   floorType,
   materialQtys,
   setMaterialQtys,
+  materialMarkups,
 }: {
   floorType: FloorType;
   materialQtys: Record<string, string>;
   setMaterialQtys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  materialMarkups?: Record<string, number>;
 }) {
   // Search — flat global, hľadá v ID + name + desc, case-insensitive substring
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -2267,6 +2284,7 @@ function MaterialCatalog({
                     materialQtys={materialQtys}
                     setMaterialQtys={setMaterialQtys}
                     sectionLabel={ROLE_LABELS_SK[p.role] ?? p.role}
+                    materialMarkups={materialMarkups}
                   />
                 ))}
               </ul>
@@ -2283,6 +2301,7 @@ function MaterialCatalog({
         products={mains}
         materialQtys={materialQtys}
         setMaterialQtys={setMaterialQtys}
+        materialMarkups={materialMarkups}
         emptyMsg="Pre tento typ podlahy zatiaľ nie sú v katalógu hlavné nátery."
         open={openStep === 1}
         onToggle={() => setOpenStep(openStep === 1 ? 0 : 1)}
@@ -2301,6 +2320,7 @@ function MaterialCatalog({
         products={primers}
         materialQtys={materialQtys}
         setMaterialQtys={setMaterialQtys}
+        materialMarkups={materialMarkups}
         emptyMsg={
           selectedMains.size === 0
             ? "Vyber najprv hlavný náter."
@@ -2320,6 +2340,7 @@ function MaterialCatalog({
         products={step3Products}
         materialQtys={materialQtys}
         setMaterialQtys={setMaterialQtys}
+        materialMarkups={materialMarkups}
         emptyMsg="Pre tento systém v katalógu nie sú dokončovacie produkty."
         open={openStep === 3}
         onToggle={() => setOpenStep(openStep === 3 ? 0 : 3)}
@@ -2335,6 +2356,7 @@ function MaterialCatalog({
           products={additives}
           materialQtys={materialQtys}
           setMaterialQtys={setMaterialQtys}
+          materialMarkups={materialMarkups}
           emptyMsg="—"
           open={openStep === 4}
           onToggle={() => setOpenStep(openStep === 4 ? 0 : 4)}
@@ -2357,6 +2379,7 @@ function Section({
   open,
   onToggle,
   completed,
+  materialMarkups,
 }: {
   step: number;
   title: string;
@@ -2370,6 +2393,7 @@ function Section({
   open: boolean;
   onToggle: () => void;
   completed?: boolean;
+  materialMarkups?: Record<string, number>;
 }) {
   const accentClasses = {
     sky: {
@@ -2468,6 +2492,7 @@ function Section({
                   materialQtys={materialQtys}
                   setMaterialQtys={setMaterialQtys}
                   disabled={disabled}
+                  materialMarkups={materialMarkups}
                 />
               ))}
             </ul>
@@ -2483,11 +2508,13 @@ function MaterialRow({
   materialQtys,
   setMaterialQtys,
   disabled,
+  materialMarkups,
 }: {
   product: Product;
   materialQtys: Record<string, string>;
   setMaterialQtys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   disabled?: boolean;
+  materialMarkups?: Record<string, number>;
 }) {
   const qty = parseFloat(materialQtys[p.id] ?? "") || 0;
   // Cena = null keď nemáme náklad — neukáž odhad, ukáž pomlčku.
@@ -2497,7 +2524,14 @@ function MaterialRow({
       : p.sell_by === "kg" && p.cost_per_kg > 0
         ? p.cost_per_kg
         : null;
-  const sellRate = baseCost !== null ? applyMargin(baseCost, MARZA_MATERIAL) : null;
+  // Per-role marža z DB, fallback global 0.37
+  const roleKey = `markup.${p.role}`;
+  const perRoleMarza = materialMarkups?.[roleKey];
+  const marza =
+    typeof perRoleMarza === "number" && perRoleMarza >= 0 && perRoleMarza < 1
+      ? perRoleMarza
+      : (materialMarkups?.["margin.material"] ?? MARZA_MATERIAL);
+  const sellRate = baseCost !== null ? applyMargin(baseCost, marza) : null;
   const lineSell = sellRate !== null ? qty * sellRate : null;
   const unit = p.sell_by === "package" ? "bal." : "kg";
   const subtitle =
@@ -2606,11 +2640,13 @@ function SearchResultRow({
   materialQtys,
   setMaterialQtys,
   sectionLabel,
+  materialMarkups,
 }: {
   product: Product;
   materialQtys: Record<string, string>;
   setMaterialQtys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   sectionLabel: string;
+  materialMarkups?: Record<string, number>;
 }) {
   const qty = parseFloat(materialQtys[p.id] ?? "") || 0;
   const baseCost =
@@ -2619,7 +2655,13 @@ function SearchResultRow({
       : p.sell_by === "kg" && p.cost_per_kg > 0
         ? p.cost_per_kg
         : null;
-  const sellRate = baseCost !== null ? applyMargin(baseCost, MARZA_MATERIAL) : null;
+  const roleKey = `markup.${p.role}`;
+  const perRoleMarza = materialMarkups?.[roleKey];
+  const marza =
+    typeof perRoleMarza === "number" && perRoleMarza >= 0 && perRoleMarza < 1
+      ? perRoleMarza
+      : (materialMarkups?.["margin.material"] ?? MARZA_MATERIAL);
+  const sellRate = baseCost !== null ? applyMargin(baseCost, marza) : null;
   const lineSell = sellRate !== null ? qty * sellRate : null;
   const unit = p.sell_by === "package" ? "bal." : "kg";
   const subtitle =
