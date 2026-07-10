@@ -9,6 +9,7 @@ import {
   TrendingUp,
   UserPlus,
   Users,
+  Warehouse,
 } from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -102,6 +103,12 @@ export default async function AdminDashboard() {
       desc: "Generuj objednávkové tabuľky pre Siku / Topstone (SAP # + názov + balenie + ks → PDF).",
       icon: Package,
       badge: "🚧 In building",
+    },
+    {
+      href: "/admin/sklad",
+      title: "Skladové zásoby",
+      desc: "Aktuálny stav materiálu na sklade (Sika/Topstone). Ručne pridávaj po prijatí, alert pri nízkom stave. Realizátor pri tlači tlačiva sa auto-odpočíta.",
+      icon: Warehouse,
     },
     {
       href: "/admin/settings",
