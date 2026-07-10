@@ -15,6 +15,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const DEFAULT_ROOM_ID = "00000000-0000-0000-0000-000000000001";
 
+/** Prefix DM room title (viď /api/chat/dm/route.ts). */
+export const DM_PREFIX = "🔒 DM:";
+
 export type ChatMessage = {
   id: string;
   user_id: string;
@@ -36,15 +39,40 @@ export type ChatRoom = {
   created_at: string;
   last_message_at: string;
   message_count: number;
+  /** True ak je to DM medzi 2 usermi. */
+  is_dm: boolean;
+  /** DM: meno druhého užívateľa (pre zobrazenie), null pri obyčajných roomkách. */
+  peer_name: string | null;
+  /** DM: id druhého užívateľa. */
+  peer_id: string | null;
 };
+
+/**
+ * Ak title matchuje DM_PREFIX, vytiahne [uidMin, uidMax]. Vráti null pre
+ * obyčajné roomky.
+ */
+export function parseDmTitle(
+  title: string,
+): { uidMin: string; uidMax: string } | null {
+  if (!title.startsWith(DM_PREFIX)) return null;
+  const raw = title.slice(DM_PREFIX.length);
+  const parts = raw.split(":");
+  if (parts.length !== 2) return null;
+  const [a, b] = parts;
+  if (!/^[0-9a-f-]{36}$/i.test(a) || !/^[0-9a-f-]{36}$/i.test(b)) return null;
+  return { uidMin: a, uidMax: b };
+}
 
 const PAGE_SIZE = 100;
 
 /**
  * Načíta zoznam aktívnych roomiek zoradených podľa last_message_at DESC.
  * Hydratuje meno tvorcu (z public.users).
+ *
+ * DM roomy: filtrujeme také kde ani jeden účastník = current user
+ * (`currentUserId`). Pre DM roomy hydratujeme peer_name (meno druhého).
  */
-export async function loadRooms(): Promise<ChatRoom[]> {
+export async function loadRooms(currentUserId?: string): Promise<ChatRoom[]> {
   const admin = createAdminClient();
   const { data: rooms, error } = await admin
     .from("team_rooms")
@@ -59,24 +87,38 @@ export async function loadRooms(): Promise<ChatRoom[]> {
   }
   if (rooms.length === 0) return [];
 
-  // Hydratuj mená creatorov
-  const creatorIds = Array.from(
-    new Set(rooms.map((r) => r.created_by).filter(Boolean) as string[]),
-  );
-  const creators =
-    creatorIds.length > 0
+  // Filter DM roomy — iba také kde je current user účastník
+  const visibleRooms = rooms.filter((r) => {
+    const dm = parseDmTitle(r.title);
+    if (!dm) return true; // obyčajná roomka — všetci vidia
+    if (!currentUserId) return false; // bez user ID nikto nevidí DMs
+    return dm.uidMin === currentUserId || dm.uidMax === currentUserId;
+  });
+
+  // Hydratuj mená creatorov + peers (pre DM roomy)
+  const userIds = new Set<string>();
+  for (const r of visibleRooms) {
+    if (r.created_by) userIds.add(r.created_by);
+    const dm = parseDmTitle(r.title);
+    if (dm) {
+      userIds.add(dm.uidMin);
+      userIds.add(dm.uidMax);
+    }
+  }
+  const users =
+    userIds.size > 0
       ? (
           await admin
             .from("users")
             .select("id, name")
-            .in("id", creatorIds)
+            .in("id", Array.from(userIds))
         ).data ?? []
       : [];
-  const creatorMap = new Map(creators.map((u) => [u.id, u.name]));
+  const userMap = new Map(users.map((u) => [u.id, u.name]));
 
   // Hydratuj message counts (jedno query, batch)
   const counts: Record<string, number> = {};
-  for (const r of rooms) {
+  for (const r of visibleRooms) {
     const { count } = await admin
       .from("team_messages")
       .select("id", { count: "exact", head: true })
@@ -85,15 +127,27 @@ export async function loadRooms(): Promise<ChatRoom[]> {
     counts[r.id] = count ?? 0;
   }
 
-  return rooms.map((r) => ({
-    id: r.id,
-    title: r.title,
-    created_by: r.created_by,
-    created_by_name: r.created_by ? creatorMap.get(r.created_by) ?? null : null,
-    created_at: r.created_at,
-    last_message_at: r.last_message_at,
-    message_count: counts[r.id] ?? 0,
-  }));
+  return visibleRooms.map((r) => {
+    const dm = parseDmTitle(r.title);
+    let peerId: string | null = null;
+    let peerName: string | null = null;
+    if (dm && currentUserId) {
+      peerId = dm.uidMin === currentUserId ? dm.uidMax : dm.uidMin;
+      peerName = userMap.get(peerId) ?? "Neznámy";
+    }
+    return {
+      id: r.id,
+      title: r.title,
+      created_by: r.created_by,
+      created_by_name: r.created_by ? userMap.get(r.created_by) ?? null : null,
+      created_at: r.created_at,
+      last_message_at: r.last_message_at,
+      message_count: counts[r.id] ?? 0,
+      is_dm: !!dm,
+      peer_id: peerId,
+      peer_name: peerName,
+    };
+  });
 }
 
 export async function loadChatHistory(

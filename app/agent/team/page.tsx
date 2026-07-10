@@ -18,14 +18,28 @@ export const dynamic = "force-dynamic";
  * `h-[75vh]` na chate dávalo iba ~830px ale nad ním header zožral ~330px
  * a pod chatom bola 100px biela plocha. Teraz fit-on-screen.
  */
-export default async function TeamPage() {
+export default async function TeamPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ room?: string }>;
+}) {
   const me = await getCurrentAppUser();
   if (!me) redirect("/login");
 
-  const [rooms, initialMessages] = await Promise.all([
-    loadRooms(),
-    loadChatHistory(DEFAULT_ROOM_ID),
-  ]);
+  const sp = await searchParams;
+  const requestedRoom = typeof sp.room === "string" ? sp.room : null;
+
+  // Načítaj rooms najprv aby sme vedeli overiť či ?room=<id> je platný
+  const rooms = await loadRooms(me.id);
+
+  // Ak URL má ?room=<id> a je v našich rooms (t.j. má na to prístup), otvor
+  // ho hneď — inak fallback na DEFAULT_ROOM_ID (Všeobecná diskusia).
+  const openRoomId =
+    requestedRoom && rooms.some((r) => r.id === requestedRoom)
+      ? requestedRoom
+      : DEFAULT_ROOM_ID;
+
+  const initialMessages = await loadChatHistory(openRoomId);
 
   return (
     <div className="flex flex-col gap-2 md:gap-3 h-[calc(100vh-240px)] min-h-[520px]">

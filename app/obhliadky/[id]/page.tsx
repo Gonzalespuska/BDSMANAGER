@@ -11,6 +11,7 @@ import { InspectionForm } from "./inspection-form";
 import { MediaUpload } from "@/app/realizacie/[id]/media-upload";
 import { MediaGallery } from "@/app/realizacie/[id]/media-gallery";
 import { PhotoChecklist } from "@/components/obhliadky/photo-checklist";
+import { DmButton } from "./dm-button";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -149,11 +150,27 @@ export default async function ObhliadkaDetailPage({
         <div className="grid md:grid-cols-2 gap-3 text-sm">
           <div>
             <div className="text-xs text-muted-foreground">Obchodník</div>
-            <div className="font-bold">{salesUser?.name ?? "—"}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="font-bold">{salesUser?.name ?? "—"}</div>
+              {salesUser && salesUser.id !== user.id && (
+                <DmButton
+                  peerId={salesUser.id}
+                  peerName={salesUser.name}
+                />
+              )}
+            </div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground">Obhliadkár</div>
-            <div className="font-bold">{inspector?.name ?? "—"}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="font-bold">{inspector?.name ?? "—"}</div>
+              {inspector && inspector.id !== user.id && (
+                <DmButton
+                  peerId={inspector.id}
+                  peerName={inspector.name}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>

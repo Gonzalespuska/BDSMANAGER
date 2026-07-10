@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Hash, Plus, Search, Send, Trash2, X } from "lucide-react";
+import { Hash, MessageCircle, Plus, Search, Send, Trash2, X } from "lucide-react";
 
 import { createBrowserClient } from "@supabase/ssr";
 
@@ -29,8 +29,15 @@ export function ChatRoom({
   initialMessages,
 }: Props) {
   const [rooms, setRooms] = React.useState<ChatRoomType[]>(initialRooms);
+  // Ak URL má ?room=<id>, otvor tú roomku (deep-link z DmButton).
+  const initialRoomId = React.useMemo(() => {
+    if (typeof window === "undefined") return DEFAULT_ROOM_ID;
+    const p = new URLSearchParams(window.location.search).get("room");
+    if (p && initialRooms.some((r) => r.id === p)) return p;
+    return DEFAULT_ROOM_ID;
+  }, [initialRooms]);
   const [activeRoomId, setActiveRoomId] =
-    React.useState<string>(DEFAULT_ROOM_ID);
+    React.useState<string>(initialRoomId);
   const [messages, setMessages] =
     React.useState<ChatMessage[]>(initialMessages);
   const [loadingMessages, setLoadingMessages] = React.useState(false);
@@ -419,52 +426,81 @@ export function ChatRoom({
               Žiadne roomky.
             </li>
           ) : (
-            rooms.map((r) => {
-              const isActive = r.id === activeRoomId;
-              return (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    onClick={() => selectRoom(r.id)}
-                    className={cn(
-                      "w-full text-left px-2.5 py-2 rounded-md transition-colors group flex items-start gap-2",
-                      isActive
-                        ? "bg-sky-100 dark:bg-sky-900/40 text-sky-900 dark:text-sky-100"
-                        : "hover:bg-muted/70 text-foreground/80",
-                    )}
-                  >
-                    <Hash
+            (() => {
+              // Rozdel na 2 sekcie: Osobné správy (DM) vs. Roomky
+              const dms = rooms.filter((r) => r.is_dm);
+              const regulars = rooms.filter((r) => !r.is_dm);
+              const RoomButton = (r: (typeof rooms)[number]) => {
+                const isActive = r.id === activeRoomId;
+                const displayName = r.is_dm ? (r.peer_name ?? "Osobná správa") : r.title;
+                return (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => selectRoom(r.id)}
                       className={cn(
-                        "w-4 h-4 shrink-0 mt-0.5",
+                        "w-full text-left px-2.5 py-2 rounded-md transition-colors group flex items-start gap-2",
                         isActive
-                          ? "text-sky-600"
-                          : "text-muted-foreground group-hover:text-foreground",
+                          ? r.is_dm
+                            ? "bg-violet-100 dark:bg-violet-900/40 text-violet-900 dark:text-violet-100"
+                            : "bg-sky-100 dark:bg-sky-900/40 text-sky-900 dark:text-sky-100"
+                          : "hover:bg-muted/70 text-foreground/80",
                       )}
-                      aria-hidden
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className={cn(
-                          "text-sm font-bold truncate leading-tight",
-                          isActive && "text-sky-900 dark:text-sky-100",
-                        )}
-                      >
-                        {r.title}
+                    >
+                      {r.is_dm ? (
+                        <MessageCircle
+                          className={cn(
+                            "w-4 h-4 shrink-0 mt-0.5",
+                            isActive ? "text-violet-600" : "text-muted-foreground group-hover:text-foreground",
+                          )}
+                          aria-hidden
+                        />
+                      ) : (
+                        <Hash
+                          className={cn(
+                            "w-4 h-4 shrink-0 mt-0.5",
+                            isActive ? "text-sky-600" : "text-muted-foreground group-hover:text-foreground",
+                          )}
+                          aria-hidden
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className={cn(
+                            "text-sm font-bold truncate leading-tight",
+                            isActive && (r.is_dm ? "text-violet-900 dark:text-violet-100" : "text-sky-900 dark:text-sky-100"),
+                          )}
+                        >
+                          {displayName}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 tabular-nums">
+                          <span>{timeAgo(r.last_message_at)}</span>
+                          {r.message_count > 0 && (
+                            <>
+                              <span>·</span>
+                              <span>{r.message_count} msg</span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 tabular-nums">
-                        <span>{timeAgo(r.last_message_at)}</span>
-                        {r.message_count > 0 && (
-                          <>
-                            <span>·</span>
-                            <span>{r.message_count} msg</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                </li>
+                    </button>
+                  </li>
+                );
+              };
+              return (
+                <>
+                  {regulars.map(RoomButton)}
+                  {dms.length > 0 && (
+                    <>
+                      <li className="mt-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-t pt-2">
+                        Osobné správy
+                      </li>
+                      {dms.map(RoomButton)}
+                    </>
+                  )}
+                </>
               );
-            })
+            })()
           )}
         </ul>
       </aside>
@@ -473,10 +509,16 @@ export function ChatRoom({
       <div className="flex-1 flex flex-col min-w-0">
         {/* Room header — title + search */}
         <div className="border-b bg-zinc-100 dark:bg-zinc-900/60 px-4 py-2.5 flex items-center gap-3">
-          <Hash className="w-4 h-4 text-sky-600 shrink-0" aria-hidden />
+          {activeRoom?.is_dm ? (
+            <MessageCircle className="w-4 h-4 text-violet-600 shrink-0" aria-hidden />
+          ) : (
+            <Hash className="w-4 h-4 text-sky-600 shrink-0" aria-hidden />
+          )}
           <div className="flex-1 min-w-0">
             <div className="font-extrabold text-sm truncate">
-              {activeRoom?.title ?? "Načítavam…"}
+              {activeRoom?.is_dm
+                ? (activeRoom.peer_name ?? "Osobná správa")
+                : (activeRoom?.title ?? "Načítavam…")}
             </div>
             {activeRoom?.created_by_name && (
               <div className="text-[10px] text-muted-foreground">
