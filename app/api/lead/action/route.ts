@@ -165,6 +165,31 @@ export async function POST(request: NextRequest) {
           .eq("id", body.lead_id);
         if (error) throw new Error(error.message);
 
+        // ═══════════════════════════════════════════════════════════════
+        // TODO — AUTO SMS PRI NEZDVIHOL (bude implementované vo fáze 2)
+        // ═══════════════════════════════════════════════════════════════
+        // Keď obchodák stlačí "Nezdvihol" (missed_call) → status='no_answer'
+        // → PARALELNE POSLAŤ SMS klientovi Z ČÍSLA OBCHODÁKA.
+        //
+        // Šablóna SMS (Slovensky):
+        //   "Dobrý deň, volal som Vám ohľadom cenovej ponuky epoxidových
+        //   podláh (Epoxidovo). Zavolajte prosím späť keď budete voľní.
+        //   Ďakujem, {agent.name} · {agent.phone}"
+        //
+        // Implementácia (fáza 2):
+        //   1. Poskytovateľ: Twilio Programmable Messaging alebo O2 SK API
+        //   2. Číslo odosielateľa = agent.phone z users tabuľky
+        //   3. Uložiť SMS log do novej lead_sms_log tabuľky (timestamp,
+        //      status delivered/failed, cost) pre audit
+        //   4. Rate limit — max 1 SMS na lead za 24h aby sme neotravovali
+        //   5. Feature flag app_settings.sms_auto_missed_call = true/false
+        //      aby sa dalo vypnúť
+        //   6. Odchádzajúce z čísla obchodáka: caller ID whitelist / verify
+        //      pri poskytovateľovi
+        //
+        // Aktuálne: iba log activity — SMS neposielame.
+        // ═══════════════════════════════════════════════════════════════
+
         admin
           .from("lead_activities")
           .insert({

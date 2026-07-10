@@ -4,6 +4,29 @@ Otvorené úlohy a plánované features. Aktualizuje sa priebežne.
 
 ---
 
+## 📱 AUTO-SMS pri „Nezdvíhal" (fáza 2)
+
+Keď obchodák stlačí **Nezdvíhal** na leade (alebo cez status picker →
+„Nezdvíhali"), status sa zmení na `no_answer`. **Paralelne pošleme SMS
+klientovi z čísla obchodáka.**
+
+**Detaily:**
+- Šablóna SMS: *„Dobrý deň, volal som Vám ohľadom cenovej ponuky epoxidových
+  podláh (Epoxidovo). Zavolajte prosím späť keď budete voľní. Ďakujem,
+  {agent.name} · {agent.phone}"*
+- Odosielateľ = **agent.phone** z users tabuľky (nie firemné číslo)
+- Log do novej tabuľky `lead_sms_log` (timestamp, delivered/failed, cost)
+- Rate limit: max 1 SMS na lead za 24h
+- Feature flag `app_settings.sms_auto_missed_call` — možnosť vypnúť
+- Poskytovateľ: Twilio Programmable Messaging alebo O2 SK API (výber)
+- Caller ID verify pri poskytovateľovi aby SMS reálne prišla z čísla obchodáka
+
+**Kde v kóde:** `app/api/lead/action/route.ts` — action=`missed_call` branch
+(tam je aj podrobný TODO komentár priamo v kóde). Aktuálne iba
+`lead_activities` insert; SMS neposielame.
+
+---
+
 ## 🚨 ČAKÁ NA UŽÍVATEĽA (manuálne akcie)
 
 ### Supabase SQL migrations — treba spustiť v SQL Editore
