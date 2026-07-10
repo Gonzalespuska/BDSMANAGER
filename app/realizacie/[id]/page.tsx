@@ -18,6 +18,7 @@ import type { Lead } from "@/lib/types/lead";
 import { MediaUpload } from "./media-upload";
 import { MediaGallery } from "./media-gallery";
 import { MarkDoneButton } from "./mark-done-button";
+import { ExecutionWizard } from "./execution-wizard";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -155,57 +156,61 @@ export default async function RealizaciaDetailPage({
         </div>
       </div>
 
-      {/* Tri samostatné tlačiteľné plány + technický postup */}
-      <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-4 space-y-3">
-        <div className="font-bold text-sm text-sky-900">
-          📋 Materiály pre realizátora
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* Realizačný wizard — Zodpovednosť · Inventúra · Odovzdanie
+          (interaktívny inline flow so podpismi + auto-výpočet materiálu).
+          Statické PDF plány sú dostupné na /realizacie/[id]/plan?view=... */}
+      {(user.role === "realizacie" || user.role === "admin") && !isCompleted && (
+        <ExecutionWizard
+          leadId={id}
+          m2={parseFloat(data.plocha ?? "0") || 0}
+          typPodlahy={data.typ_podlahy ?? null}
+          team={await (async () => {
+            const { data: teamRows } = await sb
+              .from("users")
+              .select("id, name")
+              .eq("role", "realizacie")
+              .eq("active", true)
+              .order("name");
+            return (teamRows ?? []).map((u) => ({
+              id: u.id as string,
+              name: u.name as string,
+            }));
+          })()}
+          meId={user.id}
+          meName={user.name}
+          existing={
+            ((l.data as Record<string, unknown> | null | undefined)
+              ?.realization_execution as never) ?? {}
+          }
+        />
+      )}
+
+      {/* Statické tlačiteľné PDF plány — druhotné, sekundárny prístup */}
+      <details className="rounded-xl border-2 border-slate-200 bg-white overflow-hidden">
+        <summary className="px-4 py-2.5 cursor-pointer text-xs font-bold text-slate-600 hover:bg-slate-50 uppercase tracking-wider">
+          📋 Tlačiteľné plány (postup / sklad / zodpovednosť — statické PDF)
+        </summary>
+        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
           <Link
             href={`/realizacie/${id}/plan?view=postup`}
-            className="rounded-xl border-2 border-emerald-300 bg-white hover:border-emerald-500 hover:bg-emerald-50 p-4 flex items-start gap-3 transition-all group"
+            className="rounded-lg border hover:bg-emerald-50 hover:border-emerald-300 px-3 py-2 font-semibold"
           >
-            <div className="text-3xl">🔨</div>
-            <div className="flex-1">
-              <div className="font-extrabold text-emerald-900 group-hover:text-emerald-700">
-                Postupový plán
-              </div>
-              <div className="text-xs text-emerald-800/80 mt-1">
-                10 krokov s podpismi na odškrtávanie priamo na stavbe.
-              </div>
-            </div>
+            🔨 Postup (PDF)
           </Link>
           <Link
             href={`/realizacie/${id}/plan?view=sklad`}
-            className="rounded-xl border-2 border-orange-300 bg-white hover:border-orange-500 hover:bg-orange-50 p-4 flex items-start gap-3 transition-all group"
+            className="rounded-lg border hover:bg-orange-50 hover:border-orange-300 px-3 py-2 font-semibold"
           >
-            <div className="text-3xl">📦</div>
-            <div className="flex-1">
-              <div className="font-extrabold text-orange-900 group-hover:text-orange-700">
-                Zoznam zo skladu
-              </div>
-              <div className="text-xs text-orange-800/80 mt-1">
-                Vyber systém → auto-výpočet balení podľa m². SAP # + ks.
-              </div>
-            </div>
+            📦 Zoznam (PDF)
           </Link>
           <Link
             href={`/realizacie/${id}/plan?view=zodpovednost`}
-            className="rounded-xl border-2 border-amber-300 bg-white hover:border-amber-500 hover:bg-amber-50 p-4 flex items-start gap-3 transition-all group"
+            className="rounded-lg border hover:bg-amber-50 hover:border-amber-300 px-3 py-2 font-semibold"
           >
-            <div className="text-3xl">✍️</div>
-            <div className="flex-1">
-              <div className="font-extrabold text-amber-900 group-hover:text-amber-700">
-                Zodpovednosť
-              </div>
-              <div className="text-xs text-amber-800/80 mt-1">
-                Kto čo podpísal — obchodák, obhliadkár, realizator, skladník.
-                Jasná audit stopa pre reklamácie.
-              </div>
-            </div>
+            ✍️ Zodpovednosť (PDF)
           </Link>
         </div>
-      </div>
+      </details>
 
       {/* Media upload — iba pre realizator / admin */}
       {(user.role === "realizacie" || user.role === "admin") && !isCompleted && (
