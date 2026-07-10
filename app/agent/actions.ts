@@ -872,9 +872,12 @@ export async function completeInspectionAction(
     return { ok: false, error: "forbidden_not_your_inspection" };
   }
 
-  // Ak nie je feasible, status → lost. Inak interested (pripravená ponuka).
+  // Ak nie je feasible, status → lost. Inak "inspected" — obhliadka HOTOVÁ,
+  // čaká na obchodáka aby si pozrel výsledky (fotky, testy, m²) a poslal
+  // finálnu cenovú ponuku klientovi.
+  // Predtým sa dávalo "interested" ale to preskočilo review krok obchodáka.
   const feasible = (result.feasible ?? true) === true;
-  const nextStatus = feasible ? "interested" : "lost";
+  const nextStatus = feasible ? "inspected" : "lost";
   const nowIso = new Date().toISOString();
 
   const { error: updErr } = await supabase

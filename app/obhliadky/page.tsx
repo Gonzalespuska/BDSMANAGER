@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { CalendarDays, ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { CalendarDays, CheckCircle2, ClipboardList } from "lucide-react";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -20,7 +21,11 @@ export const dynamic = "force-dynamic";
  * Zoskupené podľa dňa. Zoradené vzostupne (najbližšia obhliadka hore).
  * Klik na kartu → detail obhliadky (formulár na zápis výsledku).
  */
-export default async function ObhliadkyDashboard() {
+export default async function ObhliadkyDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
 
@@ -30,25 +35,45 @@ export default async function ObhliadkyDashboard() {
     redirect(dashboardPathForRole(user.role));
   }
 
+  const sp = await searchParams;
+  const activeTab = sp.tab === "hotove" ? "hotove" : "aktivne";
+
   const sb = createAdminClient();
 
-  // STRICT scope — iba obhliadky ktoré obchodník EXPLICITNE priradil tomuto
-  // obhliadkárovi (`inspection_by = user.id`). Žiadne fallbacky, žiadne
-  // proxy — inak by tu nabehli náhodné staré `scheduled` leady z celej DB.
+  // STRICT scope — iba obhliadky priradené tomuto obhliadkárovi
+  // (`inspection_by = user.id`). Admin bez view-as vidí všetky.
   //
-  // Admin bez view-as vidí VŠETKY needs_inspection (dispatcher view).
-  // Admin viewing-as-obhliadky sa scopne tiež (user.id je admin ID → 0
-  // results — čo je správne, admin nie je reálny obhliadkár).
+  // Aktívne tab: status = needs_inspection (čakajú na obhliadku)
+  // Hotové tab: status = inspected (obhliadka HOTOVÁ, obchodák si pozerá)
+  const targetStatus =
+    activeTab === "hotove" ? "inspected" : "needs_inspection";
+  const orderCol =
+    activeTab === "hotove" ? "last_activity_at" : "inspection_at";
+  const orderAsc = activeTab === "aktivne";
+
   const baseQuery = sb
     .from("leads")
     .select("*")
-    .eq("status", "needs_inspection")
-    .order("inspection_at", { ascending: true })
+    .eq("status", targetStatus)
+    .order(orderCol, { ascending: orderAsc })
     .limit(100);
   const scopedQuery =
     user.role === "admin" ? baseQuery : baseQuery.eq("inspection_by", user.id);
   const { data: leadsRaw } = await scopedQuery;
   const leads = (leadsRaw ?? []) as Lead[];
+
+  // Counts pre bedge — koľko je aktívnych vs. hotových
+  const countQuery = (status: string) => {
+    const q = sb
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("status", status);
+    return user.role === "admin" ? q : q.eq("inspection_by", user.id);
+  };
+  const [{ count: countAktivne }, { count: countHotove }] = await Promise.all([
+    countQuery("needs_inspection"),
+    countQuery("inspected"),
+  ]);
 
   // Get dátum z lead-u — prefer inspection_at, fallback next_callback_at
   function getDate(l: Lead): Date | null {
@@ -89,21 +114,71 @@ export default async function ObhliadkyDashboard() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-violet-500" aria-hidden />
             Obhliadky
-            <span className="text-violet-500">({leads.length})</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Kliknutím na kartu otvoríš detail + formulár po obhliadke.
+            {activeTab === "aktivne"
+              ? "Aktívne obhliadky — kliknutím otvoríš detail + wizard po obhliadke."
+              : "Hotové obhliadky — obchodník ich vidí, môže poslať cenovú ponuku."}
           </p>
         </div>
       </header>
 
+      {/* Tabs — Aktívne / Hotové */}
+      <div className="inline-flex rounded-xl border-2 bg-background p-1 gap-1">
+        <Link
+          href="/obhliadky"
+          className={cn(
+            "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors",
+            activeTab === "aktivne"
+              ? "bg-violet-500 text-white shadow-sm"
+              : "text-muted-foreground hover:bg-violet-50 hover:text-violet-700",
+          )}
+        >
+          <ClipboardList className="w-4 h-4" aria-hidden />
+          Aktívne
+          <span
+            className={cn(
+              "text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded",
+              activeTab === "aktivne" ? "bg-white/20" : "bg-violet-100 text-violet-700",
+            )}
+          >
+            {countAktivne ?? 0}
+          </span>
+        </Link>
+        <Link
+          href="/obhliadky?tab=hotove"
+          className={cn(
+            "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors",
+            activeTab === "hotove"
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700",
+          )}
+        >
+          <CheckCircle2 className="w-4 h-4" aria-hidden />
+          Hotové (obhliadnuté)
+          <span
+            className={cn(
+              "text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded",
+              activeTab === "hotove" ? "bg-white/20" : "bg-emerald-100 text-emerald-700",
+            )}
+          >
+            {countHotove ?? 0}
+          </span>
+        </Link>
+      </div>
+
       {leads.length === 0 ? (
         <div className="rounded-xl border bg-background p-12 text-center">
           <div className="text-4xl mb-3">🌴</div>
-          <h3 className="text-lg font-bold mb-1">Žiadne obhliadky</h3>
+          <h3 className="text-lg font-bold mb-1">
+            {activeTab === "hotove"
+              ? "Zatiaľ žiadne hotové obhliadky"
+              : "Žiadne aktívne obhliadky"}
+          </h3>
           <p className="text-sm text-muted-foreground">
-            Obchodník ti zatiaľ nič nepriradil. Až posunie lead cez „Poslať na
-            obhliadku", objaví sa tu.
+            {activeTab === "hotove"
+              ? "Až dokončíš prvú obhliadku a odošleš cez wizard, zjaví sa tu."
+              : `Obchodník ti zatiaľ nič nepriradil. Až posunie lead cez „Poslať na obhliadku", objaví sa tu.`}
           </p>
         </div>
       ) : (

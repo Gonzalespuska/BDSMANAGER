@@ -11,6 +11,7 @@ import { MediaUpload } from "@/app/realizacie/[id]/media-upload";
 import { MediaGallery } from "@/app/realizacie/[id]/media-gallery";
 import { DmButton } from "./dm-button";
 import { InspectionWizard } from "./inspection-wizard";
+import { InspectionReview } from "./inspection-review";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -189,15 +190,10 @@ export default async function ObhliadkaDetailPage({
       )}
 
       {alreadyCompleted && l.inspection_result && (
-        <div className="rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
-          <h3 className="font-bold mb-2 inline-flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-violet-600" aria-hidden />
-            Výsledok obhliadky
-          </h3>
-          <pre className="text-xs bg-background border rounded-lg p-3 overflow-x-auto">
-{JSON.stringify(l.inspection_result, null, 2)}
-          </pre>
-        </div>
+        <InspectionReview
+          result={l.inspection_result as Record<string, unknown>}
+          photos={checklistMedia}
+        />
       )}
     </div>
   );
