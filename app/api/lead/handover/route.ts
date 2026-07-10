@@ -66,7 +66,7 @@ export async function POST(request: Request) {
 
     const { data: lead, error: leadErr } = await sb
       .from("leads")
-      .select("assigned_to, status")
+      .select("assigned_to, status, name, data")
       .eq("id", lead_id)
       .maybeSingle();
     if (leadErr) {
@@ -169,20 +169,27 @@ export async function POST(request: Request) {
       // Nie fatal
     }
 
-    // Insert calendar_note aby priradenie bolo VIDITEĽNÉ v kalendári
-    // (deň so značkou "obhliadka: TEST · Meno" na daný dátum).
+    // Insert calendar_note aby priradenie bolo VIDITEĽNÉ v kalendári.
+    // Body obsahuje meno klienta + rozmery/lokalitu → obchodák aj cieľový
+    // user vidia kontext bez toho aby museli otvárať detail leadu.
     // kind='meeting' aby obchodák aj cieľový user videli event.
+    const dataObj = (lead.data ?? {}) as Record<string, string | undefined>;
+    const m2 = dataObj.plocha ? ` · ${dataObj.plocha} m²` : "";
+    const lokalita = dataObj.lokalita ? ` · ${dataObj.lokalita}` : "";
+    const priestor = dataObj.priestor ? ` · ${dataObj.priestor}` : "";
+    const clientName = lead.name ?? "Klient";
+    const emoji = mode === "inspection" ? "🔍" : "🔨";
+    const label = mode === "inspection" ? "Obhliadka" : "Realizácia";
+    const body = `${emoji} ${label} — ${clientName}${m2}${lokalita}${priestor}`;
     const { error: calErr } = await sb.from("calendar_notes").insert({
       date: scheduledDate,
-      body:
-        mode === "inspection"
-          ? `🔍 Obhliadka${note ? ` — ${note.split("\n").slice(-1)[0]}` : ""}`
-          : `🔨 Realizácia${note ? ` — ${note.split("\n").slice(-1)[0]}` : ""}`,
+      body,
       kind: "meeting",
       starts_at: scheduledIso,
       user_id: user.id, // creator
       target_user_id, // priradený obhliadkár/realizátor
       lead_id,
+      contact_name: clientName,
     });
     if (calErr) {
       console.error("[handover] calendar_note insert failed:", calErr);
