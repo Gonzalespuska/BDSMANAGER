@@ -161,7 +161,7 @@ export default async function RealizacieDashboard() {
             </div>
             <ul className="space-y-2">
               {legacyActive.map((l) => (
-                <li key={l.id} className="rounded-xl border bg-background p-4 flex items-center justify-between gap-3">
+                <li key={l.id} className="rounded-xl border bg-background p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <Link
                     href={`/realizacie/${l.id}`}
                     className="flex-1 min-w-0 group"
