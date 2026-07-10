@@ -112,6 +112,7 @@ export function ProfileMenu({
 
   return (
     <div ref={wrapRef} className="relative">
+      {/* Desktop pill (full email + role badge) — sm+ */}
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -121,6 +122,7 @@ export function ProfileMenu({
         )}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={`Profil ${user.name}`}
       >
         <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background relative overflow-hidden">
           {currentAvatar ? (
@@ -162,6 +164,38 @@ export function ProfileMenu({
           className={cn(
             "w-4 h-4 text-muted-foreground transition-transform",
             open && "rotate-180",
+          )}
+          aria-hidden
+        />
+      </button>
+
+      {/* Mobile — kruhový avatar 40×40 s malým role indikátorom.
+          Bez desktop pill dropdown na mobile nefungoval (bol schovaný cez
+          `hidden`) — používateľ nemal ako odhlásiť sa alebo sa dostať do
+          profilu. Klik otvorí ten istý dropdown menu ako desktop. */}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="sm:hidden relative inline-flex items-center justify-center w-10 h-10 rounded-full bg-foreground text-background overflow-hidden shrink-0"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`Profil ${user.name}`}
+      >
+        {currentAvatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={currentAvatar}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <UserIcon className="w-5 h-5" aria-hidden />
+        )}
+        {/* Role indikátor — malá bodka vpravo dole */}
+        <span
+          className={cn(
+            "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-background",
+            isRealAdmin ? "bg-rose-500" : "bg-sky-500",
           )}
           aria-hidden
         />
