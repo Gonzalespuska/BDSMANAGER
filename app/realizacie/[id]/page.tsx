@@ -164,6 +164,7 @@ export default async function RealizaciaDetailPage({
           leadId={id}
           m2={parseFloat(data.plocha ?? "0") || 0}
           typPodlahy={data.typ_podlahy ?? null}
+          priestor={data.priestor ?? null}
           team={await (async () => {
             const { data: teamRows } = await sb
               .from("users")

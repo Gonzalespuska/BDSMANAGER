@@ -2,10 +2,16 @@
 
 import * as React from "react";
 import {
+  AlertTriangle,
+  BookOpen,
   Check,
   CheckCircle2,
+  ChevronRight,
   ClipboardList,
+  Clock,
   FileText,
+  Info,
+  Lightbulb,
   Loader2,
   Package,
   Pencil,
@@ -17,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
 import { saveExecutionAction } from "./execution-actions";
+import { findGuide, type ProcedureGuide } from "@/lib/data/procedure-guides";
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types
@@ -48,11 +55,6 @@ interface InventoryRow {
 interface ExecutionState {
   tasks: TaskRow[];
   inventory: InventoryRow[];
-  handover?: {
-    signed_by: string | null;
-    signed_at: string | null;
-    notes: string;
-  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -163,6 +165,7 @@ export function ExecutionWizard({
   leadId,
   m2,
   typPodlahy,
+  priestor,
   team,
   meId,
   meName,
@@ -171,6 +174,7 @@ export function ExecutionWizard({
   leadId: string;
   m2: number;
   typPodlahy: string | null;
+  priestor: string | null;
   team: TeamMember[];
   meId: string;
   meName: string;
@@ -207,26 +211,23 @@ export function ExecutionWizard({
 
   const [tasksOpen, setTasksOpen] = React.useState(false);
   const [inventoryOpen, setInventoryOpen] = React.useState(false);
-  const [handoverOpen, setHandoverOpen] = React.useState(false);
+  const [guideOpen, setGuideOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
-  const [handover, setHandover] = React.useState(
-    existing.handover ?? {
-      signed_by: null as string | null,
-      signed_at: null as string | null,
-      notes: "",
-    },
-  );
 
   const tasksSigned = tasks.filter((t) => t.signed_at !== null).length;
   const inventoryChecked = inventory.filter((i) => i.checked).length;
-  const handoverDone = handover.signed_at !== null;
+
+  // Postup — vyberie sa podľa typu podlahy + priestoru
+  const guide: ProcedureGuide = React.useMemo(
+    () => findGuide(typPodlahy, priestor),
+    [typPodlahy, priestor],
+  );
 
   async function persist(next: Partial<ExecutionState>) {
     setSaving(true);
     const payload: ExecutionState = {
       tasks: next.tasks ?? tasks,
       inventory: next.inventory ?? inventory,
-      handover: next.handover ?? handover,
     };
     const r = await saveExecutionAction(leadId, payload as never);
     setSaving(false);
@@ -251,13 +252,6 @@ export function ExecutionWizard({
     }
     setInventoryOpen(false);
   }
-  async function saveHandover(nh: NonNullable<ExecutionState["handover"]>) {
-    setHandover(nh);
-    if (await persist({ handover: nh })) {
-      toast.success("Odovzdanie potvrdené");
-    }
-    setHandoverOpen(false);
-  }
 
   return (
     <section className="space-y-3">
@@ -281,16 +275,16 @@ export function ExecutionWizard({
           accent="amber"
         />
         <BigCard
-          icon={<FileText className="w-8 h-8" />}
-          title="Odovzdanie"
-          subtitle="Podpis o dokončení"
+          icon={<BookOpen className="w-8 h-8" />}
+          title="Postup"
+          subtitle={guide.title}
           summary={
-            handoverDone
-              ? "Zákazka odovzdaná"
-              : "Klik po dokončení realizácie"
+            guide.id === "fallback"
+              ? "⚠ Návod pre tento systém ešte nie je pripravený"
+              : `${guide.steps.length} krokov · ${guide.total_time}`
           }
-          done={handoverDone}
-          onOpen={() => setHandoverOpen(true)}
+          done={false}
+          onOpen={() => setGuideOpen(true)}
           accent="emerald"
         />
       </div>
@@ -319,15 +313,7 @@ export function ExecutionWizard({
           onSave={saveInventory}
         />
       )}
-      {handoverOpen && (
-        <HandoverModal
-          initial={handover}
-          meId={meId}
-          meName={meName}
-          onClose={() => setHandoverOpen(false)}
-          onSave={saveHandover}
-        />
-      )}
+      {guideOpen && <GuideModal guide={guide} onClose={() => setGuideOpen(false)} />}
     </section>
   );
 }
@@ -796,95 +782,155 @@ function InvRow({
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// HANDOVER MODAL
+// GUIDE MODAL — automatický návod pre konkrétny systém podľa typu podlahy
 // ═══════════════════════════════════════════════════════════════════════
 
-function HandoverModal({
-  initial,
-  meId,
-  meName,
+function GuideModal({
+  guide,
   onClose,
-  onSave,
 }: {
-  initial: NonNullable<ExecutionState["handover"]>;
-  meId: string;
-  meName: string;
+  guide: ProcedureGuide;
   onClose: () => void;
-  onSave: (h: NonNullable<ExecutionState["handover"]>) => void;
 }) {
-  const [notes, setNotes] = React.useState(initial.notes ?? "");
-  const [pending, setPending] = React.useState(false);
-  const isSigned = initial.signed_at !== null;
+  const [stepIdx, setStepIdx] = React.useState(0);
+  const totalSteps = guide.steps.length;
+  const step = guide.steps[stepIdx];
+  const isLast = stepIdx === totalSteps - 1;
 
   return (
-    <ModalShell onClose={onClose} title="📄 Odovzdanie zákazky">
+    <ModalShell onClose={onClose} title={`📖 ${guide.title}`}>
+      {/* Intro na 1. kroku */}
+      {stepIdx === 0 && (
+        <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 p-4 mb-4">
+          <div className="text-xs font-bold uppercase tracking-wider text-emerald-800 mb-1">
+            Systém
+          </div>
+          <div className="text-sm font-black text-emerald-900 mb-2">
+            {guide.material_system}
+          </div>
+          <div className="text-sm text-emerald-900 leading-snug">
+            {guide.intro}
+          </div>
+          <div className="text-[11px] font-bold text-emerald-700 mt-2 inline-flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            {guide.total_time}
+          </div>
+        </div>
+      )}
+
+      {/* Aktuálny krok */}
       <div className="space-y-4">
-        <div className="rounded-xl bg-emerald-50 border-2 border-emerald-200 p-4 text-sm text-emerald-900">
-          <div className="font-bold mb-1 inline-flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5" />
-            Potvrdenie o dokončení realizácie
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 w-10 h-10 rounded-full bg-sky-500 text-white font-black flex items-center justify-center text-lg tabular-nums">
+            {stepIdx + 1}
           </div>
-          Klikom podpisuješ, že podlaha bola úspešne dokončená, priestor je
-          vyčistený a zákazka odovzdaná klientovi.
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-lg leading-tight">
+              {step.title}
+            </h3>
+            {typeof step.duration_min === "number" && (
+              <div className="text-[11px] text-muted-foreground mt-1 inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                ~{step.duration_min} min
+                {step.wait_hours_after && (
+                  <span className="ml-2 text-amber-700 font-bold">
+                    + {step.wait_hours_after} h čakať
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-            Poznámka pre obchodníka (voliteľné)
-          </label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            placeholder={`Napr. „klient veľmi spokojný", „zvyšná farba vrátená na sklad", ...`}
-            className="w-full rounded-lg border-2 bg-background px-3 py-2 text-sm resize-none focus:border-emerald-500 focus:outline-none"
-          />
-        </div>
+        {/* Popis */}
+        <p className="text-sm leading-relaxed text-foreground/90">
+          {step.description}
+        </p>
 
-        {isSigned ? (
-          <div className="rounded-xl bg-emerald-100 border-2 border-emerald-400 p-4">
-            <div className="font-bold text-emerald-900 inline-flex items-center gap-2">
-              <Check className="w-5 h-5" />
-              Odovzdané —{" "}
-              {new Date(initial.signed_at!).toLocaleString("sk-SK")}
+        {/* Tips */}
+        {step.tips && step.tips.length > 0 && (
+          <div className="rounded-lg border-2 border-sky-200 bg-sky-50/50 p-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-sky-700 mb-1.5 inline-flex items-center gap-1">
+              <Lightbulb className="w-3.5 h-3.5" /> Tipy
             </div>
-            <button
-              type="button"
-              onClick={async () => {
-                setPending(true);
-                await onSave({
-                  signed_by: null,
-                  signed_at: null,
-                  notes,
-                });
-                setPending(false);
-              }}
-              className="mt-2 text-xs font-bold text-rose-700 hover:text-rose-800 underline"
-            >
-              Zrušiť podpis
-            </button>
+            <ul className="space-y-1 text-sm text-sky-900">
+              {step.tips.map((t, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="text-sky-500 shrink-0">•</span>
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={async () => {
-              setPending(true);
-              await onSave({
-                signed_by: meId,
-                signed_at: new Date().toISOString(),
-                notes,
-              });
-              setPending(false);
-            }}
-            disabled={pending}
-            className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-3 font-black inline-flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-          >
-            <Signature className="w-5 h-5" />
-            {pending
-              ? "Ukladám…"
-              : `Podpísať ako ${meName} a odovzdať zákazku`}
-          </button>
         )}
+
+        {/* Warnings */}
+        {step.warnings && step.warnings.length > 0 && (
+          <div className="rounded-lg border-2 border-rose-300 bg-rose-50 p-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-rose-700 mb-1.5 inline-flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5" /> Pozor!
+            </div>
+            <ul className="space-y-1 text-sm text-rose-900">
+              {step.warnings.map((w, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="text-rose-500 shrink-0">⚠</span>
+                  <span>{w}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Materials */}
+        {step.materials && step.materials.length > 0 && (
+          <div className="rounded-lg border-2 border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 inline-flex items-center gap-1">
+              <Package className="w-3.5 h-3.5" /> Materiál na tento krok
+            </div>
+            <ul className="space-y-0.5 text-sm text-slate-800">
+              {step.materials.map((m, i) => (
+                <li key={i}>• {m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="mt-6 pt-4 border-t flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => stepIdx > 0 && setStepIdx(stepIdx - 1)}
+          disabled={stepIdx === 0}
+          className="rounded-xl border-2 bg-background hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed px-4 py-3 text-sm font-bold text-muted-foreground transition-colors"
+        >
+          ← Späť
+        </button>
+        <div className="flex-1 text-center text-xs font-bold text-muted-foreground tabular-nums">
+          {stepIdx + 1} / {totalSteps}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (isLast) {
+              onClose();
+            } else {
+              setStepIdx(stepIdx + 1);
+            }
+          }}
+          className="rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-4 py-3 text-sm font-black inline-flex items-center gap-2 shadow-md"
+        >
+          {isLast ? "Hotovo — Zavrieť" : "Ďalej"}
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Rýchly progres bar */}
+      <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all"
+          style={{ width: `${((stepIdx + 1) / totalSteps) * 100}%` }}
+        />
       </div>
     </ModalShell>
   );
