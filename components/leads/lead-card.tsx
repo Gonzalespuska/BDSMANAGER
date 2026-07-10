@@ -20,6 +20,7 @@ import { HandoffActions } from "./handoff-actions";
 import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
 import { MissedCallDropdown } from "./missed-call-dropdown";
+import { MissingFieldChip } from "./missing-field-chip";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -412,19 +413,41 @@ export function LeadCard({
             </div>
           )}
 
-          {/* Info bits (custom fields) */}
-          {infoBits.length > 0 && (
-            <div className="px-5 pt-4 flex flex-wrap items-center gap-1.5">
-              {infoBits.map((bit, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-800 text-xs font-semibold"
-                >
-                  {bit}
-                </span>
-              ))}
-            </div>
-          )}
+          {/* Info bits — kľúčové polia leadu (plocha, priestor, typ podlahy,
+              lokalita). Ak chýbajú, zobrazí sa amber dashed „+ Doplniť"
+              chip s inline dropdown/input — obchodák môže pri hovore hneď
+              doplniť bez otvárania detailu. */}
+          <div className="px-5 pt-4 flex flex-wrap items-center gap-1.5">
+            <MissingFieldChip
+              leadId={lead.id}
+              field="plocha"
+              value={typeof dataFields.plocha === "string" ? dataFields.plocha : null}
+              kind="number"
+              placeholder="m²"
+              suffix="m²"
+            />
+            <MissingFieldChip
+              leadId={lead.id}
+              field="priestor"
+              value={typeof dataFields.priestor === "string" ? dataFields.priestor : null}
+              kind="priestor"
+              placeholder="Priestor"
+            />
+            <MissingFieldChip
+              leadId={lead.id}
+              field="typ_podlahy"
+              value={typeof dataFields.typ_podlahy === "string" ? dataFields.typ_podlahy : null}
+              kind="typ_podlahy"
+              placeholder="Typ podlahy"
+            />
+            <MissingFieldChip
+              leadId={lead.id}
+              field="lokalita"
+              value={typeof dataFields.lokalita === "string" ? dataFields.lokalita : null}
+              kind="text"
+              placeholder="Mesto"
+            />
+          </div>
 
           {/* Message excerpt — pekný blockquote namiesto italic kvôli AI vibe */}
           {typeof dataFields.message === "string" && dataFields.message && (
