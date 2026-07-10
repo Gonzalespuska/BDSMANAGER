@@ -142,38 +142,20 @@ export default async function ObhliadkaDetailPage({
         </div>
       )}
 
-      {/* Priradenie */}
-      <div className="rounded-xl border bg-background p-4">
-        <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">
-          Priradenie
-        </div>
-        <div className="grid md:grid-cols-2 gap-3 text-sm">
-          <div>
-            <div className="text-xs text-muted-foreground">Obchodník</div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="font-bold">{salesUser?.name ?? "—"}</div>
-              {salesUser && salesUser.id !== user.id && (
-                <DmButton
-                  peerId={salesUser.id}
-                  peerName={salesUser.name}
-                />
-              )}
-            </div>
+      {/* Priradenie — obhliadkára ukazovať nemá zmysel (vidí sám seba),
+          iba obchodníka koho môže kontaktovať cez DM. Admin, ktorý pozerá
+          cudziu obhliadku, si tú info nájde v /obhliadky liste. */}
+      {salesUser && salesUser.id !== user.id && (
+        <div className="rounded-xl border bg-background p-4">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">
+            Obchodník ktorý ju priradil
           </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Obhliadkár</div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="font-bold">{inspector?.name ?? "—"}</div>
-              {inspector && inspector.id !== user.id && (
-                <DmButton
-                  peerId={inspector.id}
-                  peerName={inspector.name}
-                />
-              )}
-            </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="font-bold text-base">{salesUser.name}</div>
+            <DmButton peerId={salesUser.id} peerName={salesUser.name} />
           </div>
         </div>
-      </div>
+      )}
 
       {/* PHOTO CHECKLIST — presné inštrukcie čo odfotiť pre realizátorov */}
       {(user.role === "obhliadky" || user.role === "admin") &&
