@@ -58,6 +58,10 @@ export function ChatRoom({
   const [searching, setSearching] = React.useState(false);
   const [highlightId, setHighlightId] = React.useState<string | null>(null);
 
+  // Mobile sidebar toggle — na mobile je sidebar overlay, klik na roomku
+  // ho zavrie a otvorí chat. Na desktope je vždy visible (sm+).
+  const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
+
   const listRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -215,6 +219,8 @@ export function ChatRoom({
   }, [activeRoomId]);
 
   async function selectRoom(roomId: string) {
+    // Zavri mobile sidebar (na desktope nemá efekt)
+    setMobileSidebarOpen(false);
     if (roomId === activeRoomId) return;
     setActiveRoomId(roomId);
     setLoadingMessages(true);
@@ -361,9 +367,27 @@ export function ChatRoom({
   }
 
   return (
-    <div className="flex h-full rounded-2xl border bg-background overflow-hidden">
-      {/* ─── LEFT SIDEBAR: rooms list ─── */}
-      <aside className="w-64 shrink-0 border-r bg-zinc-50 dark:bg-zinc-900/40 flex flex-col">
+    <div className="relative flex h-full rounded-2xl border bg-background overflow-hidden">
+      {/* Mobile overlay backdrop — klik zavrie sidebar */}
+      {mobileSidebarOpen && (
+        <div
+          className="sm:hidden fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+      {/* ─── LEFT SIDEBAR: rooms list ───
+          Desktop: fixed 256px vedla chatu. Mobile: overlay ktorý sa
+          otvara cez hamburger button v room header-i, cez klik na roomku
+          sa auto-zavrie a otvori chat. */}
+      <aside
+        className={cn(
+          "border-r bg-zinc-50 dark:bg-zinc-900/40 flex flex-col",
+          "sm:w-64 sm:shrink-0 sm:relative sm:translate-x-0",
+          // Mobile: fixed panel z lava, transition
+          "fixed left-0 top-0 bottom-0 w-72 z-40 transition-transform duration-200",
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
         {/* Header s + button */}
         <div className="px-3 py-3 border-b">
           <button
@@ -508,7 +532,30 @@ export function ChatRoom({
       {/* ─── RIGHT SIDE: active room chat ─── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Room header — title + search */}
-        <div className="border-b bg-zinc-100 dark:bg-zinc-900/60 px-4 py-2.5 flex items-center gap-3">
+        <div className="border-b bg-zinc-100 dark:bg-zinc-900/60 px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-3">
+          {/* Hamburger — iba na mobile, otvára sidebar */}
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(true)}
+            className="sm:hidden shrink-0 -ml-1 p-1.5 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+            aria-label="Zobraziť roomky"
+          >
+            <span className="sr-only">Menu</span>
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
           {activeRoom?.is_dm ? (
             <MessageCircle className="w-4 h-4 text-violet-600 shrink-0" aria-hidden />
           ) : (
@@ -526,7 +573,7 @@ export function ChatRoom({
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2 bg-background border border-zinc-300 dark:border-zinc-700 focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/30 rounded-md px-2.5 py-1.5 w-[260px] max-w-full transition-colors">
+          <div className="hidden sm:flex items-center gap-2 bg-background border border-zinc-300 dark:border-zinc-700 focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/30 rounded-md px-2.5 py-1.5 w-[260px] max-w-full transition-colors">
             <input
               type="text"
               value={searchTerm}
