@@ -13,6 +13,7 @@ import {
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { CallScriptsPicker } from "./call-scripts-picker";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -108,11 +109,32 @@ export default async function SkoleniePage() {
         </div>
       )}
 
-      {/* SEKCIE — podľa role, do ktorej sa nováčik pripravuje */}
+      {/* 📞 CALL SCRIPTY — interaktívny picker pre obchodákov.
+          Priestor + typ podlahy → šitý script s otváracou vetou,
+          kvalifikačnými otázkami, argumentami, námietkami s odpoveďami,
+          cenovým rozsahom, uzatvárajúcou vetou a tipmi z praxe. */}
+      <section className="rounded-3xl border-4 border-sky-300 bg-gradient-to-br from-sky-50/60 via-white to-emerald-50/40 p-5 shadow-md">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="shrink-0 w-12 h-12 rounded-2xl bg-sky-500 text-white flex items-center justify-center shadow-lg shadow-sky-500/30">
+            <Phone className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black">Call scripty pre obchodákov</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Vyber priestor + typ podlahy a dostaneš presne cielený script.
+              Otváracia veta, kvalifikačné otázky, argumenty, námietky
+              s odpoveďami, cenový rozsah, uzatvorenie.
+            </p>
+          </div>
+        </div>
+        <CallScriptsPicker />
+      </section>
+
+      {/* SEKCIE — statické training modules (video + PDF placeholder). */}
       <TrainingSection
         icon={<Phone className="w-5 h-5 text-sky-600" />}
-        title="Príprava pre OBCHODNÍKOV"
-        subtitle="Ako predávať epoxidové podlahy — telefonáty, argumenty, generátor"
+        title="Doplnkové materiály pre OBCHODNÍKOV"
+        subtitle="Videá + PDF cheat sheets — pripravujeme"
         tint="sky"
         items={[
           {
