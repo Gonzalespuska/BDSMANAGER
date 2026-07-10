@@ -21,6 +21,7 @@ import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
 import { MissedCallDropdown } from "./missed-call-dropdown";
 import { MissingFieldChip } from "./missing-field-chip";
+import { SK_CITIES } from "@/lib/data/sk-cities";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -421,7 +422,7 @@ export function LeadCard({
             <MissingFieldChip
               leadId={lead.id}
               field="plocha"
-              value={typeof dataFields.plocha === "string" ? dataFields.plocha : null}
+              value={coerceString(dataFields.plocha)}
               kind="number"
               placeholder="m²"
               suffix="m²"
@@ -429,23 +430,24 @@ export function LeadCard({
             <MissingFieldChip
               leadId={lead.id}
               field="priestor"
-              value={typeof dataFields.priestor === "string" ? dataFields.priestor : null}
+              value={coerceString(dataFields.priestor)}
               kind="priestor"
               placeholder="Priestor"
             />
             <MissingFieldChip
               leadId={lead.id}
               field="typ_podlahy"
-              value={typeof dataFields.typ_podlahy === "string" ? dataFields.typ_podlahy : null}
+              value={coerceString(dataFields.typ_podlahy)}
               kind="typ_podlahy"
               placeholder="Typ podlahy"
             />
             <MissingFieldChip
               leadId={lead.id}
               field="lokalita"
-              value={typeof dataFields.lokalita === "string" ? dataFields.lokalita : null}
+              value={coerceString(dataFields.lokalita)}
               kind="text"
               placeholder="Mesto"
+              autocomplete={SK_CITIES}
             />
           </div>
 
@@ -746,6 +748,18 @@ export function LeadCard({
 // ============================================================================
 // Modal — "Výsledok hovoru"
 // ============================================================================
+
+/**
+ * Bezpečná konverzia unknown → string alebo null.
+ * Používa sa v MissingFieldChip aby chip fungoval aj keď hodnota v
+ * lead.data je uložená ako number namiesto string (napr. plocha=80).
+ */
+function coerceString(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "string") return v.trim() || null;
+  if (typeof v === "number") return isFinite(v) ? String(v) : null;
+  return null;
+}
 
 function OutcomeModal({
   lead,

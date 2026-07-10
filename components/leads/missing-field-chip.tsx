@@ -29,6 +29,10 @@ interface Props {
   suffix?: string;
   /** Options pre dropdown (kind = typ_podlahy / priestor). */
   options?: string[];
+  /** Autocomplete zoznam pre text input (napr. slovenské mestá).
+   *  Renderuje sa ako <datalist> — native browser suggest.
+   *  Napíšeš „Tr" a browser ponúkne Trnava, Trenčín, Trebišov, ... */
+  autocomplete?: string[];
   onSaved?: (newValue: string) => void;
 }
 
@@ -58,8 +62,12 @@ export function MissingFieldChip({
   placeholder,
   suffix,
   options,
+  autocomplete,
   onSaved,
 }: Props) {
+  // Unique ID pre datalist — musí byť stabilný, inak sa <datalist>
+  // s <input list> nezosynchronizujú.
+  const datalistId = React.useId();
   const [editing, setEditing] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const [localValue, setLocalValue] = React.useState<string>(value ?? "");
@@ -160,6 +168,8 @@ export function MissingFieldChip({
               ref={inputRef}
               type={kind === "number" ? "number" : "text"}
               inputMode={kind === "number" ? "decimal" : "text"}
+              list={autocomplete && autocomplete.length > 0 ? datalistId : undefined}
+              autoComplete="off"
               value={displayValue}
               onChange={(e) => setLocalValue(e.target.value)}
               onKeyDown={(e) => {
@@ -174,9 +184,16 @@ export function MissingFieldChip({
               disabled={pending}
               className={cn(
                 "px-2 py-1 text-xs font-bold bg-white border-0 focus:outline-none tabular-nums",
-                kind === "number" ? "w-16 text-center" : "w-28",
+                kind === "number" ? "w-16 text-center" : "w-32",
               )}
             />
+            {autocomplete && autocomplete.length > 0 && (
+              <datalist id={datalistId}>
+                {autocomplete.map((opt) => (
+                  <option key={opt} value={opt} />
+                ))}
+              </datalist>
+            )}
             {suffix && (
               <span className="px-1 py-1 text-xs font-bold text-muted-foreground bg-white">
                 {suffix}
