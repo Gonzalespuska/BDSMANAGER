@@ -3,7 +3,7 @@ import {
   ArrowLeft,
   Eye,
   EyeOff,
-  Facebook,
+  Share2 as Facebook,
   Globe,
   Phone,
   UserCircle,

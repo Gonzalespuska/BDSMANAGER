@@ -26,7 +26,7 @@ export async function createAgentAction(input: {
   name: string;
   email: string;
   phone: string;
-  role: "admin" | "obchod" | "obhliadky" | "realizacie" | "skolenie";
+  role: "admin" | "obchod" | "obhliadky" | "realizacie";
   capacity: number;
 }): Promise<ActionResult<{ id: string; magic_link?: string }>> {
   const me = await requireAdmin();

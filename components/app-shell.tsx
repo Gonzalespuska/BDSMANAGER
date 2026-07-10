@@ -51,9 +51,9 @@ const NAV_TAB_DEFS: Record<
     label: "Office",
     icon: <Headphones className="w-4 h-4" />,
   },
-  skolenie: {
+  podklady: {
     href: "/skolenie",
-    label: "Školenie",
+    label: "Podklady",
     icon: <GraduationCap className="w-4 h-4" />,
   },
   calendar: {
@@ -108,20 +108,34 @@ export async function AppShell({
   const realRole = await getRealUserRole();
   const isRealAdmin = realRole === "admin";
 
-  // Fetch avatar_url z DB (best effort — nespadne ak stĺpec neexistuje)
+  // Fetch avatar_url + created_at z DB.
+  // created_at slúži na určenie, či je agent stále „nováčik" (< 90 dní) →
+  // uvidí Podklady v hlavnom menu. Starší už len v ProfileMenu dropdowne.
   let avatarUrl: string | null = null;
+  let userCreatedAt: string | null = null;
   try {
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const sb = createAdminClient();
     const { data } = await sb
       .from("users")
-      .select("avatar_url")
+      .select("avatar_url, created_at")
       .eq("id", user.id)
       .maybeSingle();
     avatarUrl = (data?.avatar_url as string | null) ?? null;
+    userCreatedAt = (data?.created_at as string | null) ?? null;
   } catch {
     /* SQL 20 nebola spustená → avatar_url stĺpec neexistuje, ignoruj */
   }
+
+  // Nováčik = agent mladší ako 90 dní od vytvorenia účtu.
+  // Vidí „Podklady" v hlavnom nav. Starší v dropdowne.
+  const NOVACIK_DAYS = 90;
+  const isNovacik =
+    userCreatedAt !== null &&
+    Date.now() - new Date(userCreatedAt).getTime() <
+      NOVACIK_DAYS * 24 * 3600 * 1000;
+  // Admin vidí Podklady vždy (na kontrolu obsahu).
+  const showPodkladyInNav = isNovacik || user.role === "admin";
   const viewAsCookie = (await cookies()).get("view_as_role")?.value;
   const validViewAsRoles = ["obchod", "obhliadky", "realizacie", "office"];
   const currentViewAs = (validViewAsRoles.includes(viewAsCookie ?? "")
@@ -141,7 +155,10 @@ export async function AppShell({
   const isAdmin = user.role === "admin";
   const isDev = process.env.NODE_ENV !== "production";
   // Nav sa filtruje podľa user.role — ktorá už môže byť view-as override
-  const visibleTabs = navTabsForRole(user.role);
+  let visibleTabs = navTabsForRole(user.role);
+  if (!showPodkladyInNav) {
+    visibleTabs = visibleTabs.filter((t) => t !== "podklady");
+  }
   const homeHref = dashboardPathForRole(user.role);
 
   return (
@@ -182,6 +199,7 @@ export async function AppShell({
               realRole={realRole ?? user.role}
               selfPaused={selfPaused}
               avatarUrl={avatarUrl}
+              showPodkladyLink={!showPodkladyInNav}
             />
           </div>
         </div>

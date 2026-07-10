@@ -39,21 +39,35 @@ export const dynamic = "force-dynamic";
 export default async function SkoleniePage() {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
-  // Prístup IBA pre admin (má prístup do všetkého) a rolu skolenie.
-  // Ostatné role sa presmerujú na svoj dashboard — nemajú dôvod chodiť
-  // do onboarding sekcie po tom, ako sú už povýšení.
-  if (user.role !== "admin" && user.role !== "skolenie") {
-    redirect("/agent");
-  }
+  // Prístup pre všetkých autentifikovaných — Podklady su k dispozícii
+  // pre celý tím kedykoľvek. Prv sme mali skolenie rolu ktorá mala
+  // exkluzívny prístup, ale to bolo zrušené — Podklady sú knihovna
+  // ktorá je otvorená všetkým agentom.
 
-  const isNovacik = user.role === "skolenie";
+  // Nováčik = agent mladší 90 dní (rovnaká logika ako v AppShell).
+  // Vidí varovanie hore že si to má prejsť.
+  let isNovacik = false;
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const sb = createAdminClient();
+    const { data } = await sb
+      .from("users")
+      .select("created_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (data?.created_at) {
+      isNovacik =
+        Date.now() - new Date(data.created_at as string).getTime() <
+        90 * 24 * 3600 * 1000;
+    }
+  } catch {}
 
   return (
     <div className="space-y-6">
       <header className="space-y-2">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
-          <GraduationCap className="w-6 h-6 text-rose-500" aria-hidden />
-          Školenie
+          <GraduationCap className="w-6 h-6 text-sky-500" aria-hidden />
+          Podklady
           {isNovacik && (
             <span className="text-[10px] uppercase tracking-wider font-bold bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full">
               nováčik

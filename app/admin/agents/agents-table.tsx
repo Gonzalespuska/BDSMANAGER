@@ -405,8 +405,8 @@ function AddAgentModal({
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [role, setRole] = React.useState<
-    "admin" | "obchod" | "obhliadky" | "realizacie" | "skolenie"
-  >("skolenie");
+    "admin" | "obchod" | "obhliadky" | "realizacie"
+  >("obchod");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -492,11 +492,10 @@ function AddAgentModal({
               <div className="grid grid-cols-2 gap-2">
                 {(
                   [
-                    { id: "skolenie", label: "🎓 Školenie (default)", color: "rose" },
-                    { id: "obchod", label: "Obchod", color: "sky" },
-                    { id: "obhliadky", label: "Obhliadky", color: "violet" },
-                    { id: "realizacie", label: "Realizácie", color: "emerald" },
-                    { id: "admin", label: "Admin", color: "amber" },
+                    { id: "obchod", label: "📞 Obchod (default)", color: "sky" },
+                    { id: "obhliadky", label: "🔍 Obhliadky", color: "violet" },
+                    { id: "realizacie", label: "🔨 Realizácie", color: "emerald" },
+                    { id: "admin", label: "🛡 Admin", color: "amber" },
                   ] as const
                 ).map((r) => {
                   const active = role === r.id;

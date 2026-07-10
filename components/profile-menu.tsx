@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  BookOpen,
   Camera,
   ChevronDown,
   Loader2,
@@ -34,6 +35,7 @@ export function ProfileMenu({
   realRole,
   selfPaused,
   avatarUrl,
+  showPodkladyLink,
 }: {
   user: AppUser;
   /** Reálna rola bez view-as override — vždy sa zobrazuje v pill-e. */
@@ -41,6 +43,9 @@ export function ProfileMenu({
   selfPaused: boolean;
   /** URL na profilovú fotku (z users.avatar_url). */
   avatarUrl?: string | null;
+  /** True ak agent už NIE JE nováčik (starší ako 90 dní) — Podklady sa
+   *  presunuli z hlavného menu sem do dropdownu. */
+  showPodkladyLink?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
@@ -223,6 +228,26 @@ export function ProfileMenu({
               )}
             </div>
           </div>
+
+          {/* Podklady link — pre veteránov (starší 90 dní od registrácie).
+              Predpokladáme že si to už prečítali, ale nechceme im to skrývať
+              úplne — presunuli sme to sem z hlavného menu. */}
+          {showPodkladyLink && (
+            <a
+              href="/skolenie"
+              onClick={() => setOpen(false)}
+              className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-950/30 text-sm font-semibold text-sky-700 dark:text-sky-400 inline-flex items-center gap-2.5 border-b border-slate-200/60 dark:border-slate-700/60 mb-1 pb-2.5"
+              role="menuitem"
+            >
+              <BookOpen className="w-4 h-4" aria-hidden />
+              <div className="flex-1">
+                <div className="font-bold">Podklady</div>
+                <div className="text-[10px] text-muted-foreground font-normal leading-tight mt-0.5">
+                  Call scripty, návody, materiály
+                </div>
+              </div>
+            </a>
+          )}
 
           {/* Sign out */}
           <form action={signOutAction}>
