@@ -7,11 +7,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatPhoneSK } from "@/lib/phone-format";
 import type { Lead } from "@/lib/types/lead";
 
-import { InspectionForm } from "./inspection-form";
 import { MediaUpload } from "@/app/realizacie/[id]/media-upload";
 import { MediaGallery } from "@/app/realizacie/[id]/media-gallery";
-import { PhotoChecklist } from "@/components/obhliadky/photo-checklist";
 import { DmButton } from "./dm-button";
+import { InspectionWizard } from "./inspection-wizard";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -157,17 +156,18 @@ export default async function ObhliadkaDetailPage({
         </div>
       )}
 
-      {/* PHOTO CHECKLIST — presné inštrukcie čo odfotiť pre realizátorov */}
-      {(user.role === "obhliadky" || user.role === "admin") &&
-        !alreadyCompleted && (
-          <PhotoChecklist leadId={id} media={checklistMedia} />
-        )}
-
-      {/* Form — testy (vlhkosť, odtrhový test, ...) MUSÍ byť pred fotkami */}
-      {isInspector && !alreadyCompleted && (
-        <InspectionForm
+      {/* WIZARD — Testy · Zameranie · Nafotenie (nový app-style flow) */}
+      {(isInspector || user.role === "admin") && !alreadyCompleted && (
+        <InspectionWizard
           leadId={id}
           existingResult={l.inspection_result}
+          existingPhotos={checklistMedia
+            .filter((m) => m.checklist_key)
+            .map((m) => ({
+              id: m.id,
+              url: m.url,
+              tag: (m.checklist_key as "floor_top" | "defects" | "other") ?? "other",
+            }))}
         />
       )}
 
