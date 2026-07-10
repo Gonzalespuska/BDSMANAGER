@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   Check,
+  Eye,
   MailCheck,
   Pause,
   Play,
@@ -280,9 +281,39 @@ function AgentRow({
           <span className="text-muted-foreground"> / {agent.total_leads}</span>
         </td>
 
-        {/* Akcie — Edit + Delete access */}
+        {/* Akcie — Preview (impersonate) + Edit + Delete access */}
         <td className="px-3 py-2 text-right">
           <div className="inline-flex items-center gap-1">
+            {agent.role !== "admin" && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/view-as", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ user_id: agent.id }),
+                    });
+                    const j = (await res.json()) as {
+                      ok?: boolean;
+                      redirect?: string;
+                      error?: string;
+                    };
+                    if (j.ok && j.redirect) window.location.href = j.redirect;
+                    else alert(`Chyba: ${j.error ?? "unknown"}`);
+                  } catch (e) {
+                    alert(
+                      `Chyba: ${e instanceof Error ? e.message : "network"}`,
+                    );
+                  }
+                }}
+                title={`Zobraziť UI ako ${agent.name.split(" ")[0] || "agent"} — uvidíš presne to čo vidí on`}
+                className="h-8 px-2 inline-flex items-center gap-1 rounded-md border-2 border-violet-300 bg-violet-50 hover:bg-violet-100 hover:border-violet-500 text-violet-800 text-xs font-bold transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5" aria-hidden />
+                Preview
+              </button>
+            )}
             <Button
               asChild
               size="sm"

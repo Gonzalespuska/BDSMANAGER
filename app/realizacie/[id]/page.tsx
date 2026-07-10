@@ -19,6 +19,7 @@ import { MediaUpload } from "./media-upload";
 import { MediaGallery } from "./media-gallery";
 import { MarkDoneButton } from "./mark-done-button";
 import { ExecutionWizard } from "./execution-wizard";
+import { DmButton } from "@/components/dm-button";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -69,7 +70,7 @@ export default async function RealizaciaDetailPage({
   // Assigned user info
   const userIds = [l.assigned_to, l.realization_by].filter(Boolean) as string[];
   const { data: users } = userIds.length
-    ? await sb.from("users").select("id, name, email").in("id", userIds)
+    ? await sb.from("users").select("id, name, email, phone").in("id", userIds)
     : { data: [] };
   const userMap = new Map((users ?? []).map((u) => [u.id, u]));
   const salesUser = l.assigned_to ? userMap.get(l.assigned_to) : null;
@@ -132,29 +133,41 @@ export default async function RealizaciaDetailPage({
         </div>
       )}
 
-      {/* Kto na tejto zákazke pracuje */}
-      <div className="rounded-xl border bg-background p-4 space-y-2">
-        <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
-          Priradenie
-        </div>
-        <div className="grid md:grid-cols-2 gap-3 text-sm">
-          <div>
-            <div className="text-xs text-muted-foreground">Obchodník (majiteľ zákazky)</div>
-            <div className="font-bold">{salesUser?.name ?? "—"}</div>
-            {salesUser?.email && <div className="text-xs text-muted-foreground">{salesUser.email}</div>}
+      {/* Priradenie — kontakt na obchodáka (majiteľa zákazky). Realizátora
+          nezobrazujeme (vidí sám seba). Ak sa realizátor potrebuje niečo
+          spýtať obchodáka, klik 💬 Napísať otvorí DM chat rovnako ako
+          na /obhliadky/[id]. */}
+      {salesUser && salesUser.id !== user.id && (
+        <div className="rounded-xl border-2 border-sky-200 bg-sky-50/40 p-4">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-sky-700 mb-2">
+            Obchodník ktorý ti pridelil zákazku
           </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Realizator</div>
-            <div className="font-bold">{realizator?.name ?? "—"}</div>
-            {realizator?.email && <div className="text-xs text-muted-foreground">{realizator.email}</div>}
-            {l.realization_at && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                Posunutá: {new Date(l.realization_at).toLocaleString("sk-SK")}
-              </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="font-black text-base">{salesUser.name}</div>
+            {salesUser.phone && (
+              <a
+                href={`tel:${salesUser.phone}`}
+                className="inline-flex items-center gap-1.5 rounded-lg border-2 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 px-3 py-1.5 text-xs font-bold transition-colors"
+              >
+                <Phone className="w-3.5 h-3.5" aria-hidden />
+                {formatPhoneSK(salesUser.phone as string)}
+              </a>
             )}
+            <DmButton peerId={salesUser.id} peerName={salesUser.name} />
           </div>
+          {salesUser.email && (
+            <div className="text-xs text-muted-foreground mt-1.5">
+              📧 {salesUser.email}
+            </div>
+          )}
+          {l.realization_at && (
+            <div className="text-[11px] text-sky-800 mt-2 font-semibold">
+              🔨 Termín realizácie:{" "}
+              {new Date(l.realization_at).toLocaleString("sk-SK")}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* Realizačný wizard — Zodpovednosť · Inventúra · Odovzdanie
           (interaktívny inline flow so podpismi + auto-výpočet materiálu).

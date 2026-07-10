@@ -9,7 +9,7 @@ import type { Lead } from "@/lib/types/lead";
 
 import { MediaUpload } from "@/app/realizacie/[id]/media-upload";
 import { MediaGallery } from "@/app/realizacie/[id]/media-gallery";
-import { DmButton } from "./dm-button";
+import { DmButton } from "@/components/dm-button";
 import { InspectionWizard } from "./inspection-wizard";
 import { InspectionReview } from "./inspection-review";
 

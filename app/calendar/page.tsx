@@ -126,17 +126,16 @@ export default async function CalendarPage({ searchParams }: Props) {
       .lte("date", toDate.toISOString().slice(0, 10))
       .order("created_at", { ascending: true });
 
-    if (me.role === "admin") {
+    // Admin + Obchodák: vidia VŠETKY kalendáre v tíme (obhliadky + realizácie
+    // od každého obhliadkára/realizátora + vlastné note-y).
+    // Dôvod: obchodák plánuje svoje CP na základe kedy má obhliadkár voľno,
+    // realizátor kapacitu, atď. — musí vidieť celý team schedule.
+    if (me.role === "admin" || me.role === "obchod") {
       return base;
     }
-    if (me.role === "obchod") {
-      // Obchodák: assignments v tíme + svoje osobné
-      return base.or(
-        `user_id.eq.${me.id},kind.in.(meeting,call),target_user_id.eq.${me.id}`,
-      );
-    }
-    // Obhliadky / realizacie / office / skolenie — iba pridelené jemu +
-    // svoje osobné.
+    // Obhliadky / realizacie / office / skolenie — iba čo bolo priradené
+    // jemu + svoje osobné poznámky. Zámerne NEVIDÍ ostatných členov tímu
+    // aby sa nezvyšovala kognitívna záťaž jeho stránky.
     return base.or(`user_id.eq.${me.id},target_user_id.eq.${me.id}`);
   })();
 
