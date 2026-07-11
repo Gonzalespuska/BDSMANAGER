@@ -398,85 +398,140 @@ export function CalendarGrid({
 
   return (
     <>
-      {/* ASSIGN MODE BANNER — zobrazuje profil zákazníka pri priradzovaní */}
+      {/* ASSIGN MODE BANNER — zobrazuje profil zákazníka pri priradzovaní.
+          Redesign 2026-07-11: user "toto by mohlo byt krajsie prazdneho
+          atd, v bublinach by mohli byt tie veci ze mesto rozmer typ, cislo
+          mail v osobitnom riadku, otvorit lead → otvorit detail". */}
       {isAssigning && assignLead && (
         <div
           className={cn(
-            "rounded-2xl border-2 p-4 mb-3 shadow-sm",
+            "rounded-2xl border-2 p-5 mb-3 shadow-sm",
             assignMode === "inspection"
-              ? "border-violet-300 bg-violet-50/60"
-              : "border-emerald-300 bg-emerald-50/60",
+              ? "border-violet-300 bg-gradient-to-br from-violet-50 via-white to-violet-50/40"
+              : "border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40",
           )}
         >
-          <div className="flex items-start gap-3 flex-wrap">
+          {/* HEADER — emoji + label + meno + CTA vpravo */}
+          <div className="flex items-start gap-4">
             <div
               className={cn(
-                "w-12 h-12 rounded-full inline-flex items-center justify-center text-2xl shrink-0 shadow",
+                "w-14 h-14 rounded-full inline-flex items-center justify-center text-2xl shrink-0 shadow-lg",
                 assignMode === "inspection"
-                  ? "bg-violet-500 text-white"
-                  : "bg-emerald-500 text-white",
+                  ? "bg-violet-500 text-white shadow-violet-500/30"
+                  : "bg-emerald-500 text-white shadow-emerald-500/30",
               )}
             >
               {assignMode === "inspection" ? "🔍" : "🔨"}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">
+              <div
+                className={cn(
+                  "text-[10px] uppercase tracking-widest font-black inline-flex items-center gap-1.5",
+                  assignMode === "inspection"
+                    ? "text-violet-700"
+                    : "text-emerald-700",
+                )}
+              >
                 Priraďuješ{" "}
                 {assignMode === "inspection" ? "obhliadku" : "realizáciu"}{" "}
                 zákazníkovi
               </div>
-              <div className="text-lg font-extrabold tracking-tight">
+              <div className="text-2xl font-black tracking-tight leading-tight mt-1">
                 {assignLead.name || (
                   <span className="italic text-muted-foreground">
                     bez mena
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-3 mt-1 text-xs">
-                {assignLead.phone && (
-                  <a
-                    href={`tel:${assignLead.phone}`}
-                    className="font-mono font-semibold text-foreground hover:underline tabular-nums"
-                  >
-                    📞 {formatPhoneSK(assignLead.phone)}
-                  </a>
-                )}
-                {assignLead.email && (
-                  <a
-                    href={`mailto:${assignLead.email}`}
-                    className="font-semibold text-foreground hover:underline truncate max-w-[220px]"
-                  >
-                    ✉️ {assignLead.email}
-                  </a>
-                )}
-                {assignLead.city && (
-                  <span className="inline-flex items-center gap-0.5">
-                    📍 <strong>{assignLead.city}</strong>
-                  </span>
-                )}
-                {assignLead.m2 && (
-                  <span className="inline-flex items-center gap-0.5">
-                    📐 <strong>{assignLead.m2} m²</strong>
-                  </span>
-                )}
-                {assignLead.floor_type && (
-                  <span className="inline-flex items-center gap-0.5">
-                    🎨 <strong>{assignLead.floor_type}</strong>
-                  </span>
-                )}
-              </div>
-              <div className="mt-2 text-[11px] text-muted-foreground italic">
-                👇 Klikni na voľný deň v kalendári — otvorí sa formulár na
-                priradenie.
-              </div>
             </div>
             <Link
               href={`/agent/leads/${assignLead.id}`}
               target="_blank"
-              className="shrink-0 text-[11px] font-semibold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/60"
+              className={cn(
+                "shrink-0 text-xs font-bold inline-flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-white/80 transition-colors",
+                assignMode === "inspection"
+                  ? "text-violet-700 border border-violet-200"
+                  : "text-emerald-700 border border-emerald-200",
+              )}
             >
-              Otvoriť lead ↗
+              Otvoriť detail ↗
             </Link>
+          </div>
+
+          {/* KONTAKT — osobitný riadok: tel: + email: (biele karty s ikonami) */}
+          {(assignLead.phone || assignLead.email) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+              {assignLead.phone && (
+                <a
+                  href={`tel:${assignLead.phone}`}
+                  className="flex items-center gap-2.5 rounded-xl bg-white border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 px-3 py-2.5 transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 text-sm">
+                    📞
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-black uppercase tracking-wider text-emerald-700">
+                      Telefón
+                    </div>
+                    <div className="font-black tabular-nums text-sm text-slate-900 truncate">
+                      {formatPhoneSK(assignLead.phone)}
+                    </div>
+                  </div>
+                </a>
+              )}
+              {assignLead.email && (
+                <a
+                  href={`mailto:${assignLead.email}`}
+                  className="flex items-center gap-2.5 rounded-xl bg-white border border-slate-200 hover:border-sky-400 hover:bg-sky-50/40 px-3 py-2.5 transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0 text-sm">
+                    ✉
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-black uppercase tracking-wider text-sky-700">
+                      Email
+                    </div>
+                    <div className="font-bold text-sm text-slate-900 truncate">
+                      {assignLead.email}
+                    </div>
+                  </div>
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* CHIPS — bubliny s mestom / rozmerom / typom */}
+          {(assignLead.city || assignLead.m2 || assignLead.floor_type) && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {assignLead.city && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white border-2 border-slate-200 px-3 py-1.5 text-sm font-bold text-slate-800 whitespace-nowrap shadow-sm">
+                  📍 {assignLead.city}
+                </span>
+              )}
+              {assignLead.m2 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white border-2 border-slate-200 px-3 py-1.5 text-sm font-bold text-slate-800 whitespace-nowrap shadow-sm">
+                  📐 {assignLead.m2} m²
+                </span>
+              )}
+              {assignLead.floor_type && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white border-2 border-slate-200 px-3 py-1.5 text-sm font-bold text-slate-800 whitespace-nowrap shadow-sm">
+                  🎨 {assignLead.floor_type}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* HINT — dole */}
+          <div
+            className={cn(
+              "mt-4 text-xs font-semibold inline-flex items-center gap-1.5 px-3 py-2 rounded-lg",
+              assignMode === "inspection"
+                ? "bg-violet-100/60 text-violet-800"
+                : "bg-emerald-100/60 text-emerald-800",
+            )}
+          >
+            💡 Klikni na voľný deň v kalendári — otvorí sa formulár na
+            priradenie.
           </div>
         </div>
       )}
