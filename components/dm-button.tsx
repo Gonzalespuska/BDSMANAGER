@@ -48,9 +48,10 @@ export function DmButton({
       if (json.is_new) {
         toast.success(`Nová konverzácia s ${peerName}`);
       }
-      // Naviguj na /agent/team s query ?room=<id> — chat client detekuje
-      // a otvorí príslušnú roomku.
-      router.push(`/agent/team?room=${json.room_id}`);
+      // Naviguj na /dm/[roomId] — samostatná Messenger-style konverzácia
+      // (bez Tím chat sidebaru so všeobecnou diskusiou). Pre team-wide
+      // roomky je /agent/team, tu si otvor JEDNU 1-na-1 konverzáciu.
+      router.push(`/dm/${json.room_id}`);
     } catch (e) {
       toast.error(`Chyba siete: ${e instanceof Error ? e.message : "neznáma"}`);
     } finally {

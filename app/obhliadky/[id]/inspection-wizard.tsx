@@ -400,10 +400,6 @@ function TestsModal({
           <div className="text-center">
             <Droplets className="w-14 h-14 mx-auto text-sky-500 mb-2" aria-hidden />
             <h3 className="text-xl font-extrabold">Test vlhkosti podkladu</h3>
-            <p className="text-sm text-muted-foreground mt-1 leading-snug">
-              Zmeraj vlhkosť <strong>dvomi meračmi</strong> od rôznych značiek —
-              aby sme mali istotu (Sika, Tramex, Protimeter…).
-            </p>
           </div>
 
           <BigInput

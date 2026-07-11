@@ -137,9 +137,17 @@ export async function POST(request: NextRequest) {
     })
     .then(() => {});
 
+  // Public URL — foto-guide UI potrebuje priamo url na <img src=...>
+  // (viď app/obhliadky/[id]/inspection-wizard.tsx handleFiles → json.url)
+  const {
+    data: { publicUrl },
+  } = admin.storage.from("inspection-media").getPublicUrl(storagePath);
+
   return NextResponse.json({
     ok: true,
+    id: inserted.id,
     media_id: inserted.id,
+    url: publicUrl,
     storage_path: storagePath,
     caption: inserted.caption,
   });
