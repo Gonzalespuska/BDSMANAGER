@@ -106,14 +106,8 @@ export default async function RealizacieDashboard() {
         </div>
       </div>
 
-      {/* ─── AKTÍVNE ──────────────────────────────────────────────────── */}
-      {/* User: "nech su zoradene podla datumu casu, dautum cas velky vidno,
-          rozdelene podla dna pondelok utorok streda... najblizsich 7 dni
-          zasebou scrollujes ked chces dalej v kalendari".
-
-          Grouping: split active[] na 7 dní od dneška podľa realization_at.
-          Sortnuté ASC → prvý má najbližšiu realizáciu. Ostatné (za týždeň)
-          v samostatnej "Neskôr → pozri kalendár" sekcii. */}
+      {/* ─── AKTÍVNE — 7-dňový plán ──────────────────────────────────── */}
+      <section className="space-y-3">
       {(() => {
         const now = new Date();
         const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -357,7 +351,8 @@ export default async function RealizacieDashboard() {
           <div className="rounded-xl border bg-background p-8 text-center text-sm text-muted-foreground">
             Žiadne aktívne realizácie. Obchodník ti zatiaľ nič neposunul.
           </div>
-        )}
+        );
+      })()}
       </section>
 
       {/* ─── DOKONČENÉ ─────────────────────────────────────────────────── */}
