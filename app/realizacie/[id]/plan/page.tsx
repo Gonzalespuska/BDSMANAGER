@@ -138,6 +138,20 @@ export default async function RealizationPlanPage({
         realizationDate={realizationDateIso}
         activeView={activeView}
         isGarage={isGarage}
+        realizationInventory={
+          Array.isArray(data.realization_inventory)
+            ? (data.realization_inventory as Array<{
+                sku: string;
+                label: string;
+                qty: number;
+                unit: string;
+                note?: string;
+              }>)
+            : []
+        }
+        realizationSystemLabel={
+          rs?.system ? `${rs.system}` : null
+        }
         isJednofarebna={isJednofarebna}
         isChipsova={isChipsova}
         isMetalicka={isMetalicka}

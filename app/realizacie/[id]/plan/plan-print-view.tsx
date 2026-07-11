@@ -72,6 +72,8 @@ export function PlanPrintView({
   systemId: initialSystemId,
   procedureSteps,
   systemCode,
+  realizationInventory,
+  realizationSystemLabel,
 }: {
   leadName: string;
   leadPhone?: string | null;
@@ -92,6 +94,19 @@ export function PlanPrintView({
   systemId?: string | null;
   procedureSteps?: Array<{ step: number; title: string; note: string }>;
   systemCode?: string | null;
+  // Inventúra vypočítaná obchodákom pri kliknutí "Poslať na realizáciu"
+  // (uložená v lead.data.realization_inventory). Realizator ju len vidí,
+  // NEMENÍ. User 2026-07-11: "ten system vybera obchodak a ma mu to tam
+  // vypisat iba ze co ma zobrat podla m2 a podla systemu ktory vybral
+  // obchodak".
+  realizationInventory?: Array<{
+    sku: string;
+    label: string;
+    qty: number;
+    unit: string;
+    note?: string;
+  }>;
+  realizationSystemLabel?: string | null;
 }) {
   // Ak sme dostali kroky z DB (podľa priradeného systému), použij ich.
   // Inak fallback na hardcoded buildSteps(isGarage).
@@ -106,22 +121,29 @@ export function PlanPrintView({
         }))
       : buildSteps(isGarage);
   void systemCode;
+  void initialSystemId;
   const areaNum = parseFloat((plocha ?? "").replace(",", ".")) || 0;
-  const [systemId, setSystemId] = React.useState<string>(initialSystemId ?? "");
-  const selectedSystem = React.useMemo(
-    () => FLOOR_SYSTEMS.find((s) => s.id === systemId) ?? null,
-    [systemId],
-  );
-  const calcItems: CalculatedItem[] = React.useMemo(() => {
-    if (!selectedSystem || areaNum <= 0) return [];
-    return calcSystemForArea(selectedSystem, areaNum);
-  }, [selectedSystem, areaNum]);
+
+  // Deprecated (system picker + Sika katalóg + custom items) — realizator
+  // to nesmie meniť, obchodák to už pre-vybral cez SystemPickerButton.
+  // Ponechávame prázdne stubs aby ďalší kód nižšie neprestal fungovať.
+  function _unused() {
+    void SIKA_PRODUCTS;
+    void FLOOR_SYSTEMS;
+    void calcSystemForArea;
+    void COAT_LABELS;
+  }
+  void _unused;
 
   const [skladPicks, setSkladPicks] = React.useState<
     Array<{ sap: string; name: string; packaging: string; qty: string }>
   >([]);
+  void skladPicks;
+
   const [customName, setCustomName] = React.useState("");
+  void customName;
   const [customQty, setCustomQty] = React.useState("");
+  void customQty;
 
   function addFromCatalog(sap: string, name: string, packaging: string) {
     setSkladPicks((prev) => {
@@ -129,6 +151,7 @@ export function PlanPrintView({
       return [...prev, { sap, name, packaging, qty: "1" }];
     });
   }
+  void addFromCatalog;
   function addCustom() {
     const n = customName.trim();
     const q = customQty.trim();
@@ -244,207 +267,112 @@ export function PlanPrintView({
           </table>
 
         </>
-      ) : (
-        // ═════════ ZOZNAM ZO SKLADU ═════════
+      ) : activeView === "sklad" ? (
+        // ═════════ INVENTÚRA — READ-ONLY, čo obchodák pre-vybral ═════════
+        // User 2026-07-11: "ten system vybera obchodak a ma mu to tam
+        // vypisat iba ze co ma zobrat podla m2 a podla systemu ktory
+        // vybral obchodak". Realizator NIČ nepicka, len škrtne "Vzal".
         <>
-          {/* Systém selector — auto-výpočet materiálu podľa m² */}
-          <div className="mb-4 no-print rounded-lg border-2 border-sky-300 bg-sky-50/60 p-3 space-y-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-sky-900 flex items-center justify-between">
-              <span>🎯 Vyber systém podlahy → auto-výpočet</span>
+          {/* Info banner o systéme */}
+          <div className="mb-4 rounded-lg border-2 border-emerald-300 bg-emerald-50/60 p-3">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-800">
+                  📦 Inventúra — priprav zo skladu
+                </div>
+                <div className="mt-1 font-black text-lg text-slate-900">
+                  {realizationSystemLabel
+                    ? `Systém: ${realizationSystemLabel}`
+                    : "Systém: —"}
+                </div>
+                <div className="text-xs text-slate-600 mt-0.5">
+                  Zoznam vypočítal obchodák podľa vybraného systému a plochy.
+                  Odškrtávaj čo si vzal.
+                </div>
+              </div>
               {areaNum > 0 && (
-                <span className="text-[10px] normal-case font-normal">
-                  plocha: <strong>{areaNum} m²</strong>
-                </span>
-              )}
-            </div>
-            <div className="flex gap-2 items-center flex-wrap">
-              <select
-                value={systemId}
-                onChange={(e) => setSystemId(e.target.value)}
-                className="flex-1 min-w-[240px] rounded-lg border-2 border-sky-300 bg-white px-3 py-2 text-sm font-bold focus:border-sky-500 focus:outline-none"
-              >
-                <option value="">— vyber systém —</option>
-                {FLOOR_SYSTEMS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              {selectedSystem && (
-                <div className="text-[10px] italic text-sky-800">
-                  {selectedSystem.suitable_for.join(", ")}
+                <div className="text-right shrink-0">
+                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
+                    Plocha
+                  </div>
+                  <div className="text-2xl font-black text-emerald-700 tabular-nums">
+                    {areaNum} m²
+                  </div>
                 </div>
               )}
             </div>
-            {selectedSystem && areaNum > 0 && calcItems.length > 0 && (
-              <div className="rounded-md bg-white border border-sky-200 p-2 text-[11px] text-slate-700">
-                <strong className="text-sky-900">
-                  Auto-výpočet pre {areaNum} m²:
-                </strong>
-                <ul className="mt-1 space-y-0.5">
-                  {calcItems.map((c) => (
-                    <li key={c.sap_number} className="flex justify-between gap-2">
-                      <span>
-                        {COAT_LABELS[c.coat]} · {c.name}
-                      </span>
-                      <span className="tabular-nums font-bold text-sky-900">
-                        {c.needed_kg} kg → <strong>{c.packages} ks</strong> ×{" "}
-                        {c.packaging}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const rows = calcItems.map((c) => ({
-                      sap: c.sap_number,
-                      name: c.name,
-                      packaging: c.packaging,
-                      qty: String(c.packages),
-                    }));
-                    setSkladPicks(rows);
-                  }}
-                  className="mt-2 w-full rounded bg-sky-600 hover:bg-sky-700 text-white px-2 py-1.5 text-xs font-bold"
-                >
-                  ↓ Nakopírovať do tabuľky nižšie
-                </button>
-              </div>
-            )}
-            {selectedSystem && areaNum <= 0 && (
-              <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-900">
-                ⚠️ Plocha (m²) nie je vyplnená v leade — vyplň ju pre
-                auto-výpočet.
-              </div>
-            )}
           </div>
 
-          {/* Ručný výber zo Sika katalógu */}
-          <div className="mb-4 no-print rounded-lg border-2 border-orange-200 bg-orange-50/40 p-3 space-y-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-orange-800">
-              📦 Alebo ručný výber zo Sika katalógu — klikni pre pridanie
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {SKLAD_DEFAULT_MATERIALS.map((p) => (
-                <button
-                  key={p.sap_number}
-                  type="button"
-                  onClick={() =>
-                    addFromCatalog(p.sap_number, p.name, p.packaging)
-                  }
-                  className="text-left rounded border-2 border-orange-300 bg-white hover:bg-orange-50 p-2 text-xs"
-                >
-                  <div className="font-semibold truncate">{p.name}</div>
-                  <div className="text-[10px] text-slate-500 font-mono">
-                    SAP {p.sap_number}
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div className="pt-2 border-t border-orange-200 grid grid-cols-3 gap-2">
-              <input
-                type="text"
-                placeholder="Vlastný materiál"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                className="col-span-2 rounded border px-2 py-1 text-sm"
-              />
-              <div className="flex gap-1">
-                <input
-                  type="text"
-                  placeholder="ks"
-                  value={customQty}
-                  onChange={(e) => setCustomQty(e.target.value)}
-                  className="w-16 rounded border px-2 py-1 text-sm tabular-nums"
-                />
-                <button
-                  type="button"
-                  onClick={addCustom}
-                  className="rounded bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 text-xs font-bold"
-                >
-                  + Pridať
-                </button>
+          {(!realizationInventory || realizationInventory.length === 0) ? (
+            <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-6 text-center">
+              <div className="text-amber-900 font-black text-sm mb-1">
+                ⚠ Obchodák ešte nevybral systém
+              </div>
+              <div className="text-xs text-amber-800">
+                Kým obchodák neklikne „Poslať na realizáciu" a nevyberie
+                systém (Sikafloor 264 atď.), inventúra sa neobjaví.
               </div>
             </div>
-          </div>
-
-          {/* Skutočná tabuľka (aj v printe) */}
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-slate-100 border border-slate-300">
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-10">
-                  #
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-24">
-                  SAP #
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700">
-                  Materiál
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-24">
-                  Balenie
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-16">
-                  Ks
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-16">
-                  Vzal
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700 w-40">
-                  Podpis
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {skladPicks.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="border border-slate-300 px-2 py-6 text-center text-slate-500 italic"
-                  >
-                    Zatiaľ prázdny zoznam — klikni na produkt vyššie alebo pridaj vlastný
-                  </td>
+          ) : (
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-slate-100 border border-slate-300">
+                  <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-10">
+                    #
+                  </th>
+                  <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700">
+                    Materiál
+                  </th>
+                  <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-20">
+                    Ks
+                  </th>
+                  <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-20">
+                    Balenie
+                  </th>
+                  <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-16">
+                    Vzal
+                  </th>
                 </tr>
-              ) : (
-                skladPicks.map((p, i) => (
-                  <tr key={p.sap + i} className="border border-slate-300">
-                    <td className="border border-slate-300 px-2 py-2 text-center tabular-nums font-semibold">
+              </thead>
+              <tbody>
+                {realizationInventory.map((p, i) => (
+                  <tr key={p.sku + i} className="border border-slate-300">
+                    <td className="border border-slate-300 px-2 py-3 text-center tabular-nums font-black text-lg">
                       {i + 1}
                     </td>
-                    <td className="border border-slate-300 px-2 py-2 tabular-nums font-mono text-xs">
-                      {p.sap}
+                    <td className="border border-slate-300 px-3 py-3">
+                      <div className="font-black text-base">{p.label}</div>
+                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                        SKU {p.sku}
+                      </div>
+                      {p.note && (
+                        <div className="text-[10px] text-slate-600 italic mt-0.5">
+                          {p.note}
+                        </div>
+                      )}
                     </td>
-                    <td className="border border-slate-300 px-2 py-2 font-semibold">
-                      {p.name}
+                    <td className="border border-slate-300 px-2 py-3 text-center">
+                      <div className="text-3xl font-black tabular-nums text-emerald-700">
+                        {p.qty}×
+                      </div>
                     </td>
-                    <td className="border border-slate-300 px-2 py-2 text-center text-xs">
-                      {p.packaging}
+                    <td className="border border-slate-300 px-2 py-3 text-center text-xs font-bold">
+                      {p.unit}
                     </td>
-                    <td className="border border-slate-300 px-2 py-2">
-                      <input
-                        type="text"
-                        value={p.qty}
-                        onChange={(e) => {
-                          const copy = [...skladPicks];
-                          copy[i] = { ...copy[i], qty: e.target.value };
-                          setSkladPicks(copy);
-                        }}
-                        className="w-12 text-center text-sm font-bold tabular-nums border rounded px-1"
-                      />
-                    </td>
-                    <td className="border border-slate-300 px-2 py-2 text-center">
-                      <div className="w-6 h-6 border-2 border-slate-400 rounded mx-auto"></div>
-                    </td>
-                    <td className="border border-slate-300 px-2 py-2">
-                      <div className="h-6 border-b border-dashed border-slate-300"></div>
+                    <td className="border border-slate-300 px-2 py-3 text-center">
+                      <div className="w-7 h-7 border-2 border-slate-400 rounded mx-auto"></div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-
+                ))}
+              </tbody>
+            </table>
+          )}
         </>
+      ) : (
+        // ═════════ ZODPOVEDNOSŤ — v samostatnom bloku nižšie ═════════
+        <div className="text-xs text-slate-500 italic">
+          {/* Bude zrenderované v samostatnej sekcii pod tabuľkou */}
+        </div>
       )}
 
       {activeView === "zodpovednost" && (
