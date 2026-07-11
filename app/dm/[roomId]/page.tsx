@@ -29,10 +29,13 @@ const UUID_RE = /^[0-9a-f-]{36}$/i;
  */
 export default async function DmPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ roomId: string }>;
+  searchParams: Promise<{ prefill?: string }>;
 }) {
   const { roomId } = await params;
+  const sp = await searchParams;
   const me = await getCurrentAppUser();
   if (!me) redirect("/login");
 
@@ -93,6 +96,7 @@ export default async function DmPage({
           avatar_url: (peer.avatar_url as string | null) ?? null,
         }}
         initialMessages={messages}
+        prefill={sp.prefill}
       />
     </AppShell>
   );

@@ -144,7 +144,11 @@ export default async function ObhliadkaDetailPage({
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <div className="font-bold text-base">{salesUser.name}</div>
-            <DmButton peerId={salesUser.id} peerName={salesUser.name} />
+            <DmButton
+              peerId={salesUser.id}
+              peerName={salesUser.name}
+              prefill={`Ahoj ${salesUser.name.split(" ")[0]}, píšem ti ohľadom obhliadky u klienta „${l.name}"${data.lokalita ? ` (${data.lokalita})` : ""}. `}
+            />
           </div>
         </div>
       )}

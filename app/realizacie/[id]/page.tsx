@@ -153,7 +153,11 @@ export default async function RealizaciaDetailPage({
                 {formatPhoneSK(salesUser.phone as string)}
               </a>
             )}
-            <DmButton peerId={salesUser.id} peerName={salesUser.name} />
+            <DmButton
+              peerId={salesUser.id}
+              peerName={salesUser.name}
+              prefill={`Ahoj ${salesUser.name.split(" ")[0]}, píšem ti ohľadom realizácie u klienta „${l.name}". `}
+            />
           </div>
           {salesUser.email && (
             <div className="text-xs text-muted-foreground mt-1.5">

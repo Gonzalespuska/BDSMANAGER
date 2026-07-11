@@ -18,10 +18,15 @@ export function DmButton({
   peerId,
   peerName,
   className,
+  prefill,
 }: {
   peerId: string;
   peerName: string;
   className?: string;
+  /** Voliteľne pre-fill textarea keď sa otvorí konverzácia. User: "ked
+   * uz pises tak tam musi byt referencia ze stlacim a napise spravu
+   * ahoj pisem ti ohladom obhliadky... a potom uz manualne napsies". */
+  prefill?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
@@ -48,10 +53,11 @@ export function DmButton({
       if (json.is_new) {
         toast.success(`Nová konverzácia s ${peerName}`);
       }
-      // Naviguj na /dm/[roomId] — samostatná Messenger-style konverzácia
-      // (bez Tím chat sidebaru so všeobecnou diskusiou). Pre team-wide
-      // roomky je /agent/team, tu si otvor JEDNU 1-na-1 konverzáciu.
-      router.push(`/dm/${json.room_id}`);
+      // Naviguj na /dm/[roomId] — voliteľne s prefill query param
+      const url = prefill
+        ? `/dm/${json.room_id}?prefill=${encodeURIComponent(prefill)}`
+        : `/dm/${json.room_id}`;
+      router.push(url);
     } catch (e) {
       toast.error(`Chyba siete: ${e instanceof Error ? e.message : "neznáma"}`);
     } finally {

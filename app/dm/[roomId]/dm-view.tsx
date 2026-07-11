@@ -43,16 +43,37 @@ export function DmView({
   meName,
   peer,
   initialMessages,
+  prefill,
 }: {
   roomId: string;
   meId: string;
   meName: string;
   peer: Peer;
   initialMessages: ChatMessage[];
+  /** Voliteľne pre-fill textarea (z DmButton prefill prop → ?prefill=...). */
+  prefill?: string;
 }) {
   const router = useRouter();
   const [messages, setMessages] = React.useState<ChatMessage[]>(initialMessages);
-  const [input, setInput] = React.useState("");
+  // Pre-fill: user "ked stlacim napise spravu ahoj pisem ti ohladom
+  // obhliadky... a potom uz manualne napises nieco".
+  const [input, setInput] = React.useState(prefill ?? "");
+
+  // Vyčisti prefill query param aby refresh nezachoval starý draft.
+  React.useEffect(() => {
+    if (prefill && typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("prefill")) {
+        url.searchParams.delete("prefill");
+        window.history.replaceState(
+          {},
+          "",
+          url.pathname + (url.search ? url.search : ""),
+        );
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [sending, setSending] = React.useState(false);
   const listRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
