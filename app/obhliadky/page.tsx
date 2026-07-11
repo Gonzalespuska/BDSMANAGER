@@ -118,7 +118,7 @@ export default async function ObhliadkyDashboard({
           <p className="text-sm text-muted-foreground mt-1">
             {activeTab === "aktivne"
               ? "Aktívne obhliadky — kliknutím otvoríš detail + wizard po obhliadke."
-              : "Hotové obhliadky — obchodník ich vidí, môže poslať cenovú ponuku."}
+              : "Obhliadnuté — čo si už obhliadol a odoslal obchodníkovi. Zoradené od najnovšej."}
           </p>
         </div>
       </header>
@@ -155,7 +155,7 @@ export default async function ObhliadkyDashboard({
           )}
         >
           <CheckCircle2 className="w-4 h-4" aria-hidden />
-          Hotové (obhliadnuté)
+          Obhliadnuté
           <span
             className={cn(
               "text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded",
@@ -181,6 +181,15 @@ export default async function ObhliadkyDashboard({
               : `Obchodník ti zatiaľ nič nepriradil. Až posunie lead cez „Poslať na obhliadku", objaví sa tu.`}
           </p>
         </div>
+      ) : activeTab === "hotove" ? (
+        // Hotové = flat list zoradený podľa času odoslania obhliadky
+        // (last_activity_at DESC). Date grouping tu nedáva zmysel — user
+        // len chce vidieť "ktoré som obhliadol nedávno".
+        <ul className="space-y-2">
+          {leads.map((l) => (
+            <ObhliadkaCard key={l.id} lead={l} />
+          ))}
+        </ul>
       ) : (
         <div className="space-y-6">
           {sortedKeys.map((dateKey) => {
