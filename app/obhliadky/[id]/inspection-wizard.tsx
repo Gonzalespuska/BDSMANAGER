@@ -109,9 +109,6 @@ export function InspectionWizard({
   const [photos, setPhotos] = React.useState<PhotoItem[]>(existingPhotos);
   const [note, setNote] = React.useState(ex.agent_note ?? "");
   const [submitting, setSubmitting] = React.useState(false);
-  // Success overlay — po úspešnom odoslaní zobrazíme full-screen celebration
-  // aby obhliadkár VIDEL že to prešlo (predtým iba toast na 800 ms).
-  const [submittedAt, setSubmittedAt] = React.useState<Date | null>(null);
 
   // ─── Modaly (open state) ───
   const [testsOpen, setTestsOpen] = React.useState(false);
@@ -153,8 +150,7 @@ export function InspectionWizard({
       toast.error(`Chyba: ${res.error}`);
       return;
     }
-    // Success overlay + haptic (mobile). Redirect až po ~4 s alebo klik na CTA.
-    setSubmittedAt(new Date());
+    // Haptic (mobile)
     try {
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         navigator.vibrate?.([80, 40, 120]);
@@ -162,6 +158,22 @@ export function InspectionWizard({
     } catch {
       /* not supported */
     }
+    // Inline toast (okamžitá vizuálna spätná väzba)
+    toast.success("Obhliadka odoslaná — obchodník dostal notifikáciu.");
+    // NAVIGATE-then-celebrate: revalidatePath v server action re-renderoval
+    // stránku a wizard sa unmounted skôr než overlay stihol zobraziť.
+    // Preto ihneď navigujeme na /obhliadky s justSubmitted param → tam
+    // sa zobrazí celebration banner ktorý PREŽIJE cez F5.
+    const summary = new URLSearchParams({
+      justSubmitted: leadId,
+      m2: measurement.total_m2.toFixed(2),
+      moist: `${tests.moisture_1_pct}/${tests.moisture_2_pct}`,
+      adh: String(tests.adhesion_mpa ?? ""),
+      photos: String(photos.length),
+    });
+    // Navrat na /obhliadky (Aktívne tab default) — obhliadkár vidí zoznam
+    // ďalších obhliadok ktoré má spraviť. Banner ukáže potvrdenie hore.
+    router.push(`/obhliadky?${summary.toString()}`);
   }
 
   return (
@@ -303,17 +315,6 @@ export function InspectionWizard({
             setPhotosOpen(false);
             toast.success(`${p.length} fotiek nahratých`);
           }}
-        />
-      )}
-      {submittedAt && (
-        <SubmissionSuccess
-          summary={{
-            m2: measurement.total_m2,
-            moisture: `${tests.moisture_1_pct}%/${tests.moisture_2_pct}%`,
-            adhesion: `${tests.adhesion_mpa} MPa`,
-            photos: photos.length,
-          }}
-          onClose={() => router.push("/obhliadky?tab=hotove")}
         />
       )}
     </section>

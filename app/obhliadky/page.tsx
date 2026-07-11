@@ -8,6 +8,7 @@ import type { Lead } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
 
 import { ObhliadkaCard } from "./obhliadka-card";
+import { JustSubmittedBanner } from "./just-submitted-banner";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -24,7 +25,14 @@ export const dynamic = "force-dynamic";
 export default async function ObhliadkyDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    justSubmitted?: string;
+    m2?: string;
+    moist?: string;
+    adh?: string;
+    photos?: string;
+  }>;
 }) {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
@@ -37,6 +45,22 @@ export default async function ObhliadkyDashboard({
 
   const sp = await searchParams;
   const activeTab = sp.tab === "hotove" ? "hotove" : "aktivne";
+  const justSubmitted = sp.justSubmitted ?? null;
+  // Fetch meno tej práve odoslanej obhliadky pre banner
+  let justSubmittedName: string | null = null;
+  if (justSubmitted) {
+    try {
+      const sbTmp = createAdminClient();
+      const { data: l } = await sbTmp
+        .from("leads")
+        .select("name")
+        .eq("id", justSubmitted)
+        .maybeSingle();
+      justSubmittedName = (l?.name as string) ?? null;
+    } catch {
+      /* ignore */
+    }
+  }
 
   const sb = createAdminClient();
 
@@ -109,6 +133,15 @@ export default async function ObhliadkyDashboard({
 
   return (
     <div className="space-y-6">
+      {justSubmitted && (
+        <JustSubmittedBanner
+          leadName={justSubmittedName ?? "Obhliadka"}
+          m2={sp.m2 ?? ""}
+          moist={sp.moist ?? ""}
+          adh={sp.adh ?? ""}
+          photos={sp.photos ?? "0"}
+        />
+      )}
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">

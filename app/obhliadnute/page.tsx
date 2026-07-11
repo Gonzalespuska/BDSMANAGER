@@ -74,7 +74,7 @@ export default async function ObhliadnutePage() {
   const { data: leadsRaw } = await q;
   const leads = leadsRaw ?? [];
 
-  // Fotky pre všetky leady batch
+  // Fotky pre všetky leady batch — public URL (bucket je public od 2026-07-11)
   const leadIds = leads.map((l) => l.id as string);
   let photosByLead = new Map<string, { url: string; id: string }[]>();
   let inspectorMap = new Map<string, { name: string; email: string }>();
@@ -84,22 +84,14 @@ export default async function ObhliadnutePage() {
       .select("id, lead_id, storage_path")
       .in("lead_id", leadIds)
       .order("created_at", { ascending: false });
-    const paths = (mediaRaw ?? []).map((m) => m.storage_path as string);
-    const signedMap = new Map<string, string>();
-    if (paths.length > 0) {
-      const { data: signed } = await sb.storage
-        .from("inspection-media")
-        .createSignedUrls(paths, 604800);
-      for (const s of signed ?? []) {
-        if (s.signedUrl && s.path) signedMap.set(s.path, s.signedUrl);
-      }
-    }
     for (const m of mediaRaw ?? []) {
       const lid = m.lead_id as string;
-      const url = signedMap.get(m.storage_path as string);
-      if (!url) continue;
+      const { data: { publicUrl } } = sb.storage
+        .from("inspection-media")
+        .getPublicUrl(m.storage_path as string);
+      if (!publicUrl) continue;
       if (!photosByLead.has(lid)) photosByLead.set(lid, []);
-      photosByLead.get(lid)!.push({ url, id: m.id as string });
+      photosByLead.get(lid)!.push({ url: publicUrl, id: m.id as string });
     }
 
     const inspectorIds = Array.from(
