@@ -29,14 +29,15 @@ export default async function RealizacieDashboard() {
 
   const sb = createAdminClient();
 
-  // Aktívne realizácie: status=in_realization + priradené mne (alebo všetky pre admin)
+  // Aktívne realizácie: status=in_realization + priradené mne.
+  // Zoradené ASC (najbližšie hore). Nižšie filtrujeme na najbližších 7 dní.
   const activeQuery = sb
     .from("leads")
     .select(
       "id, name, phone, email, status, last_activity_at, value_estimate, assigned_to, realization_by, realization_at, data",
     )
     .eq("status", "in_realization")
-    .order("realization_at", { ascending: false });
+    .order("realization_at", { ascending: true });
 
   const activeQueryScoped = user.role === "admin"
     ? activeQuery
@@ -106,100 +107,200 @@ export default async function RealizacieDashboard() {
       </div>
 
       {/* ─── AKTÍVNE ──────────────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <h2 className="text-base md:text-lg font-black uppercase tracking-wider text-slate-700 inline-flex items-center gap-2">
-          🔨 Aktívne realizácie
-        </h2>
-        {active.length > 0 ? (
-          <ul className="space-y-3">
-            {active.map((l) => {
-              const data = (l.data ?? {}) as Record<string, string>;
-              return (
-                <li
-                  key={l.id}
-                  className="rounded-2xl border-2 border-emerald-300 bg-white shadow-sm overflow-hidden"
-                >
-                  {/* Header — meno + m²/lokalita/typ + hodnota */}
-                  <Link
-                    href={`/realizacie/${l.id}`}
-                    className="block p-4 hover:bg-emerald-50/40 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-black text-xl md:text-2xl leading-tight">
-                          {l.name}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          {data.lokalita && (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
-                              📍 {data.lokalita}
-                            </span>
-                          )}
-                          {data.plocha && (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
-                              📏 {data.plocha} m²
-                            </span>
-                          )}
-                          {data.typ_podlahy && (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
-                              🎨 {data.typ_podlahy}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm font-semibold text-slate-600 mt-2">
-                          📅 Posunutá na realizáciu:{" "}
-                          {new Date(l.realization_at).toLocaleString("sk-SK", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        {l.value_estimate != null && (
-                          <div className="font-black text-emerald-700 tabular-nums text-2xl md:text-3xl">
-                            {l.value_estimate.toLocaleString("sk-SK")} €
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
+      {/* User: "nech su zoradene podla datumu casu, dautum cas velky vidno,
+          rozdelene podla dna pondelok utorok streda... najblizsich 7 dni
+          zasebou scrollujes ked chces dalej v kalendari".
 
-                  {/* 3 buttons row — Zodpovednosť / Inventúra / Postup —
-                      user "musisa byt zodpovednost inventura postup to
-                      musi byt uz takto vidietlne na tomto riadku". */}
-                  <div className="border-t-2 border-emerald-100 bg-emerald-50/50 px-4 py-3 flex flex-wrap gap-2">
-                    <Link
-                      href={`/realizacie/${l.id}/plan?view=zodpovednost`}
-                      className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
-                      title="Zodpovednosť — kto podpísal čo (obchodák, obhliadkár, realizator, skladník)"
+          Grouping: split active[] na 7 dní od dneška podľa realization_at.
+          Sortnuté ASC → prvý má najbližšiu realizáciu. Ostatné (za týždeň)
+          v samostatnej "Neskôr → pozri kalendár" sekcii. */}
+      {(() => {
+        const now = new Date();
+        const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const in7d = new Date(today0);
+        in7d.setDate(in7d.getDate() + 7);
+        const week: Array<{ date: Date; iso: string; items: typeof active }> = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(today0);
+          d.setDate(d.getDate() + i);
+          const iso = d.toISOString().slice(0, 10);
+          week.push({ date: d, iso, items: [] });
+        }
+        const laterItems: typeof active = [];
+        for (const l of active) {
+          const at = new Date(l.realization_at);
+          const isoDay = new Date(at.getFullYear(), at.getMonth(), at.getDate())
+            .toISOString()
+            .slice(0, 10);
+          const slot = week.find((w) => w.iso === isoDay);
+          if (slot) slot.items.push(l);
+          else if (at >= in7d) laterItems.push(l);
+          // items pred dneškom (in progress) → prilepím do dnes
+          else week[0].items.push(l);
+        }
+
+        function weekdayLabel(d: Date): string {
+          const now2 = new Date();
+          const isToday =
+            d.toDateString() === now2.toDateString();
+          const tomorrow = new Date(now2);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const isTomorrow = d.toDateString() === tomorrow.toDateString();
+          if (isToday) return "Dnes";
+          if (isTomorrow) return "Zajtra";
+          return d.toLocaleDateString("sk-SK", { weekday: "long" });
+        }
+
+        function fullDate(d: Date): string {
+          return d.toLocaleDateString("sk-SK", {
+            day: "numeric",
+            month: "long",
+          });
+        }
+
+        return active.length > 0 ? (
+          <div className="space-y-6">
+            {week.map((w) => {
+              const isEmpty = w.items.length === 0;
+              const isToday = w.date.toDateString() === new Date().toDateString();
+              return (
+                <section key={w.iso} className="space-y-2">
+                  <div
+                    className={cn(
+                      "flex items-baseline gap-3 border-l-4 pl-3 py-1",
+                      isToday
+                        ? "border-emerald-500"
+                        : isEmpty
+                          ? "border-slate-200"
+                          : "border-emerald-300",
+                    )}
+                  >
+                    <h3
+                      className={cn(
+                        "text-2xl md:text-3xl font-black capitalize leading-none",
+                        isToday ? "text-emerald-700" : "text-slate-800",
+                      )}
                     >
-                      <span>✍️</span>
-                      Zodpovednosť
-                    </Link>
-                    <Link
-                      href={`/realizacie/${l.id}/plan?view=sklad`}
-                      className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
-                      title="Inventúra — zoznam materiálu zo skladu, čo brať na zákazku"
-                    >
-                      <span>📦</span>
-                      Inventúra
-                    </Link>
-                    <Link
-                      href={`/realizacie/${l.id}/plan?view=postup`}
-                      className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
-                      title="Postupový plán — odškrtávanie krokov na stavbe"
-                    >
-                      <span>🔨</span>
-                      Postup
-                    </Link>
+                      {weekdayLabel(w.date)}
+                    </h3>
+                    <span className="text-lg font-bold text-slate-500">
+                      · {fullDate(w.date)}
+                    </span>
+                    {!isEmpty && (
+                      <span className="ml-auto text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
+                        {w.items.length} zákazk
+                        {w.items.length === 1 ? "a" : w.items.length < 5 ? "y" : "ov"}
+                      </span>
+                    )}
                   </div>
-                </li>
+                  {isEmpty ? (
+                    <div className="text-sm italic text-slate-400 pl-4">
+                      🌴 Žiadne realizácie
+                    </div>
+                  ) : (
+                    <ul className="space-y-3">
+                      {w.items.map((l) => {
+                        const data = (l.data ?? {}) as Record<string, string>;
+                        const timeStr = new Date(l.realization_at).toLocaleTimeString(
+                          "sk-SK",
+                          { hour: "2-digit", minute: "2-digit" },
+                        );
+                        return (
+                          <li
+                            key={l.id}
+                            className="rounded-2xl border-2 border-emerald-300 bg-white shadow-sm overflow-hidden"
+                          >
+                            <Link
+                              href={`/realizacie/${l.id}`}
+                              className="block p-4 hover:bg-emerald-50/40 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-3 flex-wrap">
+                                <div className="min-w-0 flex-1">
+                                  {/* ČAS — big pill */}
+                                  <div className="inline-flex items-center gap-2 mb-2">
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500 text-white text-lg font-black tabular-nums shadow-sm">
+                                      ⏰ {timeStr}
+                                    </span>
+                                  </div>
+                                  <div className="font-black text-xl md:text-2xl leading-tight">
+                                    {l.name}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                                    {data.lokalita && (
+                                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
+                                        📍 {data.lokalita}
+                                      </span>
+                                    )}
+                                    {data.plocha && (
+                                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
+                                        📏 {data.plocha} m²
+                                      </span>
+                                    )}
+                                    {data.typ_podlahy && (
+                                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
+                                        🎨 {data.typ_podlahy}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  {l.value_estimate != null && (
+                                    <div className="font-black text-emerald-700 tabular-nums text-2xl md:text-3xl">
+                                      {l.value_estimate.toLocaleString("sk-SK")} €
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </Link>
+                            <div className="border-t-2 border-emerald-100 bg-emerald-50/50 px-4 py-3 flex flex-wrap gap-2">
+                              <Link
+                                href={`/realizacie/${l.id}/plan?view=zodpovednost`}
+                                className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                              >
+                                <span>✍️</span>
+                                Zodpovednosť
+                              </Link>
+                              <Link
+                                href={`/realizacie/${l.id}/plan?view=sklad`}
+                                className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                              >
+                                <span>📦</span>
+                                Inventúra
+                              </Link>
+                              <Link
+                                href={`/realizacie/${l.id}/plan?view=postup`}
+                                className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                              >
+                                <span>🔨</span>
+                                Postup
+                              </Link>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
               );
             })}
-          </ul>
+            {laterItems.length > 0 && (
+              <section className="mt-6 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-4 text-center">
+                <div className="text-sm text-slate-700 font-semibold">
+                  ⏭ Ďalej ({laterItems.length} zákazk
+                  {laterItems.length === 1 ? "a" : laterItems.length < 5 ? "y" : "ov"})
+                  za viac ako 7 dní
+                </div>
+                <div className="mt-2">
+                  <Link
+                    href="/calendar"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 text-sm font-black transition-colors"
+                  >
+                    Pozri v kalendári →
+                  </Link>
+                </div>
+              </section>
+            )}
+          </div>
         ) : showLegacyProxy && legacyActive.length > 0 ? (
           <div className="space-y-2">
             <div className="rounded-lg border-2 border-dashed border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
