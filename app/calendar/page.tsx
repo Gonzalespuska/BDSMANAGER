@@ -173,6 +173,22 @@ export default async function CalendarPage({ searchParams }: Props) {
     }
   }
 
+  // Filterable users pre dropdown v hlavičke kalendára (obchod/admin)
+  let filterableUsers: Array<{ id: string; name: string; role: string }> = [];
+  if (me.role === "admin" || me.role === "obchod") {
+    const { data: users } = await admin
+      .from("users")
+      .select("id, name, role")
+      .in("role", ["obhliadky", "realizacie"])
+      .eq("active", true)
+      .order("name");
+    filterableUsers = (users ?? []).map((u) => ({
+      id: u.id as string,
+      name: (u.name as string) ?? "?",
+      role: (u.role as string) ?? "",
+    }));
+  }
+
   const [{ data: notesRows, error: notesErr }, { data: generalNotes }] =
     await Promise.all([
       notesQuery,
@@ -300,8 +316,14 @@ export default async function CalendarPage({ searchParams }: Props) {
         assignMode={assignMode}
         assignLead={assignLead}
         manualPick={params.manual === "1" && !params.lead}
+        filterableUsers={filterableUsers}
+        activeFilterUserId={filterUser}
       />
-      <CalendarStats role={me.role} activeFilterUserId={filterUserInfo?.id ?? null} />
+      {/* Prehľad — IBA pre obchod/admin. User: "tento prehlad v kalendari
+          je len pre obchodaka nie pre realizatorov ani obhliadkarov". */}
+      {(me.role === "obchod" || me.role === "admin") && (
+        <CalendarStats role={me.role} activeFilterUserId={filterUserInfo?.id ?? null} />
+      )}
     </div>
   );
 }

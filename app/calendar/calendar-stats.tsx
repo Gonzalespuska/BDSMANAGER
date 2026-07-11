@@ -227,28 +227,16 @@ export async function CalendarStats({
           </div>
         )}
 
-        {/* Realizatori breakdown — klik na riadok filtruje kalendár */}
-        {realizatorStats.length > 0 && (
-          <MemberList
-            title="Realizátori"
-            icon={<Hammer className="w-4 h-4 text-emerald-700" />}
-            members={realizatorStats}
-            activeFilterUserId={activeFilterUserId ?? null}
-            showFilter={showFilter}
-            emptyTint="emerald"
-          />
-        )}
-
-        {/* Obhliadkári breakdown — rovnaké filter správanie */}
-        {inspectorStats.length > 0 && (
-          <MemberList
-            title="Obhliadkári"
-            icon={<ClipboardList className="w-4 h-4 text-violet-700" />}
-            members={inspectorStats}
-            activeFilterUserId={activeFilterUserId ?? null}
-            showFilter={showFilter}
-            emptyTint="violet"
-          />
+        {/* User: "to ze kto ma kolko to je picovina to sa ma robit
+            v tom kalendari tym ze prepnes". Namiesto pending zoznamu
+            "kto koľko má" (ktorý zaberá miesto a duplikuje info)
+            filter cez URL param filter_user (Prehľad má Prev iteration).
+            Ak potrebné, obchodák si prepne v hlavičke kalendára. */}
+        {(realizatorStats.length > 0 || inspectorStats.length > 0) && (
+          <div className="text-[11px] text-muted-foreground italic px-1">
+            💡 Filter „kto má voľno" prepínaš priamo v hlavičke kalendára
+            hore (dropdown &quot;Zobraz kalendár&quot;).
+          </div>
         )}
       </div>
 

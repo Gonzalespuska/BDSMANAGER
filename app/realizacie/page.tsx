@@ -88,71 +88,117 @@ export default async function RealizacieDashboard() {
         </p>
       </header>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <StatCard
-          icon={<Calendar className="w-5 h-5 text-emerald-600" />}
-          label="Aktívne realizácie"
-          value={active.length}
-          tint="emerald"
-        />
-        <StatCard
-          icon={<CheckCircle2 className="w-5 h-5 text-sky-600" />}
-          label="Dokončené"
-          value={history?.length ?? 0}
-          tint="sky"
-        />
-        <StatCard
-          icon={<Package className="w-5 h-5 text-violet-600" />}
-          label="Spolu (aktívne + dokončené)"
-          value={active.length + (history?.length ?? 0)}
-          tint="violet"
-        />
+      {/* Stats — iba jeden veľký tile "Aktívne realizácie". User: "dokoncene
+          a spolu daj prec to tam netreba ten riadok". Dokončené prípadne
+          pojedú do vlastnej sekcie nižšie. */}
+      <div className="rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-white p-5 flex items-center gap-4 shadow-sm">
+        <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md shrink-0">
+          <Calendar className="w-7 h-7" aria-hidden />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs md:text-sm font-black uppercase tracking-widest text-emerald-800">
+            Aktívne realizácie
+          </div>
+          <div className="text-4xl md:text-5xl font-black tabular-nums text-slate-900 leading-none mt-1">
+            {active.length}
+          </div>
+        </div>
       </div>
 
       {/* ─── AKTÍVNE ──────────────────────────────────────────────────── */}
       <section className="space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+        <h2 className="text-base md:text-lg font-black uppercase tracking-wider text-slate-700 inline-flex items-center gap-2">
           🔨 Aktívne realizácie
         </h2>
         {active.length > 0 ? (
-          <ul className="space-y-2">
-            {active.map((l) => (
-              <li key={l.id}>
-                <Link
-                  href={`/realizacie/${l.id}`}
-                  className="block rounded-xl border-2 border-emerald-200 bg-emerald-50/30 p-4 hover:bg-emerald-50/70 transition-colors"
+          <ul className="space-y-3">
+            {active.map((l) => {
+              const data = (l.data ?? {}) as Record<string, string>;
+              return (
+                <li
+                  key={l.id}
+                  className="rounded-2xl border-2 border-emerald-300 bg-white shadow-sm overflow-hidden"
                 >
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="font-bold text-base">{l.name}</div>
-                      <div className="text-xs text-muted-foreground inline-flex items-center gap-2 flex-wrap mt-1">
-                        {(l.data as Record<string, string>)?.lokalita && (
-                          <span>📍 {(l.data as Record<string, string>).lokalita}</span>
-                        )}
-                        {(l.data as Record<string, string>)?.plocha && (
-                          <span>{(l.data as Record<string, string>).plocha} m²</span>
-                        )}
-                        {(l.data as Record<string, string>)?.typ_podlahy && (
-                          <span>· {(l.data as Record<string, string>).typ_podlahy}</span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground mt-1">
-                        Posunutá na realizáciu: {new Date(l.realization_at).toLocaleString("sk-SK")}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      {l.value_estimate != null && (
-                        <div className="font-bold text-emerald-700 tabular-nums text-lg">
-                          {l.value_estimate.toLocaleString("sk-SK")} €
+                  {/* Header — meno + m²/lokalita/typ + hodnota */}
+                  <Link
+                    href={`/realizacie/${l.id}`}
+                    className="block p-4 hover:bg-emerald-50/40 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-black text-xl md:text-2xl leading-tight">
+                          {l.name}
                         </div>
-                      )}
-                      <ArrowRight className="w-4 h-4 text-muted-foreground inline-block mt-1" aria-hidden />
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          {data.lokalita && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
+                              📍 {data.lokalita}
+                            </span>
+                          )}
+                          {data.plocha && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
+                              📏 {data.plocha} m²
+                            </span>
+                          )}
+                          {data.typ_podlahy && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-sm font-bold">
+                              🎨 {data.typ_podlahy}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-600 mt-2">
+                          📅 Posunutá na realizáciu:{" "}
+                          {new Date(l.realization_at).toLocaleString("sk-SK", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {l.value_estimate != null && (
+                          <div className="font-black text-emerald-700 tabular-nums text-2xl md:text-3xl">
+                            {l.value_estimate.toLocaleString("sk-SK")} €
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  </Link>
+
+                  {/* 3 buttons row — Zodpovednosť / Inventúra / Postup —
+                      user "musisa byt zodpovednost inventura postup to
+                      musi byt uz takto vidietlne na tomto riadku". */}
+                  <div className="border-t-2 border-emerald-100 bg-emerald-50/50 px-4 py-3 flex flex-wrap gap-2">
+                    <Link
+                      href={`/realizacie/${l.id}/plan?view=zodpovednost`}
+                      className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                      title="Zodpovednosť — kto podpísal čo (obchodák, obhliadkár, realizator, skladník)"
+                    >
+                      <span>✍️</span>
+                      Zodpovednosť
+                    </Link>
+                    <Link
+                      href={`/realizacie/${l.id}/plan?view=sklad`}
+                      className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                      title="Inventúra — zoznam materiálu zo skladu, čo brať na zákazku"
+                    >
+                      <span>📦</span>
+                      Inventúra
+                    </Link>
+                    <Link
+                      href={`/realizacie/${l.id}/plan?view=postup`}
+                      className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                      title="Postupový plán — odškrtávanie krokov na stavbe"
+                    >
+                      <span>🔨</span>
+                      Postup
+                    </Link>
                   </div>
-                </Link>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         ) : showLegacyProxy && legacyActive.length > 0 ? (
           <div className="space-y-2">

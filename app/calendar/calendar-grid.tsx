@@ -6,10 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
   Clock,
+  Eye,
   Hammer,
   Loader2,
   MapPin,
@@ -20,6 +22,7 @@ import {
   Send,
   StickyNote,
   Trash2,
+  Users as UsersIcon,
   X,
 } from "lucide-react";
 
@@ -72,6 +75,135 @@ function normalizeCity(s: string): string {
  *   • Text: 2 znaky max, digit-only
  *   • Onblur padding na "09" / "07"
  */
+/**
+ * CalendarFilterDropdown — obchod/admin toggle "Zobraz kalendár: všetkých /
+ * konkrétneho realizatora / obhliadkára". User: "prehlad je picovina to sa
+ * ma robit v tom kalendari tym ze prepnes". Setuje ?filter_user URL param
+ * → server re-fetch notes s filter.
+ */
+function CalendarFilterDropdown({
+  users,
+  activeUserId,
+}: {
+  users: FilterableUser[];
+  activeUserId: string | null;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const active = activeUserId
+    ? users.find((u) => u.id === activeUserId) ?? null
+    : null;
+
+  React.useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  function navigateTo(userId: string | null) {
+    const url = new URL(window.location.href);
+    if (userId) {
+      url.searchParams.set("filter_user", userId);
+    } else {
+      url.searchParams.delete("filter_user");
+    }
+    window.location.href = url.pathname + url.search;
+  }
+
+  const inspectors = users.filter((u) => u.role === "obhliadky");
+  const realizators = users.filter((u) => u.role === "realizacie");
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border-2",
+          active
+            ? "bg-sky-500 hover:bg-sky-600 text-white border-sky-500 shadow-sm"
+            : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200",
+        )}
+        title="Filter kalendára — zobraz iba eventy konkrétneho kolegu"
+      >
+        <Eye className="w-3.5 h-3.5" aria-hidden />
+        {active ? `Kalendár: ${active.name.split(" ")[0]}` : "Zobraz kalendár"}
+        <ChevronDown
+          className={cn("w-3.5 h-3.5 transition-transform", open && "rotate-180")}
+          aria-hidden
+        />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 w-64 rounded-xl border-2 bg-white shadow-xl overflow-hidden">
+          <button
+            type="button"
+            onClick={() => navigateTo(null)}
+            className={cn(
+              "w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-sky-50 transition-colors text-sm font-bold border-b",
+              !active && "bg-sky-100 text-sky-900",
+            )}
+          >
+            <UsersIcon className="w-4 h-4" aria-hidden />
+            Všetci (celý tím)
+            {!active && <Check className="w-4 h-4 ml-auto" aria-hidden />}
+          </button>
+          {realizators.length > 0 && (
+            <>
+              <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50/60">
+                🔨 Realizátori
+              </div>
+              {realizators.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => navigateTo(u.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-emerald-50 transition-colors text-sm font-bold",
+                    activeUserId === u.id && "bg-emerald-100 text-emerald-900",
+                  )}
+                >
+                  {u.name}
+                  {activeUserId === u.id && (
+                    <Check className="w-4 h-4 ml-auto" aria-hidden />
+                  )}
+                </button>
+              ))}
+            </>
+          )}
+          {inspectors.length > 0 && (
+            <>
+              <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-violet-700 bg-violet-50/60 border-t">
+                🔍 Obhliadkári
+              </div>
+              {inspectors.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => navigateTo(u.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-violet-50 transition-colors text-sm font-bold",
+                    activeUserId === u.id && "bg-violet-100 text-violet-900",
+                  )}
+                >
+                  {u.name}
+                  {activeUserId === u.id && (
+                    <Check className="w-4 h-4 ml-auto" aria-hidden />
+                  )}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Time24Picker({
   value,
   onChange,
@@ -291,6 +423,12 @@ export type AssignLead = {
   floor_type: string | null;
 };
 
+export interface FilterableUser {
+  id: string;
+  name: string;
+  role: string;
+}
+
 interface Props {
   initialMonth: string; // YYYY-MM
   notes: CalendarNote[];
@@ -303,6 +441,10 @@ interface Props {
   assignLead?: AssignLead | null;
   /** Manual pick mode — otvoril + Nová obhliadka / realizácia bez leadu → otvor picker */
   manualPick?: boolean;
+  /** Zoznam členov tímu na filter (obchodák/admin) — dropdown v hlavičke. */
+  filterableUsers?: FilterableUser[];
+  /** Aktuálne aktívny filter (user id). */
+  activeFilterUserId?: string | null;
 }
 
 const WEEKDAYS = ["Po", "Ut", "St", "Št", "Pi", "So", "Ne"];
@@ -329,6 +471,8 @@ export function CalendarGrid({
   assignMode,
   assignLead,
   manualPick,
+  filterableUsers = [],
+  activeFilterUserId = null,
 }: Props) {
   const canAssign = role === "obchod" || role === "admin";
   const isAssigning = !!assignMode;
@@ -595,6 +739,13 @@ export function CalendarGrid({
                 </Link>
                 <div className="w-px h-6 bg-border mx-1" />
               </>
+            )}
+            {/* Filter dropdown — obchod/admin toggle "kto má voľno" */}
+            {canAssign && filterableUsers.length > 0 && (
+              <CalendarFilterDropdown
+                users={filterableUsers}
+                activeUserId={activeFilterUserId}
+              />
             )}
             <button
               type="button"
