@@ -227,17 +227,9 @@ export async function CalendarStats({
           </div>
         )}
 
-        {/* User: "to ze kto ma kolko to je picovina to sa ma robit
-            v tom kalendari tym ze prepnes". Namiesto pending zoznamu
-            "kto koľko má" (ktorý zaberá miesto a duplikuje info)
-            filter cez URL param filter_user (Prehľad má Prev iteration).
-            Ak potrebné, obchodák si prepne v hlavičke kalendára. */}
-        {(realizatorStats.length > 0 || inspectorStats.length > 0) && (
-          <div className="text-[11px] text-muted-foreground italic px-1">
-            💡 Filter „kto má voľno" prepínaš priamo v hlavičke kalendára
-            hore (dropdown &quot;Zobraz kalendár&quot;).
-          </div>
-        )}
+        {/* Namiesto listov "kto má koľko" (odstránené — user "picovina")
+            je filter dropdown "Zobraz kalendár" priamo v hlavičke.
+            Žiadny text tu netreba. */}
       </div>
 
     </section>
