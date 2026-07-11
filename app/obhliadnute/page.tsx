@@ -47,7 +47,11 @@ export const dynamic = "force-dynamic";
  * Zámerne to NIE JE súčasť /agent (Leady) — tie sú „nové" leady na volanie.
  * Obhliadnuté je vlastná pracovná fronta.
  */
-export default async function ObhliadnutePage() {
+export default async function ObhliadnutePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
 
@@ -56,18 +60,21 @@ export default async function ObhliadnutePage() {
     redirect(dashboardPathForRole(user.role));
   }
 
+  const sp = await searchParams;
+  const activeTab: "caka" | "finalna" =
+    sp.tab === "finalna" ? "finalna" : "caka";
+
   const sb = createAdminClient();
 
-  // Leady kde bola obhliadka DOKONČENÁ (obhliadkár klikol Odoslať).
-  // Zahrňujeme:
-  //   • status='inspected' — čerstvo obhliadnuté, čakajú na CP (⚡ NOVÉ)
-  //   • status='quote_sent' — obchodák už poslal CP (zostávajú tu ako
-  //     história aby obchodák videl "toto som poslal, kedy, čo tam bolo")
+  // Dva tabby:
+  //   • "Čaká na CP" — status='inspected' — čerstvo obhliadnuté, môj krok
+  //   • "Finálna CP ✅" — status='quote_sent' — už poslaná CP, archív
   // Won/lost/archived nezobrazujeme (finálne stavy — patria do /agent).
+  const targetStatus = activeTab === "finalna" ? "quote_sent" : "inspected";
   const baseQuery = sb
     .from("leads")
     .select("*")
-    .in("status", ["inspected", "quote_sent"])
+    .eq("status", targetStatus)
     .not("inspection_result", "is", null)
     .order("last_activity_at", { ascending: false })
     .limit(100);
@@ -76,10 +83,24 @@ export default async function ObhliadnutePage() {
   const { data: leadsRaw } = await q;
   const leads = leadsRaw ?? [];
 
+  // Counts pre tab bedge — koľko čaká na CP vs. koľko je hotových
+  const countQ = (status: string) => {
+    const b = sb
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("status", status)
+      .not("inspection_result", "is", null);
+    return user.role === "admin" ? b : b.eq("assigned_to", user.id);
+  };
+  const [{ count: countCaka }, { count: countFinalna }] = await Promise.all([
+    countQ("inspected"),
+    countQ("quote_sent"),
+  ]);
+
   // Fotky pre všetky leady batch — public URL (bucket je public od 2026-07-11)
   const leadIds = leads.map((l) => l.id as string);
-  let photosByLead = new Map<string, { url: string; id: string }[]>();
-  let inspectorMap = new Map<string, { name: string; email: string }>();
+  const photosByLead: Map<string, { url: string; id: string }[]> = new Map();
+  const inspectorMap: Map<string, { name: string; email: string }> = new Map();
   if (leadIds.length > 0) {
     const { data: mediaRaw } = await sb
       .from("inspection_media")
@@ -132,27 +153,74 @@ export default async function ObhliadnutePage() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2 flex-wrap">
             <CheckCheck className="w-6 h-6 text-emerald-600" aria-hidden />
             Obhliadnuté
-            {leads.filter((l) => l.status === "inspected").length > 0 && (
-              <span className="text-[11px] font-black uppercase tracking-widest bg-rose-500 text-white px-2 py-1 rounded ml-1 animate-pulse">
-                {leads.filter((l) => l.status === "inspected").length}× NOVÉ — pošli CP
-              </span>
-            )}
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Obhliadkár už bol na mieste, spísal testy + presné m² + fotky.
-            Nové (červená bublina) čakajú na tvoju CP. Odoslané CP (sivé)
-            zostávajú tu ako archív.
+            {activeTab === "caka"
+              ? "Obhliadkár už bol na mieste, spísal testy + presné m² + fotky. Tvoj krok: pošli klientovi cenovú ponuku."
+              : "Archív odoslaných CP — obhliadnuté s finálnou cenovou ponukou odoslanou klientovi."}
           </p>
         </header>
+
+        {/* Tabs — Čaká na CP / Finálna CP */}
+        <div className="inline-flex rounded-xl border-2 bg-background p-1 gap-1">
+          <Link
+            href="/obhliadnute"
+            className={cn(
+              "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors",
+              activeTab === "caka"
+                ? "bg-rose-500 text-white shadow-sm"
+                : "text-muted-foreground hover:bg-rose-50 hover:text-rose-700",
+            )}
+          >
+            <Sparkles className="w-4 h-4" aria-hidden />
+            Čaká na CP
+            <span
+              className={cn(
+                "text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded",
+                activeTab === "caka"
+                  ? "bg-white/20"
+                  : "bg-rose-100 text-rose-700",
+              )}
+            >
+              {countCaka ?? 0}
+            </span>
+          </Link>
+          <Link
+            href="/obhliadnute?tab=finalna"
+            className={cn(
+              "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors",
+              activeTab === "finalna"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700",
+            )}
+          >
+            <CheckCheck className="w-4 h-4" aria-hidden />
+            Finálna CP ✅
+            <span
+              className={cn(
+                "text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded",
+                activeTab === "finalna"
+                  ? "bg-white/20"
+                  : "bg-emerald-100 text-emerald-700",
+              )}
+            >
+              {countFinalna ?? 0}
+            </span>
+          </Link>
+        </div>
 
         {leads.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed bg-background p-12 text-center">
             <Sparkles className="w-10 h-10 mx-auto text-emerald-400 mb-3" />
-            <h3 className="text-lg font-bold">Ešte žiadne obhliadnuté</h3>
+            <h3 className="text-lg font-bold">
+              {activeTab === "caka"
+                ? "Žiadne obhliadnuté nečakajú na CP"
+                : "Zatiaľ žiadna finálna CP"}
+            </h3>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              Až obhliadkár klikne „Odoslať obhliadku" na priradenej
-              obhliadke, lead sa zjaví tu s kompletnými dátami (testy,
-              zameranie, fotky).
+              {activeTab === "caka"
+                ? `Až obhliadkár klikne „Odoslať obhliadku" na priradenej obhliadke, lead sa zjaví tu s kompletnými dátami (testy, zameranie, fotky).`
+                : "Ak pošleš klientovi cenovú ponuku, lead sa presunie sem ako archív."}
             </p>
           </div>
         ) : (

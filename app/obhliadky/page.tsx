@@ -44,7 +44,12 @@ export default async function ObhliadkyDashboard({
   }
 
   const sp = await searchParams;
-  const activeTab = sp.tab === "hotove" ? "hotove" : "aktivne";
+  const activeTab: "aktivne" | "hotove" | "archivovane" =
+    sp.tab === "hotove"
+      ? "hotove"
+      : sp.tab === "archivovane"
+        ? "archivovane"
+        : "aktivne";
   const justSubmitted = sp.justSubmitted ?? null;
   // Fetch meno tej práve odoslanej obhliadky pre banner
   let justSubmittedName: string | null = null;
@@ -67,12 +72,17 @@ export default async function ObhliadkyDashboard({
   // STRICT scope — iba obhliadky priradené tomuto obhliadkárovi
   // (`inspection_by = user.id`). Admin bez view-as vidí všetky.
   //
-  // Aktívne tab: status = needs_inspection (čakajú na obhliadku)
-  // Hotové tab: status = inspected (obhliadka HOTOVÁ, obchodák si pozerá)
+  // Aktívne     : status = needs_inspection (čakajú na obhliadku)
+  // Obhliadnuté : status = inspected (odoslané obchodákovi, čaká na jeho CP)
+  // Archivované : status = quote_sent (obchodák poslal CP klientovi → hotové)
   const targetStatus =
-    activeTab === "hotove" ? "inspected" : "needs_inspection";
+    activeTab === "hotove"
+      ? "inspected"
+      : activeTab === "archivovane"
+        ? "quote_sent"
+        : "needs_inspection";
   const orderCol =
-    activeTab === "hotove" ? "last_activity_at" : "inspection_at";
+    activeTab === "aktivne" ? "inspection_at" : "last_activity_at";
   const orderAsc = activeTab === "aktivne";
 
   const baseQuery = sb
@@ -86,17 +96,28 @@ export default async function ObhliadkyDashboard({
   const { data: leadsRaw } = await scopedQuery;
   const leads = (leadsRaw ?? []) as Lead[];
 
-  // Counts pre bedge — koľko je aktívnych vs. hotových
+  // Counts pre bedge — koľko je aktívnych / obhliadnutých / archivovaných
   const countQuery = (status: string) => {
     const q = sb
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("status", status);
-    return user.role === "admin" ? q : q.eq("inspection_by", user.id);
+    // Pre "archivovane" scope po inspection_by aj pre admin — inak by admin
+    // videl obchodákove CP-quote_sent leady bez obhliadky.
+    const scoped =
+      user.role === "admin" && status !== "quote_sent"
+        ? q
+        : q.eq("inspection_by", user.id);
+    return scoped;
   };
-  const [{ count: countAktivne }, { count: countHotove }] = await Promise.all([
+  const [
+    { count: countAktivne },
+    { count: countHotove },
+    { count: countArchiv },
+  ] = await Promise.all([
     countQuery("needs_inspection"),
     countQuery("inspected"),
+    countQuery("quote_sent"),
   ]);
 
   // Get dátum z lead-u — prefer inspection_at, fallback next_callback_at
@@ -152,7 +173,9 @@ export default async function ObhliadkyDashboard({
           <p className="text-sm text-muted-foreground mt-1">
             {activeTab === "aktivne"
               ? "Aktívne obhliadky — kliknutím otvoríš detail + wizard po obhliadke."
-              : "Obhliadnuté — čo si už obhliadol a odoslal obchodníkovi. Zoradené od najnovšej."}
+              : activeTab === "hotove"
+                ? "Obhliadnuté — čo si už obhliadol a odoslal obchodníkovi. Zoradené od najnovšej."
+                : "Archivované — obhliadky ktoré si dokončil A obchodák už poslal klientovi finálnu cenovú ponuku."}
           </p>
         </div>
       </header>
@@ -199,26 +222,53 @@ export default async function ObhliadkyDashboard({
             {countHotove ?? 0}
           </span>
         </Link>
+        <Link
+          href="/obhliadky?tab=archivovane"
+          className={cn(
+            "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors",
+            activeTab === "archivovane"
+              ? "bg-slate-700 text-white shadow-sm"
+              : "text-muted-foreground hover:bg-slate-100 hover:text-slate-800",
+          )}
+          title="Obhliadky ktoré si dokončil a obchodák už poslal klientovi cenovú ponuku."
+        >
+          <CheckCircle2 className="w-4 h-4" aria-hidden />
+          Archivované ✓
+          <span
+            className={cn(
+              "text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded",
+              activeTab === "archivovane"
+                ? "bg-white/20"
+                : "bg-slate-200 text-slate-700",
+            )}
+          >
+            {countArchiv ?? 0}
+          </span>
+        </Link>
       </div>
 
       {leads.length === 0 ? (
         <div className="rounded-xl border bg-background p-12 text-center">
-          <div className="text-4xl mb-3">🌴</div>
+          <div className="text-4xl mb-3">
+            {activeTab === "archivovane" ? "📦" : "🌴"}
+          </div>
           <h3 className="text-lg font-bold mb-1">
             {activeTab === "hotove"
               ? "Zatiaľ žiadne hotové obhliadky"
-              : "Žiadne aktívne obhliadky"}
+              : activeTab === "archivovane"
+                ? "Zatiaľ žiadne archivované"
+                : "Žiadne aktívne obhliadky"}
           </h3>
           <p className="text-sm text-muted-foreground">
             {activeTab === "hotove"
               ? "Až dokončíš prvú obhliadku a odošleš cez wizard, zjaví sa tu."
-              : `Obchodník ti zatiaľ nič nepriradil. Až posunie lead cez „Poslať na obhliadku", objaví sa tu.`}
+              : activeTab === "archivovane"
+                ? "Až obchodák pošle klientovi CP na obhliadku ktorú si spravil, presunie sa sem."
+                : `Obchodník ti zatiaľ nič nepriradil. Až posunie lead cez „Poslať na obhliadku", objaví sa tu.`}
           </p>
         </div>
-      ) : activeTab === "hotove" ? (
-        // Hotové = flat list zoradený podľa času odoslania obhliadky
-        // (last_activity_at DESC). Date grouping tu nedáva zmysel — user
-        // len chce vidieť "ktoré som obhliadol nedávno".
+      ) : activeTab !== "aktivne" ? (
+        // Hotové / Archivované = flat list zoradený podľa času.
         <ul className="space-y-2">
           {leads.map((l) => (
             <ObhliadkaCard key={l.id} lead={l} />
