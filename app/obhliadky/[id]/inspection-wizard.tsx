@@ -241,9 +241,9 @@ export function InspectionWizard({
           initial={tests}
           onClose={() => setTestsOpen(false)}
           onSave={async (r) => {
-            setTests(r);
-            setTestsOpen(false);
-            // Persist do DB (draft) — refresh nezmaže
+            // KRITICKÉ: najprv await DB, potom zatvoríme modal. Ak by sme
+            // zatvorili modal skôr, user by mohol refreshnúť skôr než save
+            // dokončí a hodnoty by sa stratili.
             const res = await saveInspectionDraftAction(leadId, {
               moisture_pct: r.moisture_1_pct,
               moisture_pct_2: r.moisture_2_pct,
@@ -251,9 +251,11 @@ export function InspectionWizard({
             });
             if (!res.ok) {
               toast.error(`Testy neuložené: ${res.error}`);
-            } else {
-              toast.success("Testy uložené");
+              return; // Modal ostane otvorený, user vidí že nesedí
             }
+            setTests(r);
+            setTestsOpen(false);
+            toast.success("Testy uložené");
           }}
         />
       )}
@@ -262,18 +264,17 @@ export function InspectionWizard({
           initial={measurement}
           onClose={() => setMeasurementOpen(false)}
           onSave={async (r) => {
-            setMeasurement(r);
-            setMeasurementOpen(false);
-            // Persist do DB (draft) — refresh nezmaže
             const res = await saveInspectionDraftAction(leadId, {
               measured_m2: r.total_m2,
               shapes: r.shapes,
             });
             if (!res.ok) {
               toast.error(`Zameranie neuložené: ${res.error}`);
-            } else {
-              toast.success(`Plocha ${r.total_m2.toFixed(2)} m² uložená`);
+              return;
             }
+            setMeasurement(r);
+            setMeasurementOpen(false);
+            toast.success(`Plocha ${r.total_m2.toFixed(2)} m² uložená`);
           }}
         />
       )}
