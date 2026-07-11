@@ -104,11 +104,15 @@ export default async function ObhliadnutePage({
   // User: "ked prejde ten datum realizacie nech sa autoamticky daju do
   // won v leadoch". Won nedá sa manuálne — iba touto cestou.
   //
-  // BUG FIX 2026-07-11: predtym sme nastavovali len status+last_activity_at.
-  // /realizacie história ale filtruje `not("realization_completed_at","is",null)`,
-  // takže lead by tam zmizol keď sa prehodil na won. Teraz zapisujeme aj
-  // realization_completed_at (ak nie je už nastavený).
+  // BUG FIX 2026-07-11 (v2): predtým aj len 1s po realization_at sme
+  // hodili lead do won → obchodák dal termín 10.7. 08:00, o pár hodín
+  // realizator videl "dokončené" bez toho aby vôbec začal. Buffer 36h
+  // aby realizator mal celý pracovný deň + noc na dokončenie a klik
+  // "Označiť ako hotové" na /realizacie/[id]:
+  //   • ak realization_at + 36h < now → prehodí na won
+  //   • inak realizator vidí zákazku ako aktívnu v /realizacie
   const nowIso = new Date().toISOString();
+  const wonThresholdIso = new Date(Date.now() - 36 * 3600 * 1000).toISOString();
   try {
     await sb
       .from("leads")
@@ -119,7 +123,7 @@ export default async function ObhliadnutePage({
       })
       .eq("status", "in_realization")
       .is("realization_completed_at", null)
-      .lt("realization_at", nowIso);
+      .lt("realization_at", wonThresholdIso);
   } catch (e) {
     console.warn("[obhliadnute] auto-transition to won failed:", e);
   }
@@ -633,6 +637,7 @@ export default async function ObhliadnutePage({
                         initialType={typ}
                         m2={typeof m2 === "number" ? m2 : null}
                         city={lokalita !== "—" ? lokalita : null}
+                        priestor={priestor}
                       />
                     )}
                     {/* Zrušiť realizáciu — iba v tabe „V realizácii".

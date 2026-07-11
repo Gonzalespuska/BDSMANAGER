@@ -121,6 +121,25 @@ export async function POST(request: Request) {
       scheduled_date ||
       (scheduled_at ? scheduled_at.slice(0, 10) : nowIso.slice(0, 10));
 
+    // Validácia: realizácia nemôže byť v minulosti (> 12h) — inak by ju
+    // auto-transition hneď hodil do won a realizator by ju videl ako
+    // dokončenú bez toho aby začal. User 2026-07-11: "dal som si
+    // realizaciu z obchodaka a vyhodilo mi ju ako dokoncene".
+    if (mode === "realization" && scheduled_at) {
+      const scheduledMs = new Date(scheduledIso).getTime();
+      const cutoffMs = Date.now() - 12 * 3600 * 1000;
+      if (scheduledMs < cutoffMs) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "past_realization_date: dátum realizácie je viac ako 12h v minulosti. Vyber budúci alebo dnešný termín.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     // Update lead — inspection_at/realization_at je NAPLÁNOVANÝ termín,
     // nie čas kliknutia Potvrdiť. last_activity_at je čas kliknutia.
     const updatePayload =
@@ -194,6 +213,44 @@ export async function POST(request: Request) {
     if (calErr) {
       console.error("[handover] calendar_note insert failed:", calErr);
       // Nie fatal — hlavne že lead update prešiel. Log kvôli diagnostike.
+    }
+
+    // Notifikácia v zvončeku pre cieľového usera (obhliadkár / realizator).
+    // User 2026-07-11: "ked pridam realizaciu realizatorovi musi vybehnut
+    // notifikacia zvoncek, teraz ju tam ani nema".
+    //
+    // Používame office_reminders (rovnaká tabuľka ako pripomienky), s
+    // note_kind='lead_note' + lead_id — v /lib/notifications.ts sa
+    // takéto rendrujú ako klikateľné lead-notifikácie.
+    //
+    // remind_at = scheduledIso (deň priradenia) - aby to vyskočilo
+    // hneď a target user videl "🔨 Realizácia — Peter Múdry, piatok
+    // 10.7. 08:00" v zvončeku.
+    const targetName = clientName;
+    const scheduledSk = new Date(scheduledIso).toLocaleString("sk-SK", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const notifNote =
+      mode === "inspection"
+        ? `🔍 Nová obhliadka — ${targetName}${m2}${lokalita}${priestor} · ${scheduledSk}`
+        : `🔨 Nová realizácia — ${targetName}${m2}${lokalita}${priestor} · ${scheduledSk}`;
+    const { error: notifErr } = await sb.from("office_reminders").insert({
+      user_id: target_user_id,
+      lead_id,
+      note: notifNote,
+      note_kind: "lead_note",
+      // remind_date = dnes → dostupné okamžite v zvončeku
+      remind_date: nowIso.slice(0, 10),
+      // remind_at = teraz → zoradenie
+      remind_at: nowIso,
+    });
+    if (notifErr) {
+      console.error("[handover] notification insert failed:", notifErr);
+      // Nie fatal — banner v UI ukáže "priradené" ale zvonček bude prázdny.
     }
 
     return NextResponse.json({ ok: true });

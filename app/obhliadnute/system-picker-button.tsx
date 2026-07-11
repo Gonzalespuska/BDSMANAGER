@@ -33,18 +33,43 @@ export function SystemPickerButton({
   initialType,
   m2,
   city,
+  priestor,
 }: {
   leadId: string;
   leadName: string;
   initialType: string | null;
   m2: number | null;
   city: string | null;
+  priestor?: string | null;
 }) {
   const [open, setOpen] = React.useState(false);
   const [type, setType] = React.useState<FloorType>(() =>
     normalizeType(initialType) ?? "jednofarebna",
   );
+
+  // User 2026-07-11: "pre garaz nech neponuka polyuretan iba epoxid
+  //  takze ta moznost vyberu ju tam ani netreba ak je to garaz ta je
+  //  vzdy epoxy". → ak je priestor garáž, binder je vždy 'epoxid'
+  //  a toggle sa nezobrazí.
+  const isGarage = React.useMemo(() => {
+    if (!priestor) return false;
+    const n = priestor
+      .normalize("NFD")
+      // eslint-disable-next-line no-misleading-character-class
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase();
+    return n.includes("garaz");
+  }, [priestor]);
+
   const [binder, setBinder] = React.useState<Binder>("epoxid");
+
+  // Ak sa priestor zmení na garáž (alebo štartuje ako garáž), force binder=epoxid
+  React.useEffect(() => {
+    if (isGarage && binder !== "epoxid") {
+      setBinder("epoxid");
+    }
+  }, [isGarage, binder]);
+
   const [system, setSystem] = React.useState<string>("");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -185,8 +210,11 @@ export function SystemPickerButton({
                 </div>
               </div>
 
-              {/* BINDER — iba pre jednofarebnu */}
-              {type === "jednofarebna" && (
+              {/* BINDER — iba pre jednofarebnu A NIE pre garáž.
+                  User 2026-07-11: "pre garaz nech neponuka polyuretan iba
+                  epoxid takze ta moznost vyberu ju tam ani netreba ak je
+                  to garaz ta je vzdy epoxy". */}
+              {type === "jednofarebna" && !isGarage && (
                 <div>
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
                     Živica
@@ -208,6 +236,14 @@ export function SystemPickerButton({
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+              {/* Info riadok pri garáži — vysvetli obchodákovi prečo
+                  nemá výber. */}
+              {type === "jednofarebna" && isGarage && (
+                <div className="text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  🏠 Garáž → automaticky epoxid (polyuretán sa do garáže
+                  neaplikuje).
                 </div>
               )}
 

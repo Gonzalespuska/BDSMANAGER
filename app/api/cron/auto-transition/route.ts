@@ -77,6 +77,10 @@ export async function POST(request: NextRequest) {
       );
       if (wonErr && /function .*auto_transition_realizations_to_won.* does not exist/i.test(wonErr.message)) {
         // Fallback ak SQL migrácia 32 nebola spustená
+        // 36h buffer aby realizator mal čas dokončiť + kliknúť "Hotovo"
+        const wonThresholdIso = new Date(
+          Date.now() - 36 * 3600 * 1000,
+        ).toISOString();
         const { data: updated } = await sb
           .from("leads")
           .update({
@@ -85,7 +89,8 @@ export async function POST(request: NextRequest) {
             last_activity_at: new Date().toISOString(),
           })
           .eq("status", "in_realization")
-          .lt("realization_at", new Date().toISOString())
+          .is("realization_completed_at", null)
+          .lt("realization_at", wonThresholdIso)
           .select("id");
         realizationsWon = updated?.length ?? 0;
       } else if (!wonErr) {
