@@ -674,7 +674,7 @@ function ResponsibilityProtocol({
             <td>{plocha ?? ""}</td>
           </tr>
           <tr className="row-min">
-            <td style={{ fontWeight: 700 }}>Systém (epoxid / PU / metalíza):</td>
+            <td style={{ fontWeight: 700 }}>Systém:</td>
             <td>{realizationSystemLabel ?? ""}</td>
           </tr>
           <tr className="row-min">
