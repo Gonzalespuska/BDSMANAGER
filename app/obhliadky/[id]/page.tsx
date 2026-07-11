@@ -7,8 +7,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatPhoneSK } from "@/lib/phone-format";
 import type { Lead } from "@/lib/types/lead";
 
-import { MediaUpload } from "@/app/realizacie/[id]/media-upload";
-import { MediaGallery } from "@/app/realizacie/[id]/media-gallery";
 import { DmButton } from "@/components/dm-button";
 import { InspectionWizard } from "./inspection-wizard";
 import { InspectionReview } from "./inspection-review";
@@ -59,14 +57,6 @@ export default async function ObhliadkaDetailPage({
     l.inspection_by === user.id ||
     l.assigned_to === user.id;
   if (!canAccess) redirect("/obhliadky");
-
-  // Media (legacy realizacia bucket — pre backward-compat)
-  const { data: mediaRaw } = await sb
-    .from("realization_media")
-    .select("id, storage_path, file_type, original_filename, caption, uploaded_at, uploaded_by")
-    .eq("lead_id", id)
-    .order("uploaded_at", { ascending: false });
-  const media = mediaRaw ?? [];
 
   // Foto-checklist media — inspection_media table s checklist_key.
   // Bucket 'inspection-media' je PRIVATE (viď 15_inspection_media.sql
@@ -185,22 +175,10 @@ export default async function ObhliadkaDetailPage({
         />
       )}
 
-      {/* Legacy — voľné fotky bez checklist_key */}
-      {(user.role === "obhliadky" || user.role === "admin") && !alreadyCompleted && (
-        <details className="rounded-2xl border-2 border-slate-200 bg-white overflow-hidden">
-          <summary className="px-4 py-3 cursor-pointer text-sm font-bold text-slate-700 hover:bg-slate-50">
-            📷 Voľné fotky (mimo checklistu)
-          </summary>
-          <div className="p-4 pt-0 space-y-3">
-            <MediaUpload leadId={id} />
-            <MediaGallery
-              leadId={id}
-              media={media}
-              canDelete={user.role === "admin" || user.role === "obhliadky"}
-            />
-          </div>
-        </details>
-      )}
+      {/* "Voľné fotky (mimo checklistu)" sekcia odstránená — mätie
+          obhliadkára (myslí si že sú to fotky obhliadky, ale ide o legacy
+          realizacia media upload). Fotky obhliadky ide iba cez Foto-guide
+          wizard (checklist_media). */}
 
       {alreadyCompleted && l.inspection_result && (
         <InspectionReview
