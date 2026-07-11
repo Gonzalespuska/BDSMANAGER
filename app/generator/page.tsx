@@ -154,16 +154,27 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
       const supabase = createAdminClient();
       const { data: lead } = await supabase
         .from("leads")
-        .select("id, name, email, phone, data")
+        .select("id, name, email, phone, data, inspection_result")
         .eq("id", params.lead)
         .maybeSingle();
 
       if (lead) {
         const data = (lead.data ?? {}) as Record<string, unknown>;
+        const insp = (lead.inspection_result ?? {}) as Record<string, unknown>;
+        // PRIORITA: inspection_result.measured_m2 (obhliadkárova presná
+        // hodnota z laseru) > data.plocha (pôvodný odhad klienta z formulára).
+        // Predtým sa brala len data.plocha → obchodák mal v CP 166 m² klienta,
+        // hoci obhliadkár nameral 45.
+        const measuredM2 =
+          typeof insp.measured_m2 === "number" && insp.measured_m2 > 0
+            ? insp.measured_m2
+            : null;
         const m2 =
-          typeof data.plocha === "string" || typeof data.plocha === "number"
-            ? String(data.plocha)
-            : "";
+          measuredM2 !== null
+            ? String(measuredM2)
+            : typeof data.plocha === "string" || typeof data.plocha === "number"
+              ? String(data.plocha)
+              : "";
         const floorType = mapFloorType(data.typ_podlahy);
 
         leadContext = {

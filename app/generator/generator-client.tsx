@@ -179,8 +179,12 @@ export function GeneratorClient({
   // Necháme prázdne aj keď lead má lokalitu vo formulári — agent si po telefonáte
   // explicitne potvrdí kam ide robiť. Pôvodnú hodnotu z leadu ponúkneme ako
   // klikateľný suggestion chip pod inputom.
+  // Lokalita: prefer saved quote → lead's lokalita → prázdne. Predtým tu
+  // bolo len savedQuote ?? "" a lead's lokalita zobrazoval len ako klik-
+  // suggestion — pre post-obhliadka flow (obhliadkár už bol na mieste,
+  // mesto potvrdil) je auto-fill correct.
   const [lokalita, setLokalita] = React.useState<string>(
-    savedQuote?.state.lokalita ?? "",
+    savedQuote?.state.lokalita ?? leadContext?.lokalita ?? "",
   );
   const [manualKm, setManualKm] = React.useState<string>(
     savedQuote?.state.manualKm ?? "",
