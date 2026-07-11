@@ -134,9 +134,6 @@ export function InspectionWizard({
       toast.error("Najprv doplň všetky 3 sekcie: Testy · Zameranie · Nafotenie");
       return;
     }
-    // OKAMŽITE ukáž overlay — nech user nevidí "mŕtvu" stránku počas 1-3 s
-    // trvania server action + navigation. Overlay má fixed inset-0 z-[100]
-    // takže prekryje wizard aj počas re-renderu.
     setOverlayPhase("sending");
     setSubmitting(true);
     const result = {
@@ -150,18 +147,39 @@ export function InspectionWizard({
         (tests.adhesion_mpa ?? 0) >= 1.0 &&
         ((tests.moisture_1_pct ?? 0) + (tests.moisture_2_pct ?? 0)) / 2 <= 5,
     };
-    const res = await completeInspectionAction(
-      leadId,
-      result as unknown as Record<string, unknown>,
-    );
+
+    // TIMEOUT + TRY/CATCH — ak server action hangne / throw-ne, overlay
+    // nezostane spinning navždy (user hlásil "toči sa už minútu").
+    // 20 s je bohatý limit aj pre 3G — reálne server ide 500-1500 ms.
+    let res: { ok: true } | { ok: false; error: string };
+    try {
+      const timeout = new Promise<{ ok: false; error: string }>((resolve) =>
+        setTimeout(
+          () => resolve({ ok: false, error: "timeout_20s (skús znova)" }),
+          20000,
+        ),
+      );
+      res = await Promise.race([
+        completeInspectionAction(
+          leadId,
+          result as unknown as Record<string, unknown>,
+        ),
+        timeout,
+      ]);
+    } catch (e) {
+      res = {
+        ok: false,
+        error: e instanceof Error ? e.message : "unknown_exception",
+      };
+    }
+
     if (!res.ok) {
       setOverlayPhase(null);
       setSubmitting(false);
-      toast.error(`Chyba: ${res.error}`);
+      toast.error(`Chyba pri odosielaní: ${res.error}`);
       return;
     }
     // ── SUCCESS ──
-    // Prepni overlay na "done" — zelený ✓ celebration.
     setOverlayPhase("done");
     try {
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
@@ -170,9 +188,6 @@ export function InspectionWizard({
     } catch {
       /* not supported */
     }
-    // Krátky moment (1.2 s) aby user videl ✓, potom hard-nav.
-    // Používame window.location namiesto router.push aby CF Pages Next.js
-    // transition nemal 2-3 s medzery (počas RSC fetch). Hard nav je instant.
     const summary = new URLSearchParams({
       justSubmitted: leadId,
       m2: measurement.total_m2.toFixed(2),

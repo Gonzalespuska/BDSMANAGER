@@ -951,12 +951,10 @@ export async function completeInspectionAction(
     data: { feasible, result },
   });
 
-  revalidatePath("/agent");
-  revalidatePath("/obhliadky");
-  // Obchodák teraz musí spraviť ďalší krok — pošli CP → /obhliadnute.
-  // /notifikacie tiež revalidujeme aby bell hneď ukázal novú položku.
-  revalidatePath("/obhliadnute");
-  revalidatePath("/notifikacie");
-  revalidatePath("/calendar");
+  // POZOR: revalidatePath v edge runtime na CF Pages hangol server action
+  // (pozorované 2026-07-11 — DB update prebehol ale klient nedostal
+  // response, overlay sa točil minútu, obchodák už videl obhliadnuté).
+  // Odstránené — klient robí window.location.href a middleware nastavuje
+  // Cache-Control: no-store, takže fresh render dostaneme aj tak.
   return { ok: true };
 }
