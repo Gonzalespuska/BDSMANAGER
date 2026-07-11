@@ -700,7 +700,7 @@ function ResponsibilityProtocol({
           <tr className="row-tall">
             <td>Teplota podkladu</td>
             <td></td>
-            <td>—</td>
+            <td>+10 až +25 °C</td>
           </tr>
           <tr className="row-tall">
             <td>Vlhkosť podkladu — CM metóda</td>
