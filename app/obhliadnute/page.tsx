@@ -497,6 +497,19 @@ export default async function ObhliadnutePage({
                       <Calculator className="w-4 h-4" />
                       {isNew ? "Poslať cenovú ponuku" : "Otvoriť ponuku znova"}
                     </Link>
+                    {/* Poslať na realizáciu — LEN v "Finálna CP" tabe (isNew=false,
+                        status='quote_sent'). Klient prijal CP → obchodák priradí
+                        realizatora + dátum → status='in_realization'. */}
+                    {!isNew && (
+                      <Link
+                        href={`/calendar?assign=realization&lead=${l.id}${lokalita !== "—" ? `&city=${encodeURIComponent(lokalita)}` : ""}`}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black transition-colors shadow-sm"
+                      >
+                        <span>🔨</span>
+                        Poslať na realizáciu
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    )}
                     <Link
                       href={`/obhliadky/${l.id}`}
                       className="inline-flex items-center gap-1.5 rounded-lg border-2 border-slate-200 hover:bg-slate-100 text-slate-700 px-3 py-2 text-sm font-bold transition-colors"
