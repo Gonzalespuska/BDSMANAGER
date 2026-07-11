@@ -348,47 +348,44 @@ export default async function ObhliadnutePage({
                           {formatPhoneSK(l.phone as string)}
                         </a>
                       )}
-                      <div className="flex flex-wrap gap-1.5 mt-2">
+                      <div className="flex flex-nowrap items-center gap-2 mt-2 overflow-x-auto scrollbar-hide">
                         {typeof m2 === "number" && m2 > 0 && (
                           <Chip
-                            icon={<Ruler className="w-3 h-3" />}
+                            icon={<Ruler className="w-3.5 h-3.5" />}
                             label={`${m2.toFixed(2)} m²`}
-                            tone="sky"
                           />
                         )}
                         {lokalita && lokalita !== "—" && (
                           <Chip
-                            icon={<MapPin className="w-3 h-3" />}
+                            icon={<MapPin className="w-3.5 h-3.5" />}
                             label={lokalita}
-                            tone="emerald"
                           />
                         )}
                         {priestor && (
-                          <Chip
-                            icon={<span>🏠</span>}
-                            label={priestor}
-                            tone="slate"
-                          />
+                          <Chip icon={<span>🏠</span>} label={priestor} />
                         )}
                         {typ && (
-                          <Chip
-                            icon={<span>🎨</span>}
-                            label={typ}
-                            tone="violet"
-                          />
+                          <Chip icon={<span>🎨</span>} label={typ} />
                         )}
                       </div>
                       {shapes.length > 1 && (
-                        <div className="text-[11px] text-muted-foreground mt-1">
+                        <div className="text-sm font-semibold text-slate-700 mt-3">
                           Zamerané v {shapes.length} tvaroch (atypika)
                         </div>
                       )}
-                      {inspector && (
-                        <div className="text-[11px] text-muted-foreground mt-1">
-                          <span className="font-bold">Obhliadkár:</span>{" "}
-                          {inspector.name}
-                        </div>
-                      )}
+                      {inspector &&
+                        (l as { inspection_by?: string }).inspection_by && (
+                          <div className="text-sm text-slate-700 mt-2 inline-flex items-center gap-1.5">
+                            <span className="font-bold">Obhliadkár:</span>
+                            <Link
+                              href={`/profil/${(l as { inspection_by: string }).inspection_by}`}
+                              className="font-black text-sky-700 hover:text-sky-900 hover:underline underline-offset-2 decoration-2"
+                              title="Otvoriť profil obhliadkára"
+                            >
+                              {inspector.name}
+                            </Link>
+                          </div>
+                        )}
                     </div>
 
                     {/* Stredný stĺpec: TESTY */}
@@ -522,27 +519,16 @@ export default async function ObhliadnutePage({
 function Chip({
   icon,
   label,
-  tone,
 }: {
   icon: React.ReactNode;
   label: string;
-  tone: "sky" | "slate" | "violet" | "emerald" | "amber" | "rose";
 }) {
-  const cls = {
-    sky: "bg-sky-100 text-sky-800 border-sky-200",
-    slate: "bg-slate-100 text-slate-800 border-slate-200",
-    violet: "bg-violet-100 text-violet-800 border-violet-200",
-    emerald: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    amber: "bg-amber-100 text-amber-800 border-amber-200",
-    rose: "bg-rose-100 text-rose-800 border-rose-200",
-  }[tone];
+  // Unified neutral chip — user "toto nemusi byt take farebne daj to vacsi
+  // nech to je vzdy na jeden riadok". Menšie výrazný set farieb bol
+  // distraktívny; slate-100 pozadie + dark slate text je čitateľnejšie
+  // a nekonkuruje ostatným prvkom karty (testy, poznámka, fotky).
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border",
-        cls,
-      )}
-    >
+    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold border border-slate-200 bg-slate-100 text-slate-800 whitespace-nowrap shrink-0">
       {icon}
       {label}
     </span>
