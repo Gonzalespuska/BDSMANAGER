@@ -28,7 +28,7 @@ const TABS = [
   // (dátum obhliadky uplynul → automaticky sem)
   { id: "obhliadnute_hotove", label: "✔️ Obhliadnuté" },
   { id: "archivovane", label: "📦 Archivované" },
-  { id: "ukoncene", label: "🏆 Won" },
+  { id: "ukoncene", label: "✅ Hotové realizácie" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -179,20 +179,22 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       }
 
       case "ukoncene": {
-        // Won = manuálne 'won' status ALEBO (bol v realizácii s
-        // realization_at v minulosti a stále je in_realization =
-        // nebol odstranený).
-        // Ak obchodák "vymazal" z realizácie (napr. status → lost/archived),
-        // NIE je won.
-        const nowIso = new Date().toISOString();
+        // Hotové realizácie = LEN reálne dokončené (status='won' AND
+        // realization_completed_at IS NOT NULL).
+        // User 2026-07-11: "pozor won ma byt ukoncene proste ta podlaha
+        // bola uz realizovana chapes na zaklade toho sa budu % davat aj
+        // obchodakom takze na to pozor".
+        //
+        // Predtym sme sem hádzali aj in_realization s pased realization_at
+        // — čo obchodákovi pripísalo % skôr než realizator reálne dokončil.
+        // Fix: iba status='won'. Auto-transition (36h buffer) alebo
+        // manuálne kliknutie "Hotovo" na /realizacie prehodí lead do won.
         let q = supabase
           .from("leads")
           .select("*")
-          .or(
-            `status.eq.won,and(status.eq.in_realization,realization_at.lte.${nowIso})`,
-          );
+          .eq("status", "won");
         if (!isAdmin) q = q.eq("assigned_to", user.id);
-        return q.order("last_activity_at", { ascending: false }).limit(200);
+        return q.order("realization_completed_at", { ascending: false }).limit(200);
       }
 
       case "archivovane": {
@@ -277,15 +279,13 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       if (!isAdmin) q = q.eq("assigned_to", user.id);
       return q;
     })(),
-    // "Won" count — status=won ALEBO in_realization s realization_at v minulosti
+    // "Hotové realizácie" count — LEN status=won (dokončené realizácie
+    // ktoré počítajú % obchodákovi).
     (() => {
-      const nowIso = new Date().toISOString();
       let q = supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
-        .or(
-          `status.eq.won,and(status.eq.in_realization,realization_at.lte.${nowIso})`,
-        );
+        .eq("status", "won");
       if (!isAdmin) q = q.eq("assigned_to", user.id);
       return q;
     })(),
@@ -428,7 +428,7 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
             {!searchMode && tab === "otvorene" && "Žiadna poslaná cenová ponuka. Po odoslaní CP z generátora sa lead presunie sem."}
             {!searchMode && tab === "obhliadnute" && "Žiadne leady na obhliadke. Priradenie z kalendára s termínom v BUDÚCNOSTI sa zobrazí tu. Po prejdení termínu sa automaticky presunie do Obhliadnuté."}
             {!searchMode && tab === "obhliadnute_hotove" && "Žiadne obhliadnuté leady. Sem sa automaticky presunú leady, ktorých obhliadka bola naplánovaná a jej termín uplynul."}
-            {!searchMode && tab === "ukoncene" && "Žiadne won leady. Sem sa automaticky presunú realizácie, ktorých termín prešiel a neboli zrušené — alebo manuálne cez status Won."}
+            {!searchMode && tab === "ukoncene" && "Žiadne hotové realizácie. Sem sa presunú zákazky až KEĎ realizator reálne dokončí prácu (auto po 36h od realization_at alebo manuálne kliknutím \"Hotovo\" na /realizacie/[id]). % obchodákovi sa počíta iba z týchto."}
             {!searchMode && tab === "archivovane" && "Žiadne archivované leady. Po neúspešnom kontakte / 3× nezdvihol sa lead presunie sem."}
           </p>
           {!searchMode && process.env.NODE_ENV !== "production" && (
