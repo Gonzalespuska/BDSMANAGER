@@ -1,0 +1,467 @@
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import {
+  ArrowRight,
+  Calculator,
+  Camera,
+  CheckCheck,
+  ClipboardList,
+  Droplets,
+  MapPin,
+  Phone,
+  Ruler,
+  Sparkles,
+  StickyNote,
+  Zap,
+} from "lucide-react";
+
+import { getCurrentAppUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { AppShell } from "@/components/app-shell";
+import { loadNotifications } from "@/lib/notifications";
+import { cn } from "@/lib/utils";
+import { formatPhoneSK } from "@/lib/phone-format";
+
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
+
+/**
+ * /obhliadnute — Dashboard obchodáka pre HOTOVÉ obhliadky.
+ *
+ * Obhliadkár klikol „Odoslať obhliadku" → lead prešiel na status='inspected'
+ * → obchodák tu vidí:
+ *   • základné info o klientovi (meno, telefón, m², lokalita)
+ *   • výsledky testov (vlhkosť, odtrh)
+ *   • m² z presného zamerania obhliadkára
+ *   • fotky z foto-guide
+ *   • poznámku obhliadkára (voliteľná)
+ *
+ * A môže:
+ *   • otvoriť generátor ponuky (predvyplnené m² + typ)
+ *   • otvoriť lead detail
+ *   • napísať obhliadkárovi (💬 Napísať)
+ *   • označiť lost (klient odmietol)
+ *
+ * Zámerne to NIE JE súčasť /agent (Leady) — tie sú „nové" leady na volanie.
+ * Obhliadnuté je vlastná pracovná fronta.
+ */
+export default async function ObhliadnutePage() {
+  const user = await getCurrentAppUser();
+  if (!user) redirect("/login");
+
+  if (user.role !== "obchod" && user.role !== "admin") {
+    const { dashboardPathForRole } = await import("@/lib/roles");
+    redirect(dashboardPathForRole(user.role));
+  }
+
+  const sb = createAdminClient();
+
+  // Leady status='inspected' priradené tomuto obchodákovi (admin vidí všetky)
+  const baseQuery = sb
+    .from("leads")
+    .select("*")
+    .eq("status", "inspected")
+    .order("last_activity_at", { ascending: false })
+    .limit(100);
+  const q =
+    user.role === "admin" ? baseQuery : baseQuery.eq("assigned_to", user.id);
+  const { data: leadsRaw } = await q;
+  const leads = leadsRaw ?? [];
+
+  // Fotky pre všetky leady batch
+  const leadIds = leads.map((l) => l.id as string);
+  let photosByLead = new Map<string, { url: string; id: string }[]>();
+  let inspectorMap = new Map<string, { name: string; email: string }>();
+  if (leadIds.length > 0) {
+    const { data: mediaRaw } = await sb
+      .from("inspection_media")
+      .select("id, lead_id, storage_path")
+      .in("lead_id", leadIds)
+      .order("created_at", { ascending: false });
+    const paths = (mediaRaw ?? []).map((m) => m.storage_path as string);
+    const signedMap = new Map<string, string>();
+    if (paths.length > 0) {
+      const { data: signed } = await sb.storage
+        .from("inspection-media")
+        .createSignedUrls(paths, 604800);
+      for (const s of signed ?? []) {
+        if (s.signedUrl && s.path) signedMap.set(s.path, s.signedUrl);
+      }
+    }
+    for (const m of mediaRaw ?? []) {
+      const lid = m.lead_id as string;
+      const url = signedMap.get(m.storage_path as string);
+      if (!url) continue;
+      if (!photosByLead.has(lid)) photosByLead.set(lid, []);
+      photosByLead.get(lid)!.push({ url, id: m.id as string });
+    }
+
+    const inspectorIds = Array.from(
+      new Set(
+        leads
+          .map((l) => (l as { inspection_by?: string }).inspection_by)
+          .filter(Boolean) as string[],
+      ),
+    );
+    if (inspectorIds.length > 0) {
+      const { data: users } = await sb
+        .from("users")
+        .select("id, name, email")
+        .in("id", inspectorIds);
+      for (const u of users ?? []) {
+        inspectorMap.set(u.id as string, {
+          name: (u.name as string) ?? "",
+          email: (u.email as string) ?? "",
+        });
+      }
+    }
+  }
+
+  const notifications = await loadNotifications(user.id).catch(() => []);
+  const selfPaused = user.capacity === 0;
+
+  return (
+    <AppShell
+      user={user}
+      selfPaused={selfPaused}
+      notifications={notifications}
+      wide
+    >
+      <div className="space-y-6">
+        <header>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
+            <CheckCheck className="w-6 h-6 text-emerald-600" aria-hidden />
+            Obhliadnuté
+            <span className="text-[11px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 px-2 py-1 rounded ml-1">
+              {leads.length}× čaká na CP
+            </span>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+            Obhliadkár už bol na mieste, spísal testy + presné m² + fotky.
+            Tvoj krok: pozrieť dáta → poslať klientovi cenovú ponuku (alebo
+            označiť ako lost ak už zákazku odmietol).
+          </p>
+        </header>
+
+        {leads.length === 0 ? (
+          <div className="rounded-2xl border-2 border-dashed bg-background p-12 text-center">
+            <Sparkles className="w-10 h-10 mx-auto text-emerald-400 mb-3" />
+            <h3 className="text-lg font-bold">Ešte žiadne obhliadnuté</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+              Až obhliadkár klikne „Odoslať obhliadku" na priradenej
+              obhliadke, lead sa zjaví tu s kompletnými dátami (testy,
+              zameranie, fotky).
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-4">
+            {leads.map((l) => {
+              const data = (l.data ?? {}) as Record<string, unknown>;
+              const result =
+                ((l as { inspection_result?: Record<string, unknown> })
+                  .inspection_result ?? {}) as Record<string, unknown>;
+
+              const m2 =
+                (result.measured_m2 as number | undefined) ??
+                (typeof data.plocha === "string"
+                  ? parseFloat(data.plocha)
+                  : (data.plocha as number | undefined));
+              const shapes = (result.shapes as Array<{ label: string }>) ?? [];
+              const moist1 = result.moisture_pct as number | undefined;
+              const moist2 = result.moisture_pct_2 as number | undefined;
+              const adhesion = result.adhesion_mpa as number | undefined;
+              const agentNote = result.agent_note as string | undefined;
+              const feasible = result.feasible !== false;
+              const lokalita = (data.lokalita as string | undefined) ?? "—";
+              const priestor = (data.priestor as string | undefined) ?? null;
+              const typ = (data.typ_podlahy as string | undefined) ?? null;
+              const photos = photosByLead.get(l.id as string) ?? [];
+              const inspector = (l as { inspection_by?: string })
+                .inspection_by
+                ? inspectorMap.get(
+                    (l as { inspection_by: string }).inspection_by,
+                  )
+                : null;
+              const activityAt = l.last_activity_at
+                ? new Date(l.last_activity_at as string).toLocaleString(
+                    "sk-SK",
+                    { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" },
+                  )
+                : null;
+
+              return (
+                <li
+                  key={l.id as string}
+                  className="rounded-2xl border-2 bg-white shadow-sm overflow-hidden"
+                >
+                  {/* Header — meno klienta + status pill + čas */}
+                  <div className="bg-gradient-to-r from-emerald-50 to-sky-50 px-4 py-3 border-b flex items-center gap-3 flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-base md:text-lg font-black leading-tight truncate">
+                        {l.name}
+                      </div>
+                      <div className="text-[11px] font-semibold text-muted-foreground inline-flex items-center gap-1.5 mt-0.5">
+                        <MapPin className="w-3 h-3" aria-hidden />
+                        {lokalita}
+                        {activityAt && (
+                          <>
+                            <span className="mx-1">·</span>
+                            Obhliadnuté {activityAt}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {feasible ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white px-2 py-1 rounded-full">
+                        ✓ Realizovateľné
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-rose-500 text-white px-2 py-1 rounded-full">
+                        ⛔ Neodporúča
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Body — 3 stĺpce: kontakt+chipy | testy | fotky */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+                    {/* Ľavý stĺpec: kontakt + chipy */}
+                    <div className="space-y-2">
+                      {l.phone && (
+                        <a
+                          href={`tel:${l.phone}`}
+                          className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-200 text-emerald-800 px-3 py-1.5 text-sm font-black transition-colors"
+                        >
+                          <Phone className="w-4 h-4" />
+                          {formatPhoneSK(l.phone as string)}
+                        </a>
+                      )}
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {typeof m2 === "number" && m2 > 0 && (
+                          <Chip
+                            icon={<Ruler className="w-3 h-3" />}
+                            label={`${m2.toFixed(2)} m²`}
+                            tone="sky"
+                          />
+                        )}
+                        {priestor && (
+                          <Chip
+                            icon={<span>🏠</span>}
+                            label={priestor}
+                            tone="slate"
+                          />
+                        )}
+                        {typ && (
+                          <Chip
+                            icon={<span>🎨</span>}
+                            label={typ}
+                            tone="violet"
+                          />
+                        )}
+                      </div>
+                      {shapes.length > 1 && (
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          Zamerané v {shapes.length} tvaroch (atypika)
+                        </div>
+                      )}
+                      {inspector && (
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          <span className="font-bold">Obhliadkár:</span>{" "}
+                          {inspector.name}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stredný stĺpec: TESTY */}
+                    <div className="space-y-2 rounded-xl bg-slate-50/60 border border-slate-200 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                        Testy podkladu
+                      </div>
+                      <TestRow
+                        icon={<Droplets className="w-4 h-4 text-sky-500" />}
+                        label="Vlhkosť"
+                        value={
+                          typeof moist1 === "number" &&
+                          typeof moist2 === "number"
+                            ? `${moist1}% / ${moist2}%`
+                            : null
+                        }
+                        badge={
+                          typeof moist1 === "number" &&
+                          typeof moist2 === "number"
+                            ? Math.max(moist1, moist2) <= 4
+                              ? { label: "OK", tone: "emerald" }
+                              : Math.max(moist1, moist2) <= 5
+                                ? { label: "hraničné", tone: "amber" }
+                                : { label: "vysoké", tone: "rose" }
+                            : null
+                        }
+                      />
+                      <TestRow
+                        icon={<Zap className="w-4 h-4 text-amber-500" />}
+                        label="Odtrh"
+                        value={
+                          typeof adhesion === "number"
+                            ? `${adhesion} MPa`
+                            : null
+                        }
+                        badge={
+                          typeof adhesion === "number"
+                            ? adhesion >= 1.5
+                              ? { label: "štandard", tone: "emerald" }
+                              : adhesion >= 1.0
+                                ? { label: "hraničné", tone: "amber" }
+                                : { label: "slabé", tone: "rose" }
+                            : null
+                        }
+                      />
+                    </div>
+
+                    {/* Pravý stĺpec: FOTKY */}
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 inline-flex items-center gap-1 mb-1">
+                        <Camera className="w-3 h-3" />
+                        Fotky ({photos.length})
+                      </div>
+                      {photos.length === 0 ? (
+                        <div className="text-xs text-muted-foreground italic">
+                          Bez fotiek
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {photos.slice(0, 6).map((p) => (
+                            <a
+                              key={p.id}
+                              href={p.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="aspect-square rounded-md overflow-hidden border hover:border-sky-400 transition-colors"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={p.url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Poznámka obhliadkára */}
+                  {agentNote && agentNote !== "OK — pripravené na CP." && (
+                    <div className="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-amber-700 inline-flex items-center gap-1 mb-1">
+                        <StickyNote className="w-3 h-3" />
+                        Poznámka obhliadkára
+                      </div>
+                      <div className="text-sm text-amber-900 leading-snug whitespace-pre-wrap">
+                        {agentNote}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="border-t bg-slate-50/50 px-4 py-3 flex items-center gap-2 flex-wrap">
+                    <Link
+                      href={`/generator?lead=${l.id}`}
+                      className="inline-flex items-center gap-2 rounded-lg bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 text-sm font-black transition-colors shadow-sm"
+                    >
+                      <Calculator className="w-4 h-4" />
+                      Poslať cenovú ponuku
+                    </Link>
+                    <Link
+                      href={`/agent?lead=${l.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border-2 border-slate-200 hover:bg-slate-100 text-slate-700 px-3 py-2 text-sm font-bold transition-colors"
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      Otvoriť lead
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </AppShell>
+  );
+}
+
+function Chip({
+  icon,
+  label,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  tone: "sky" | "slate" | "violet" | "emerald" | "amber" | "rose";
+}) {
+  const cls = {
+    sky: "bg-sky-100 text-sky-800 border-sky-200",
+    slate: "bg-slate-100 text-slate-800 border-slate-200",
+    violet: "bg-violet-100 text-violet-800 border-violet-200",
+    emerald: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    amber: "bg-amber-100 text-amber-800 border-amber-200",
+    rose: "bg-rose-100 text-rose-800 border-rose-200",
+  }[tone];
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border",
+        cls,
+      )}
+    >
+      {icon}
+      {label}
+    </span>
+  );
+}
+
+function TestRow({
+  icon,
+  label,
+  value,
+  badge,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | null;
+  badge:
+    | { label: string; tone: "emerald" | "amber" | "rose" }
+    | null;
+}) {
+  const badgeCls =
+    badge?.tone === "emerald"
+      ? "bg-emerald-100 text-emerald-800"
+      : badge?.tone === "amber"
+        ? "bg-amber-100 text-amber-800"
+        : "bg-rose-100 text-rose-800";
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      {icon}
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          {label}
+        </div>
+        {value ? (
+          <div className="font-black text-slate-900">{value}</div>
+        ) : (
+          <div className="text-xs italic text-muted-foreground">Nezadané</div>
+        )}
+      </div>
+      {badge && (
+        <span
+          className={cn(
+            "text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0",
+            badgeCls,
+          )}
+        >
+          {badge.label}
+        </span>
+      )}
+    </div>
+  );
+}

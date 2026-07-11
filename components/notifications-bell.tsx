@@ -198,6 +198,31 @@ export function NotificationsBell({
               );
             })()}
 
+            {/* Sekcia 1b: Obhliadka hotová — obhliadkár klikol Odoslať */}
+            {(() => {
+              const inspected = items.filter(
+                (n) => n.type === "inspection_ready",
+              );
+              if (inspected.length === 0) return null;
+              return (
+                <div>
+                  <div className="px-4 py-2 bg-emerald-50/60 border-t border-b text-[11px] font-bold uppercase tracking-wider text-emerald-800 inline-flex items-center gap-1.5 w-full">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                    Obhliadka hotová — pošli CP ({inspected.length})
+                  </div>
+                  <ul className="divide-y">
+                    {inspected.map((n) => (
+                      <NotifRow
+                        key={n.id}
+                        n={n}
+                        onClick={() => setOpen(false)}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+
             {/* Sekcia 2: Nový lead pridelený — collapsed by default, klik na header rozbalí */}
             {(() => {
               const news = items.filter((n) => n.type === "new_lead");
@@ -255,16 +280,22 @@ function NotifRow({
 }) {
   const isReminder =
     n.type === "callback_due" || n.type === "callback_overdue";
+  const isInspection = n.type === "inspection_ready";
+  // Inspection ready ide na /obhliadnute page (nie /agent/leads/[id]),
+  // aby obchodák hneď videl testy + fotky + m² a klikol "Poslať CP".
+  const href = isInspection ? `/obhliadnute` : `/agent/leads/${n.lead_id}`;
   return (
     <li>
       <Link
-        href={`/agent/leads/${n.lead_id}`}
+        href={href}
         onClick={onClick}
         className={cn(
           "block px-4 py-3 transition-colors",
           isReminder
             ? "bg-red-50 dark:bg-red-950/20 hover:bg-red-100/80 dark:hover:bg-red-950/40"
-            : "hover:bg-muted/40",
+            : isInspection
+              ? "bg-emerald-50/50 hover:bg-emerald-100/60"
+              : "hover:bg-muted/40",
         )}
       >
         <div className="flex items-start justify-between gap-2">

@@ -1380,6 +1380,10 @@ function LeadEventCard({
   const data = (note.lead_data ?? {}) as Record<string, unknown>;
   const isInspection = /obhliadka|🔍/i.test(note.body);
   const isRealization = /realiz|🔨/i.test(note.body);
+  // Ak je lead už status='inspected' (obhliadkár klikol Odoslať obhliadku)
+  // ukážeme "OBHLIADNUTÉ ✓" badge + emerald tint aby obchodák hneď videl
+  // že tento termín je HOTOVÝ a treba spraviť ďalší krok (poslať CP).
+  const isDoneInspection = isInspection && note.lead_status === "inspected";
   const timeStr = note.starts_at
     ? new Date(note.starts_at).toLocaleTimeString("sk-SK", {
         hour: "2-digit",
@@ -1395,8 +1399,11 @@ function LeadEventCard({
   const inspNote = coerceStr(data.inspection_note);
   const agentNote = coerceStr(data.agent_note);
 
-  const detailHref =
-    note.lead_id && isInspection
+  // Ak už obhliadka dokončená (status=inspected) → obchodákovi ho posúvame
+  // priamo na /obhliadnute aby videl testy + fotky + m² a klikol "Poslať CP".
+  const detailHref = isDoneInspection
+    ? `/obhliadnute`
+    : note.lead_id && isInspection
       ? `/obhliadky/${note.lead_id}`
       : note.lead_id && isRealization
         ? `/realizacie/${note.lead_id}`
@@ -1404,16 +1411,26 @@ function LeadEventCard({
           ? `/agent/leads/${note.lead_id}`
           : "#";
 
-  const accent = isInspection
+  const accent = isDoneInspection
     ? {
-        border: "border-violet-300",
-        bg: "bg-violet-50/60",
-        icon: "bg-violet-500",
-        text: "text-violet-700",
-        pill: "bg-violet-100 text-violet-800",
-        emoji: "🔍",
-        label: "Obhliadka",
+        border: "border-emerald-400",
+        bg: "bg-emerald-50",
+        icon: "bg-emerald-600",
+        text: "text-emerald-800",
+        pill: "bg-emerald-100 text-emerald-800",
+        emoji: "✓",
+        label: "Obhliadnuté — pošli CP",
       }
+    : isInspection
+      ? {
+          border: "border-violet-300",
+          bg: "bg-violet-50/60",
+          icon: "bg-violet-500",
+          text: "text-violet-700",
+          pill: "bg-violet-100 text-violet-800",
+          emoji: "🔍",
+          label: "Obhliadka",
+        }
     : isRealization
       ? {
           border: "border-emerald-300",
@@ -1539,7 +1556,7 @@ function LeadEventCard({
             accent.text,
           )}
         >
-          <span>Otvoriť detail</span>
+          <span>{isDoneInspection ? "Poslať cenovú ponuku" : "Otvoriť detail"}</span>
           <ArrowRight className="w-4 h-4" />
         </Link>
       )}

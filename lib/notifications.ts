@@ -17,7 +17,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export type Notification = {
   id: string;
-  type: "callback_due" | "callback_overdue" | "new_lead" | "admin_task";
+  type:
+    | "callback_due"
+    | "callback_overdue"
+    | "new_lead"
+    | "admin_task"
+    | "inspection_ready";
   lead_id: string;
   lead_name: string;
   lead_phone: string | null;
@@ -86,6 +91,28 @@ export async function loadNotifications(
     });
   }
 
+  // 2b. INSPECTION READY — obhliadkár klikol „Odoslať obhliadku" na leade
+  //     ktorého mám assigned_to. Musím sa naň pozrieť a poslať CP (alebo
+  //     označiť lost). Zmizne len keď zmením status z 'inspected'.
+  const { data: inspected } = await admin
+    .from("leads")
+    .select("id, name, phone, last_activity_at")
+    .eq("assigned_to", userId)
+    .eq("status", "inspected")
+    .order("last_activity_at", { ascending: false })
+    .limit(20);
+  for (const l of inspected ?? []) {
+    notifs.push({
+      id: `inspect-${l.id}`,
+      type: "inspection_ready",
+      lead_id: l.id,
+      lead_name: l.name,
+      lead_phone: l.phone,
+      when_ts: (l.last_activity_at as string) ?? new Date().toISOString(),
+      message: "Obhliadka hotová — pošli cenovú ponuku",
+    });
+  }
+
   // 3. Reminder-y z office_reminders — priradené tomuto userovi, NIE dismissed.
   //    Kritérium:
   //    - Ak je remind_at (presný čas), pripomienka je viditeľná od remind_at.
@@ -120,9 +147,11 @@ export async function loadNotifications(
         ? 0
         : n.type === "callback_overdue"
           ? 1
-          : n.type === "new_lead"
+          : n.type === "inspection_ready"
             ? 2
-            : 3;
+            : n.type === "new_lead"
+              ? 3
+              : 4;
     if (priority(a) !== priority(b)) return priority(a) - priority(b);
     return new Date(a.when_ts).getTime() - new Date(b.when_ts).getTime();
   });

@@ -950,5 +950,10 @@ export async function completeInspectionAction(
 
   revalidatePath("/agent");
   revalidatePath("/obhliadky");
+  // Obchodák teraz musí spraviť ďalší krok — pošli CP → /obhliadnute.
+  // /notifikacie tiež revalidujeme aby bell hneď ukázal novú položku.
+  revalidatePath("/obhliadnute");
+  revalidatePath("/notifikacie");
+  revalidatePath("/calendar");
   return { ok: true };
 }

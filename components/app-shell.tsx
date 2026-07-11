@@ -5,6 +5,7 @@ import {
   Bell,
   Calculator,
   Calendar as CalendarIcon,
+  CheckCheck,
   ClipboardList,
   GraduationCap,
   Hammer,
@@ -40,6 +41,11 @@ const NAV_TAB_DEFS: Record<
     href: "/obhliadky",
     label: "Obhliadky",
     icon: <ClipboardList className="w-4 h-4" />,
+  },
+  obhliadnute: {
+    href: "/obhliadnute",
+    label: "Obhliadnuté",
+    icon: <CheckCheck className="w-4 h-4" />,
   },
   realizacie: {
     href: "/realizacie",

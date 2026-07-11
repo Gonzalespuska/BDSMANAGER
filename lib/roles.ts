@@ -105,6 +105,7 @@ export function navTabsForRole(role: AppUserRole): NavTabId[] {
       return [
         "agent",
         "obhliadky",
+        "obhliadnute",
         "realizacie",
         "calendar",
         "generator",
@@ -114,7 +115,17 @@ export function navTabsForRole(role: AppUserRole): NavTabId[] {
         "admin",
       ];
     case "obchod":
-      return ["agent", "calendar", "generator", "podklady", "team", "notifikacie"];
+      // "Obhliadnuté" — obhliadka HOTOVÁ obhliadkárom, obchodák musí spraviť
+      // ďalší krok (poslať CP, alebo označiť lost). Sedí medzi Leady a Kalendár.
+      return [
+        "agent",
+        "obhliadnute",
+        "calendar",
+        "generator",
+        "podklady",
+        "team",
+        "notifikacie",
+      ];
     case "obhliadky":
       return ["obhliadky", "calendar", "podklady", "team", "notifikacie"];
     case "realizacie":
@@ -127,6 +138,7 @@ export function navTabsForRole(role: AppUserRole): NavTabId[] {
 export type NavTabId =
   | "agent"
   | "obhliadky"
+  | "obhliadnute"
   | "realizacie"
   | "office"
   | "podklady"
