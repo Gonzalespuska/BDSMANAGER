@@ -489,6 +489,16 @@ export function CalendarGrid({
     setLocalNotes(notes);
   }, [notes]);
 
+  // BUG FIX 2026-07-11: keď obchodák klikne "Nová obhliadka" Link, Next.js
+  // aktualizuje props (manualPick=true, assignMode='inspection') ale
+  // komponent sa NEUNMOUNTUJE → useState initializer sa nespustí znova →
+  // manualOpen zostáva null → modal sa neotvorí. useEffect syncne.
+  React.useEffect(() => {
+    if (manualPick && assignMode) {
+      setManualOpen(assignMode);
+    }
+  }, [manualPick, assignMode]);
+
   // Ak URL má ?day=YYYY-MM-DD (napr. z SuggestDayButton "Prejsť na
   // tento deň"), auto-otvor day modal na ten dátum.
   React.useEffect(() => {
