@@ -950,22 +950,32 @@ export function CalendarGrid({
                 >
                   ✏ Manuálne pridanie:
                 </span>
-                <Link
-                  href="/calendar?assign=inspection&manual=1"
+                {/* BUG FIX 2026-07-11 (rev.2): Predtym to boli <Link href="…?manual=1">.
+                    Modal sa otvoril na zaklade URL param — ale close handler
+                    stripoval URL cez window.history.replaceState, co desyncne
+                    Next.js router state od browser URL. Dalsi klik na Link →
+                    Next.js si mysli ze URL sa nezmenil → soft nav = no-op →
+                    modal sa neotvori. Az refresh (fresh URL read) to opravil.
+                    Fix: buttons ktore priamo togglu manualOpen state, ziadny
+                    URL round-trip. */}
+                <button
+                  type="button"
+                  onClick={() => setManualOpen("inspection")}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white transition-colors shadow-sm"
                   title="Manuálne pridať obhliadku — vyber lead + dátum + obhliadkára"
                 >
                   <ClipboardList className="w-3.5 h-3.5" aria-hidden />
                   Nová obhliadka
-                </Link>
-                <Link
-                  href="/calendar?assign=realization&manual=1"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManualOpen("realization")}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm"
                   title="Manuálne pridať realizáciu — vyber lead + dátum + realizátora"
                 >
                   <Hammer className="w-3.5 h-3.5" aria-hidden />
                   Nová realizácia
-                </Link>
+                </button>
                 <div className="w-px h-6 bg-border mx-1" />
               </>
             )}

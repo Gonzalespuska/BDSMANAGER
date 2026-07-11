@@ -5,6 +5,11 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  calcInventory,
+  systemsFor,
+  type FloorType,
+} from "@/lib/data/realization-systems";
 
 /**
  * POST /api/lead/manual-create
@@ -53,6 +58,11 @@ export async function POST(request: NextRequest) {
     city?: string | null;
     m2?: string | null;
     floor_type?: string | null;
+    // Voliteľné: pre manuálnu realizáciu obchodák hneď vyberie systém —
+    // uloží sa do data.realization_system + auto-vygeneruje inventúru.
+    system?: string | null;
+    system_type?: FloorType | null;
+    system_binder?: string | null;
   };
   try {
     body = await request.json();
@@ -87,10 +97,38 @@ export async function POST(request: NextRequest) {
   // ho vie a status je "phone_revealed", nie "new".
   const nowIso = new Date().toISOString();
 
-  const leadData: Record<string, string> = {};
+  const leadData: Record<string, unknown> = {};
   if (city) leadData.lokalita = city;
   if (m2) leadData.plocha = m2;
   if (floorType) leadData.typ_podlahy = floorType;
+
+  // Ak obchodák vyplnil systém pri manuálnej realizácii → validuj + ulož
+  // + vypočítaj inventúru (rovnako ako v /api/lead/set-system).
+  const rawSystem = body.system?.trim() || null;
+  const rawSystemType = body.system_type ?? null;
+  const rawSystemBinder = body.system_binder ?? null;
+  if (rawSystem && rawSystemType) {
+    const validForType = systemsFor(
+      rawSystemType,
+      (rawSystemBinder as "epoxid" | "polyuretan" | null) ?? null,
+    ).some((s) => s.code === rawSystem);
+    if (!validForType) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_system_for_type" },
+        { status: 400 },
+      );
+    }
+    const m2Num = m2 ? parseFloat(m2) : 0;
+    const inventory = m2Num > 0 ? calcInventory(rawSystem, m2Num) : [];
+    leadData.realization_system = {
+      type: rawSystemType,
+      binder: rawSystemBinder,
+      system: rawSystem,
+      chosen_at: nowIso,
+      chosen_by: user.id,
+    };
+    leadData.realization_inventory = inventory;
+  }
 
   const admin = createAdminClient();
 
