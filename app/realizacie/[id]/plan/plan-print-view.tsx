@@ -76,6 +76,9 @@ export function PlanPrintView({
   realizationSystemLabel,
   leadId,
   inventoryTakenAt,
+  teamMembers,
+  zakazkaCislo,
+  isChipsFloor,
 }: {
   leadName: string;
   leadPhone?: string | null;
@@ -112,6 +115,12 @@ export function PlanPrintView({
   realizationSystemLabel?: string | null;
   leadId?: string;
   inventoryTakenAt?: string | null;
+  /** Členovia realizačného tímu — round-robin cez kroky Zodpovednosti. */
+  teamMembers?: Array<{ id: string; name: string }>;
+  /** Skrátené ID zákazky pre hlavičku protokolu. */
+  zakazkaCislo?: string;
+  /** Ak je typ podlahy chipsová, pridá sa krok 11 „Aplikácia chipsov". */
+  isChipsFloor?: boolean;
 }) {
   // Ak sme dostali kroky z DB (podľa priradeného systému), použij ich.
   // Inak fallback na hardcoded buildSteps(isGarage).
@@ -181,7 +190,9 @@ export function PlanPrintView({
         }
       `}</style>
 
-      {/* Header — minimálny: iba dátum, mesto, tím */}
+      {/* Header — minimálny: iba dátum, mesto, tím.
+          Skryté pre zodpovednost view — ten má vlastný A4 hlavičku. */}
+      {activeView !== "zodpovednost" && (
       <div className="mb-6 pb-4 border-b-2 border-slate-300">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -218,6 +229,7 @@ export function PlanPrintView({
           </div>
         </div>
       </div>
+      )}
 
       {activeView === "postup" ? (
         // ═════════ POSTUPOVÝ PLÁN ═════════
@@ -391,131 +403,21 @@ export function PlanPrintView({
       )}
 
       {activeView === "zodpovednost" && (
-        // ═════════ PROTOKOL ZODPOVEDNOSTI ═════════
-        <>
-          <div className="mb-4 text-xs text-slate-700 leading-relaxed">
-            Tento protokol zaznamenáva zodpovednosť za jednotlivé fázy zákazky.
-            Každá strana potvrdzuje že prevzatím / odovzdaním časti sa
-            zaväzuje k jej správnemu vykonaniu. V prípade reklamácie sa
-            zodpovednosť určuje podľa tejto listiny.
-          </div>
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-slate-100 border border-slate-300">
-                <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700 w-40">
-                  Rola
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700">
-                  Meno / Podpis
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-28">
-                  Dátum
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border border-slate-300">
-                <td className="border border-slate-300 px-3 py-4">
-                  <div className="font-black text-sky-900">💼 Obchodák</div>
-                  <div className="text-[10px] text-slate-500 mt-1">
-                    Prevzatie leadu, odsúhlasenie ponuky, komunikácia so
-                    zákazníkom
-                  </div>
-                </td>
-                <td className="border border-slate-300 px-3 py-4">
-                  {obchodakName && (
-                    <div className="text-sm font-bold text-slate-800 mb-2">
-                      {obchodakName}
-                    </div>
-                  )}
-                  <div className="h-10 border-b border-slate-400"></div>
-                </td>
-                <td className="border border-slate-300 px-2 py-4">
-                  <div className="h-10 border-b border-dashed border-slate-300"></div>
-                </td>
-              </tr>
-              <tr className="border border-slate-300">
-                <td className="border border-slate-300 px-3 py-4">
-                  <div className="font-black text-violet-900">🔍 Obhliadkár</div>
-                  <div className="text-[10px] text-slate-500 mt-1">
-                    Merania (m², vlhkosť, odtrhový test), fotky, technická
-                    prípadnosť
-                  </div>
-                </td>
-                <td className="border border-slate-300 px-3 py-4">
-                  {obhliadkarName && (
-                    <div className="text-sm font-bold text-slate-800 mb-2">
-                      {obhliadkarName}
-                    </div>
-                  )}
-                  <div className="h-10 border-b border-slate-400"></div>
-                </td>
-                <td className="border border-slate-300 px-2 py-4">
-                  <div className="h-10 border-b border-dashed border-slate-300"></div>
-                </td>
-              </tr>
-              <tr className="border border-slate-300">
-                <td className="border border-slate-300 px-3 py-4">
-                  <div className="font-black text-orange-900">📦 Skladník</div>
-                  <div className="text-[10px] text-slate-500 mt-1">
-                    Výdaj materiálu podľa zoznamu — kvantita a kvalita
-                  </div>
-                </td>
-                <td className="border border-slate-300 px-3 py-4">
-                  <div className="h-10 border-b border-slate-400"></div>
-                </td>
-                <td className="border border-slate-300 px-2 py-4">
-                  <div className="h-10 border-b border-dashed border-slate-300"></div>
-                </td>
-              </tr>
-              <tr className="border border-slate-300">
-                <td className="border border-slate-300 px-3 py-4">
-                  <div className="font-black text-emerald-900">🔨 Realizator</div>
-                  <div className="text-[10px] text-slate-500 mt-1">
-                    Príprava podkladu, aplikácia vrstvy, dodržanie technológie
-                  </div>
-                </td>
-                <td className="border border-slate-300 px-3 py-4">
-                  {teamName && (
-                    <div className="text-sm font-bold text-slate-800 mb-2">
-                      {teamName}
-                    </div>
-                  )}
-                  <div className="h-10 border-b border-slate-400"></div>
-                </td>
-                <td className="border border-slate-300 px-2 py-4">
-                  <div className="h-10 border-b border-dashed border-slate-300"></div>
-                </td>
-              </tr>
-              <tr className="border border-slate-300 bg-amber-50/40">
-                <td className="border border-slate-300 px-3 py-4">
-                  <div className="font-black text-amber-900">👤 Zákazník</div>
-                  <div className="text-[10px] text-slate-500 mt-1">
-                    Prevzatie hotovej realizácie, kvalitatívna kontrola na
-                    mieste
-                  </div>
-                </td>
-                <td className="border border-slate-300 px-3 py-4">
-                  <div className="text-sm font-bold text-slate-800 mb-2">
-                    {leadName}
-                  </div>
-                  <div className="h-10 border-b border-slate-400"></div>
-                </td>
-                <td className="border border-slate-300 px-2 py-4">
-                  <div className="h-10 border-b border-dashed border-slate-300"></div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div className="mt-6 rounded border-2 border-slate-200 bg-slate-50/60 p-3 text-[11px] text-slate-700 leading-relaxed">
-            <strong>Poznámka:</strong> Reklamácie sa zaznamenávajú do CRM systému
-            (najcrm.sk) s odkazom na túto zákazku. Zodpovedná osoba je určená
-            podľa tejto listiny — obchodák za predaj a komunikáciu, obhliadkár
-            za technické merania, skladník za materiál, realizator za samotnú
-            aplikáciu.
-          </div>
-        </>
+        // ═════════ PROTOKOL ZODPOVEDNOSTI — v2 podľa spec z 2026-07-11 ═════════
+        // User: "toto si vytlaci realizacny tym ktory dostal danu zakazku
+        // tie mena tam budu podla toho kto je v time cize priklad su
+        // juro a petko tak sa to bude striedat".
+        // + A4, čierno-biele, prázdne polia na ručný zápis, min 30px riadky.
+        <ResponsibilityProtocol
+          leadName={leadName}
+          lokalita={lokalita ?? null}
+          plocha={plocha ?? null}
+          realizationSystemLabel={realizationSystemLabel ?? floorType ?? null}
+          realizationDate={realizationDate ?? null}
+          teamMembers={teamMembers ?? []}
+          zakazkaCislo={zakazkaCislo ?? null}
+          isChipsFloor={!!isChipsFloor}
+        />
       )}
 
       {/* Print footer */}
@@ -614,6 +516,355 @@ function InventoryTakenButton({
           ⚠ {error}
         </div>
       )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// PROTOKOL ZODPOVEDNOSTI — A4 tlačiteľný, čierno-biely
+// ══════════════════════════════════════════════════════════════════════════
+
+interface WorkStep {
+  n: number;
+  label: string;
+  isControl?: boolean;
+  chipsOnly?: boolean;
+}
+
+/**
+ * Round-robin priradenie mien tímu na kroky.
+ * Vstup: teamMembers (napr. [Juro, Peťo]) + zoznam krokov.
+ * Výstup: pre každý krok vráti meno člena podľa index % team.length.
+ * Ak tím je prázdny → prázdny reťazec (miesto na ručné doplnenie).
+ * Kontrolné kroky (isControl) → ideálne INÝ člen než predchádzajúci úkon.
+ */
+function assignResponsibilities(
+  steps: WorkStep[],
+  team: Array<{ id: string; name: string }>,
+): Array<WorkStep & { assignee: string }> {
+  if (team.length === 0) return steps.map((s) => ({ ...s, assignee: "" }));
+  const out: Array<WorkStep & { assignee: string }> = [];
+  let idx = 0;
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    let picked = team[idx % team.length];
+    // Ak kontrola a prev step má rovnakú osobu → posuň o 1
+    if (s.isControl && out.length > 0) {
+      const prev = out[out.length - 1];
+      if (prev.assignee === picked.name && team.length > 1) {
+        picked = team[(idx + 1) % team.length];
+        idx++;
+      }
+    }
+    out.push({ ...s, assignee: picked.name });
+    idx++;
+  }
+  return out;
+}
+
+function ResponsibilityProtocol({
+  leadName,
+  lokalita,
+  plocha,
+  realizationSystemLabel,
+  realizationDate,
+  teamMembers,
+  zakazkaCislo,
+  isChipsFloor,
+}: {
+  leadName: string;
+  lokalita: string | null;
+  plocha: string | null;
+  realizationSystemLabel: string | null;
+  realizationDate: string | null;
+  teamMembers: Array<{ id: string; name: string }>;
+  zakazkaCislo: string | null;
+  isChipsFloor: boolean;
+}) {
+  // Kroky presne podľa user-spec.
+  const baseSteps: WorkStep[] = [
+    { n: 1, label: "Vybrúsenie podkladu" },
+    { n: 2, label: "Vysávanie" },
+    { n: 3, label: "Skontrolovanie 1. povysávania", isControl: true },
+    { n: 4, label: "Miešanie sudov s penetráciou (skontrolovať pomer)" },
+    { n: 5, label: "Penetrácia" },
+    { n: 6, label: "Vybrúsenie penetrácie" },
+    { n: 7, label: "Povysávanie" },
+    { n: 8, label: "Skontrolovanie 2. povysávania", isControl: true },
+    { n: 9, label: "Miešanie finálnej vrstvy (pomer + pot-life)" },
+    { n: 10, label: "Aplikácia finálnej vrstvy" },
+    { n: 11, label: "Aplikácia chipsov", chipsOnly: true },
+  ];
+  const steps = baseSteps.filter((s) => !s.chipsOnly || isChipsFloor);
+  const withAssignees = assignResponsibilities(steps, teamMembers);
+
+  const dateStr = realizationDate
+    ? new Date(realizationDate).toLocaleDateString("sk-SK", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "";
+
+  return (
+    <div className="responsibility-protocol print:text-black">
+      {/* A4 print styles — čierno-biele, 15mm margins, print-safe */}
+      <style>{`
+        @media print {
+          @page { size: A4; margin: 15mm; }
+          .responsibility-protocol { color: #000; font-family: "Arial", "Helvetica", sans-serif; }
+          .responsibility-protocol * { color: #000 !important; background: transparent !important; }
+          .responsibility-protocol table { page-break-inside: auto; }
+          .responsibility-protocol tr { page-break-inside: avoid; page-break-after: auto; }
+          .responsibility-protocol h2, .responsibility-protocol h3 { page-break-after: avoid; }
+          .no-print { display: none !important; }
+        }
+        .responsibility-protocol table { border-collapse: collapse; width: 100%; font-size: 11px; }
+        .responsibility-protocol th, .responsibility-protocol td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
+        .responsibility-protocol th { text-align: left; font-weight: 700; background: #f0f0f0; }
+        .responsibility-protocol .row-min { height: 32px; }
+        .responsibility-protocol .row-tall { height: 44px; }
+        .responsibility-protocol .checkbox { display: inline-block; width: 12px; height: 12px; border: 1px solid #000; }
+        .responsibility-protocol .field-line { border-bottom: 1px solid #000; display: inline-block; min-width: 200px; height: 16px; }
+        .responsibility-protocol h2 { font-size: 14px; font-weight: 800; margin: 12px 0 6px; border-bottom: 2px solid #000; padding-bottom: 3px; text-transform: uppercase; }
+        .responsibility-protocol h3 { font-size: 12px; font-weight: 700; margin: 8px 0 4px; }
+        .responsibility-protocol .logo-slot { height: 40px; border: 1px dashed #999; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #999; margin-bottom: 8px; }
+        @media print {
+          .responsibility-protocol .logo-slot { border-color: #ccc; }
+        }
+        .responsibility-protocol .control-row { background: #f5f5f5; }
+        .responsibility-protocol .doložka { font-size: 10.5px; line-height: 1.5; margin-top: 12px; padding: 8px; border: 1px solid #000; }
+      `}</style>
+
+      {/* Logo slot — 40px prázdne miesto na neskoršie doplnenie */}
+      <div className="logo-slot no-print">EPOXIDOVO s.r.o. — logo (bude doplnené)</div>
+
+      <div style={{ textAlign: "center", marginBottom: "10px" }}>
+        <h1 style={{ fontSize: "18px", fontWeight: 800, margin: 0, letterSpacing: "0.5px" }}>
+          PROTOKOL ZODPOVEDNOSTI
+        </h1>
+        <div style={{ fontSize: "10px", marginTop: "2px" }}>
+          Rozdelenie krokov realizácie a zodpovednosti za výkon
+        </div>
+      </div>
+
+      {/* 1. HLAVIČKA */}
+      <h2>1. Hlavička</h2>
+      <table>
+        <tbody>
+          <tr className="row-min">
+            <td style={{ width: "30%", fontWeight: 700 }}>Zákazka / číslo:</td>
+            <td>{zakazkaCislo ?? ""}</td>
+          </tr>
+          <tr className="row-min">
+            <td style={{ fontWeight: 700 }}>Objekt (byt / adresa):</td>
+            <td>
+              {leadName} {lokalita ? `· ${lokalita}` : ""}
+            </td>
+          </tr>
+          <tr className="row-min">
+            <td style={{ fontWeight: 700 }}>Plocha m²:</td>
+            <td>{plocha ?? ""}</td>
+          </tr>
+          <tr className="row-min">
+            <td style={{ fontWeight: 700 }}>Systém (epoxid / PU / metalíza):</td>
+            <td>{realizationSystemLabel ?? ""}</td>
+          </tr>
+          <tr className="row-min">
+            <td style={{ fontWeight: 700 }}>Dátum realizácie:</td>
+            <td>{dateStr}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 2. PODMIENKY PROSTREDIA */}
+      <h2>2. Podmienky prostredia (vyplniť pred aplikáciou)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: "45%" }}>Parameter</th>
+            <th style={{ width: "25%" }}>Nameraná hodnota</th>
+            <th style={{ width: "30%" }}>Limit</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="row-tall">
+            <td>Teplota vzduchu</td>
+            <td></td>
+            <td>+10 až +25 °C</td>
+          </tr>
+          <tr className="row-tall">
+            <td>Teplota podkladu</td>
+            <td></td>
+            <td>—</td>
+          </tr>
+          <tr className="row-tall">
+            <td>Vlhkosť podkladu — CM metóda</td>
+            <td></td>
+            <td>max 4 %</td>
+          </tr>
+          <tr className="row-tall">
+            <td>Relatívna vlhkosť RH</td>
+            <td></td>
+            <td>max 80 %</td>
+          </tr>
+          <tr className="row-tall">
+            <td>Rosný bod</td>
+            <td></td>
+            <td>min +3 °C nad teplotou podkladu</td>
+          </tr>
+          <tr className="row-tall">
+            <td style={{ fontWeight: 700 }}>Kto meral (meno + podpis)</td>
+            <td colSpan={2}></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 3. EVIDENCIA MATERIÁLU / ŠARŽE */}
+      <h2>3. Evidencia materiálu / šarže</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: "35%" }}>Produkt</th>
+            <th style={{ width: "25%" }}>Šarža (batch)</th>
+            <th style={{ width: "15%" }}>Počet balení</th>
+            <th style={{ width: "25%" }}>Kto miešal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <tr key={i} className="row-tall">
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* 4. ROZDELENIE PRÁCE */}
+      <h2>4. Rozdelenie práce medzi realizatorov</h2>
+      {teamMembers.length > 0 && (
+        <div style={{ fontSize: "10px", marginBottom: "4px" }}>
+          <strong>Tím:</strong> {teamMembers.map((m) => m.name).join(", ")}{" "}
+          {teamMembers.length > 1 && (
+            <em>(mená sú predvyplnené striedavo — v prípade zmeny prečiarknite a napíšte ručne)</em>
+          )}
+        </div>
+      )}
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: "5%", textAlign: "center" }}>Č.</th>
+            <th style={{ width: "30%" }}>Úkon</th>
+            <th style={{ width: "18%" }}>Zodpovedná osoba</th>
+            <th style={{ width: "12%" }}>Čas od–do</th>
+            <th style={{ width: "8%", textAlign: "center" }}>Hotovo</th>
+            <th style={{ width: "15%" }}>Podpis</th>
+            <th style={{ width: "12%" }}>Poznámka</th>
+          </tr>
+        </thead>
+        <tbody>
+          {withAssignees.map((s) => (
+            <tr key={s.n} className={s.isControl ? "control-row row-tall" : "row-tall"}>
+              <td style={{ textAlign: "center", fontWeight: 800, fontSize: "13px" }}>
+                {s.n}
+              </td>
+              <td>
+                <strong>{s.label}</strong>
+                {s.isControl && (
+                  <div style={{ fontSize: "9px", marginTop: "2px" }}>
+                    ⚠ <em>Kontrola — podpisuje INÁ osoba než ktorá krok robila</em>
+                  </div>
+                )}
+              </td>
+              <td>{s.assignee}</td>
+              <td></td>
+              <td style={{ textAlign: "center" }}>
+                <span className="checkbox"></span>
+              </td>
+              <td></td>
+              <td></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* 5. FOTODOKUMENTÁCIA */}
+      <h2>5. Fotodokumentácia</h2>
+      <div style={{ padding: "8px", border: "1px solid #000", fontSize: "11px" }}>
+        Zaškrtnite fotky ktoré boli spravené počas realizácie:
+        <div style={{ marginTop: "6px", display: "flex", gap: "18px", flexWrap: "wrap" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <span className="checkbox"></span> pred brúsením
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <span className="checkbox"></span> po brúsení
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <span className="checkbox"></span> po povysávaní
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <span className="checkbox"></span> po penetrácii
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <span className="checkbox"></span> finál
+          </label>
+        </div>
+      </div>
+
+      {/* 6. SÚPIS CHÝB / DEFEKTOV */}
+      <h2>6. Súpis chýb / defektov (ak sa niečo nájde)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: "12%" }}>Dátum</th>
+            <th style={{ width: "25%" }}>Popis chyby</th>
+            <th style={{ width: "18%" }}>Ktorý krok ju spôsobil</th>
+            <th style={{ width: "18%" }}>Zodpovedná osoba</th>
+            <th style={{ width: "17%" }}>Náprava</th>
+            <th style={{ width: "10%" }}>Náklad (€)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[0, 1, 2].map((i) => (
+            <tr key={i} className="row-tall">
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* 7. ZODPOVEDNOSTNÁ DOLOŽKA */}
+      <h2>7. Zodpovednostná doložka</h2>
+      <div className="doložka">
+        Každý svojím podpisom v tabuľke (bod 4) potvrdzuje, že ním vykonaný
+        úkon bol spravený správne a podľa pokynov technológie. Ak sa pri
+        záručnej reklamácii preukáže, že chyba na diele vznikla{" "}
+        <strong>preukázateľne zlým vykonaním konkrétneho úkonu</strong>, náklady
+        na opravu (materiál + práca + doprava) znáša{" "}
+        <strong>zodpovedná osoba za daný úkon</strong> — v prípade kontrolných
+        krokov (3 a 8) aj kontrolór, ktorý úkon odsúhlasil.
+      </div>
+
+      <div style={{ marginTop: "20px", display: "flex", gap: "20px" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ borderTop: "1px solid #000", paddingTop: "4px", textAlign: "center", fontSize: "10px" }}>
+            Vedúci tímu — meno + podpis
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ borderTop: "1px solid #000", paddingTop: "4px", textAlign: "center", fontSize: "10px" }}>
+            Dátum
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

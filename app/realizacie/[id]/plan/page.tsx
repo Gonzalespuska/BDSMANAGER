@@ -76,6 +76,33 @@ export default async function RealizationPlanPage({
   const isMetalicka = /metal/i.test(floorType ?? "");
   const isMramorova = /mramor/i.test(floorType ?? "");
 
+  // Team members pre Zodpovednosť protokol.
+  // Priorita:
+  //   1. lead.data.realization_team.members — nastavené obchodákom pri
+  //      priraďovaní (keď / ak wire-neme team picker)
+  //   2. fallback: single realizator z realization_by → 1-osobový tím
+  let teamMembers: Array<{ id: string; name: string }> = [];
+  const rt = data.realization_team as
+    | { team_id?: string; team_name?: string; members?: Array<{ id: string; name: string }> }
+    | undefined;
+  if (rt?.members && Array.isArray(rt.members) && rt.members.length > 0) {
+    teamMembers = rt.members;
+  } else if (lead.realization_by) {
+    const { data: r } = await sb
+      .from("users")
+      .select("id, name, email")
+      .eq("id", lead.realization_by as string)
+      .maybeSingle();
+    if (r) {
+      teamMembers = [
+        {
+          id: r.id as string,
+          name: (r.name as string | null) ?? (r.email as string),
+        },
+      ];
+    }
+  }
+
   // Fetch procedure_steps z realization_systems ak lead má priradený systém.
   // User: "realizator ma dopredu dany ten system … autoamticky mu to na
   // dany system upravi aj postup pretoze postup je iny pre ine systemy".
@@ -171,6 +198,9 @@ export default async function RealizationPlanPage({
         systemId={(data.system_id as string | null) ?? null}
         procedureSteps={procedureSteps}
         systemCode={systemCode}
+        teamMembers={teamMembers}
+        zakazkaCislo={(lead.id as string).slice(0, 8).toUpperCase()}
+        isChipsFloor={isChipsova}
       />
     </div>
   );
