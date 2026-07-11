@@ -1,7 +1,9 @@
+import Link from "next/link";
 import {
   BarChart3,
   Calendar as CalendarIcon,
   ClipboardList,
+  Eye,
   Hammer,
   TrendingUp,
   Users,
@@ -35,21 +37,31 @@ export interface CalendarStatsData {
  */
 export async function CalendarStats({
   role,
+  activeFilterUserId,
 }: {
   role: AppUserRole;
   stats?: CalendarStatsData;
+  /** Ak je set, riadok toho člena je zvýraznený (obchodák filtruje). */
+  activeFilterUserId?: string | null;
 }) {
   const isObchod = role === "obchod" || role === "admin";
 
-  // ─── Realizatori — koľko má kto (firemný breakdown) ────────────────
+  // ─── Realizatori + Obhliadkári — koľko má kto (firemný breakdown) ────
   const sb = createAdminClient();
-  const { data: realizators } = await sb
-    .from("users")
-    .select("id, name, email")
-    .eq("role", "realizacie")
-    .eq("active", true);
+  const [{ data: realizators }, { data: inspectors }] = await Promise.all([
+    sb.from("users").select("id, name, email").eq("role", "realizacie").eq("active", true),
+    sb.from("users").select("id, name, email").eq("role", "obhliadky").eq("active", true),
+  ]);
   const realizatorIds = (realizators ?? []).map((r) => r.id as string);
+  const inspectorIds = (inspectors ?? []).map((r) => r.id as string);
   const realizatorStats: Array<{
+    id: string;
+    name: string;
+    active: number;
+    scheduled: number;
+    completed: number;
+  }> = [];
+  const inspectorStats: Array<{
     id: string;
     name: string;
     active: number;
@@ -92,6 +104,43 @@ export async function CalendarStats({
       (a, b) => b.active + b.scheduled - (a.active + a.scheduled),
     );
   }
+
+  // ─── Obhliadkári — počty needs_inspection + inspected ───────────────
+  if (inspectorIds.length > 0) {
+    const { data: leads } = await sb
+      .from("leads")
+      .select("inspection_by, status")
+      .in("inspection_by", inspectorIds);
+    const map = new Map<
+      string,
+      { active: number; scheduled: number; completed: number }
+    >();
+    for (const id of inspectorIds)
+      map.set(id, { active: 0, scheduled: 0, completed: 0 });
+    for (const l of leads ?? []) {
+      const iid = l.inspection_by as string;
+      const s = map.get(iid);
+      if (!s) continue;
+      const status = l.status as string;
+      if (status === "needs_inspection") s.scheduled++;
+      else if (status === "inspected") s.active++;
+      else if (status === "quote_sent" || status === "won" || status === "in_realization")
+        s.completed++;
+    }
+    for (const r of inspectors ?? []) {
+      const s = map.get(r.id as string)!;
+      inspectorStats.push({
+        id: r.id as string,
+        name: (r.name as string) || (r.email as string) || "?",
+        ...s,
+      });
+    }
+    inspectorStats.sort(
+      (a, b) => b.active + b.scheduled - (a.active + a.scheduled),
+    );
+  }
+
+  const showFilter = role === "obchod" || role === "admin";
 
   return (
     <section className="rounded-2xl border-2 bg-background overflow-hidden shadow-sm">
@@ -178,72 +227,152 @@ export async function CalendarStats({
           </div>
         )}
 
-        {/* Realizatori breakdown — kto koľko realizácií má */}
+        {/* Realizatori breakdown — klik na riadok filtruje kalendár */}
         {realizatorStats.length > 0 && (
-          <div className="mt-2 rounded-xl border-2 border-slate-200 bg-slate-50/60 overflow-hidden">
-            <header className="px-3 py-2 border-b bg-white/60 flex items-center gap-2">
-              <Users className="w-4 h-4 text-slate-700" aria-hidden />
-              <h3 className="font-extrabold text-sm">
-                Realizatori — koľko má kto
-              </h3>
-              <span className="text-[10px] text-muted-foreground italic ml-auto">
-                aktívny + naplánované = súčasná záťaž
-              </span>
-            </header>
-            <div className="divide-y">
-              {realizatorStats.map((r, i) => {
-                const total = r.active + r.scheduled;
-                return (
-                  <div
-                    key={r.id}
-                    className="px-3 py-2 flex items-center justify-between gap-3 hover:bg-white/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={cn(
-                          "font-black tabular-nums w-6 text-center text-sm",
-                          i === 0
-                            ? "text-amber-600"
-                            : i === 1
-                              ? "text-slate-500"
-                              : i === 2
-                                ? "text-orange-700"
-                                : "text-muted-foreground",
-                        )}
-                      >
-                        {i + 1}.
-                      </span>
-                      <div className="font-bold text-sm truncate">{r.name}</div>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs shrink-0">
-                      <StatChip
-                        label="Aktívne"
-                        value={r.active}
-                        tint="emerald"
-                      />
-                      <StatChip
-                        label="Naplánované"
-                        value={r.scheduled}
-                        tint="amber"
-                      />
-                      <StatChip
-                        label="Dokončené"
-                        value={r.completed}
-                        tint="sky"
-                      />
-                      <span className="ml-1 text-xs font-black tabular-nums text-slate-800 min-w-[24px] text-right">
-                        Σ {total}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <MemberList
+            title="Realizátori"
+            icon={<Hammer className="w-4 h-4 text-emerald-700" />}
+            members={realizatorStats}
+            activeFilterUserId={activeFilterUserId ?? null}
+            showFilter={showFilter}
+            emptyTint="emerald"
+          />
+        )}
+
+        {/* Obhliadkári breakdown — rovnaké filter správanie */}
+        {inspectorStats.length > 0 && (
+          <MemberList
+            title="Obhliadkári"
+            icon={<ClipboardList className="w-4 h-4 text-violet-700" />}
+            members={inspectorStats}
+            activeFilterUserId={activeFilterUserId ?? null}
+            showFilter={showFilter}
+            emptyTint="violet"
+          />
         )}
       </div>
 
     </section>
+  );
+}
+
+/**
+ * MemberList — spoločný komponent pre Realizatori aj Obhliadkári sekcie.
+ * Ak user má obchod/admin rolu (showFilter=true), každý riadok je Link
+ * na /calendar?filter_user=<id> — filtruje kalendár na jeho eventy.
+ */
+function MemberList({
+  title,
+  icon,
+  members,
+  activeFilterUserId,
+  showFilter,
+  emptyTint: _emptyTint,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  members: Array<{
+    id: string;
+    name: string;
+    active: number;
+    scheduled: number;
+    completed: number;
+  }>;
+  activeFilterUserId: string | null;
+  showFilter: boolean;
+  emptyTint: "emerald" | "violet";
+}) {
+  return (
+    <div className="mt-2 rounded-xl border-2 border-slate-200 bg-slate-50/60 overflow-hidden">
+      <header className="px-3 py-2 border-b bg-white/60 flex items-center gap-2">
+        {icon}
+        <h3 className="font-extrabold text-sm">
+          {title} — koľko má kto
+        </h3>
+        {showFilter ? (
+          <span className="text-[10px] text-sky-700 font-bold ml-auto inline-flex items-center gap-1">
+            <Eye className="w-3 h-3" />
+            klik = filter kalendára
+          </span>
+        ) : (
+          <span className="text-[10px] text-muted-foreground italic ml-auto">
+            aktívny + naplánované = súčasná záťaž
+          </span>
+        )}
+      </header>
+      <div className="divide-y">
+        {members.map((r, i) => {
+          const total = r.active + r.scheduled;
+          const isActive = activeFilterUserId === r.id;
+          const content = (
+            <div
+              className={cn(
+                "px-3 py-2 flex items-center justify-between gap-3 transition-colors",
+                showFilter
+                  ? "cursor-pointer hover:bg-sky-50"
+                  : "hover:bg-white/50",
+                isActive && "bg-sky-100 ring-2 ring-sky-400 ring-inset",
+              )}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={cn(
+                    "font-black tabular-nums w-6 text-center text-sm",
+                    i === 0
+                      ? "text-amber-600"
+                      : i === 1
+                        ? "text-slate-500"
+                        : i === 2
+                          ? "text-orange-700"
+                          : "text-muted-foreground",
+                  )}
+                >
+                  {i + 1}.
+                </span>
+                <div
+                  className={cn(
+                    "font-bold text-sm truncate",
+                    isActive && "text-sky-900 font-black",
+                  )}
+                >
+                  {r.name}
+                </div>
+                {isActive && (
+                  <span className="text-[9px] font-black uppercase tracking-wider bg-sky-500 text-white px-1.5 py-0.5 rounded">
+                    Filtrujem
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs shrink-0">
+                <StatChip label="Aktívne" value={r.active} tint="emerald" />
+                <StatChip
+                  label="Naplánované"
+                  value={r.scheduled}
+                  tint="amber"
+                />
+                <StatChip label="Dokončené" value={r.completed} tint="sky" />
+                <span className="ml-1 text-xs font-black tabular-nums text-slate-800 min-w-[24px] text-right">
+                  Σ {total}
+                </span>
+              </div>
+            </div>
+          );
+          if (showFilter) {
+            return (
+              <Link
+                key={r.id}
+                href={`/calendar?filter_user=${r.id}`}
+                title={`Zobraz iba kalendár: ${r.name}`}
+                className="block"
+              >
+                {content}
+              </Link>
+            );
+          }
+          return <div key={r.id}>{content}</div>;
+        })}
+      </div>
+    </div>
   );
 }
 
