@@ -68,17 +68,30 @@ export default async function ObhliadkaDetailPage({
     .order("uploaded_at", { ascending: false });
   const media = mediaRaw ?? [];
 
-  // Foto-checklist media — inspection_media table s checklist_key
+  // Foto-checklist media — inspection_media table s checklist_key.
+  // Bucket 'inspection-media' je PRIVATE (viď 15_inspection_media.sql
+  // — public: false), preto getPublicUrl by vrátil URL ktorá vracia 400.
+  // Použijeme signed URL (7 dní).
   const { data: checklistMediaRaw } = await sb
     .from("inspection_media")
     .select("id, storage_path, checklist_key")
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
+  const paths = (checklistMediaRaw ?? []).map(
+    (m) => m.storage_path as string,
+  );
+  const signedMap = new Map<string, string>();
+  if (paths.length > 0) {
+    const { data: signedList } = await sb.storage
+      .from("inspection-media")
+      .createSignedUrls(paths, 604800);
+    for (const s of signedList ?? []) {
+      if (s.signedUrl && s.path) signedMap.set(s.path, s.signedUrl);
+    }
+  }
   const checklistMedia = (checklistMediaRaw ?? []).map((m) => ({
     id: m.id as string,
-    url: sb.storage
-      .from("inspection-media")
-      .getPublicUrl(m.storage_path as string).data.publicUrl,
+    url: signedMap.get(m.storage_path as string) ?? "",
     checklist_key: (m.checklist_key as string | null) ?? null,
   }));
 

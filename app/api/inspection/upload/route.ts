@@ -137,17 +137,23 @@ export async function POST(request: NextRequest) {
     })
     .then(() => {});
 
-  // Public URL — foto-guide UI potrebuje priamo url na <img src=...>
-  // (viď app/obhliadky/[id]/inspection-wizard.tsx handleFiles → json.url)
-  const {
-    data: { publicUrl },
-  } = admin.storage.from("inspection-media").getPublicUrl(storagePath);
+  // Bucket 'inspection-media' je PRIVATE (viď supabase/15_inspection_media.sql
+  // — public: false). getPublicUrl vráti URL ale request na ňu vracia 400.
+  // Musíme podpísať URL (7 dní = 604800 s).
+  const { data: signed, error: signErr } = await admin.storage
+    .from("inspection-media")
+    .createSignedUrl(storagePath, 604800);
+  if (signErr) {
+    console.error("[inspection/upload] sign URL error:", signErr);
+    // Nie fatal — DB záznam už existuje, klient si môže signed URL vyžiadať
+    // neskôr cez /api/inspection/media-urls (ak existuje).
+  }
 
   return NextResponse.json({
     ok: true,
     id: inserted.id,
     media_id: inserted.id,
-    url: publicUrl,
+    url: signed?.signedUrl ?? null,
     storage_path: storagePath,
     caption: inserted.caption,
   });
