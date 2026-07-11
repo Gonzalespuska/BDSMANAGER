@@ -218,9 +218,12 @@ export default async function CalendarPage({ searchParams }: Props) {
   // priestor, lokalita) — pre "meeting" notes s naviazaným leadom sa
   // Day Modal zobrazí ako rich karta klienta.
   const leadIdsInNotes = new Set<string>();
+  const targetUserIdsInNotes = new Set<string>();
   for (const n of effectiveNotes ?? []) {
     const lid = n.lead_id as string | null;
     if (lid) leadIdsInNotes.add(lid);
+    const tuid = n.target_user_id as string | null;
+    if (tuid) targetUserIdsInNotes.add(tuid);
   }
   const leadInfoMap = new Map<string, {
     name: string;
@@ -242,10 +245,23 @@ export default async function CalendarPage({ searchParams }: Props) {
       });
     }
   }
+  // Fetch mená cieľových členov (obhliadkár/realizátor) — user chce ich meno
+  // v kalendári namiesto mena leadu ("🔍 Palo" nie "🔍 Peter Múdry").
+  const targetUserMap = new Map<string, string>();
+  if (targetUserIdsInNotes.size > 0) {
+    const { data: userRows } = await admin
+      .from("users")
+      .select("id, name")
+      .in("id", Array.from(targetUserIdsInNotes));
+    for (const u of userRows ?? []) {
+      targetUserMap.set(u.id as string, (u.name as string) ?? "?");
+    }
+  }
 
   const calendarNotes: CalendarNote[] = (effectiveNotes ?? []).map((n) => {
     const lid = (n.lead_id as string | null) ?? null;
     const lead = lid ? leadInfoMap.get(lid) : undefined;
+    const tuid = (n.target_user_id as string | null) ?? null;
     return {
       id: n.id as string,
       date: n.date as string,
@@ -259,6 +275,7 @@ export default async function CalendarPage({ searchParams }: Props) {
       lead_phone: lead?.phone ?? null,
       lead_data: lead?.data ?? null,
       lead_status: lead?.status ?? null,
+      target_user_name: tuid ? (targetUserMap.get(tuid) ?? null) : null,
     };
   });
 

@@ -76,6 +76,216 @@ function normalizeCity(s: string): string {
  *   • Onblur padding na "09" / "07"
  */
 /**
+ * DayAgendaView — hourly schedule pre dnes, iba obchod/admin. User:
+ * "ked obchodak dnes nech mu to ukaze dnes na hodiny presne o kolkej ma
+ * kto co, a potom sa viem prekliknut spat na mesiac".
+ *
+ * Layout: vertikálny stĺpec 6:00–20:00, každá hodina slot. Eventy sú
+ * umiestnené v hodinovom slote podľa starts_at. Rôzne farby podľa kind:
+ * violet = obhliadka, emerald = realizácia.
+ */
+function DayAgendaView({
+  date,
+  notes,
+  onOpenDayModal,
+}: {
+  date: string;
+  notes: CalendarNote[];
+  onOpenDayModal: () => void;
+}) {
+  const d = new Date(date + "T00:00:00");
+  const niceDate = d.toLocaleDateString("sk-SK", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  // Hodiny 6-20 (pracovný deň)
+  const hours = React.useMemo(
+    () => Array.from({ length: 15 }, (_, i) => 6 + i),
+    [],
+  );
+
+  // Rozdel eventy podľa hodiny (starts_at) — kľúč = HH
+  const byHour = React.useMemo(() => {
+    const map = new Map<number, CalendarNote[]>();
+    for (const n of notes) {
+      let h = 9; // default ak nie je starts_at
+      if (n.starts_at) {
+        const dt = new Date(n.starts_at);
+        if (!isNaN(dt.getTime())) h = dt.getHours();
+      }
+      if (h < 6) h = 6;
+      if (h > 20) h = 20;
+      if (!map.has(h)) map.set(h, []);
+      map.get(h)!.push(n);
+    }
+    return map;
+  }, [notes]);
+
+  const totalCount = notes.length;
+  const inspectionCount = notes.filter((n) =>
+    /obhliadka|🔍/i.test(n.body),
+  ).length;
+  const realizationCount = notes.filter((n) =>
+    /realiz|🔨/i.test(n.body),
+  ).length;
+
+  return (
+    <div className="p-4 md:p-5 space-y-3">
+      {/* Header — dátum + súhrn */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[10px] font-black uppercase tracking-widest text-sky-700">
+            Dnes
+          </div>
+          <div className="text-xl md:text-2xl font-black tracking-tight">
+            {niceDate}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {inspectionCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-violet-100 border border-violet-200 text-violet-800 text-sm font-black">
+              🔍 {inspectionCount} obhliadk{inspectionCount === 1 ? "a" : inspectionCount < 5 ? "y" : "ov"}
+            </span>
+          )}
+          {realizationCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 text-sm font-black">
+              🔨 {realizationCount} realizác{realizationCount === 1 ? "ia" : "ie"}
+            </span>
+          )}
+          {totalCount === 0 && (
+            <span className="text-sm font-semibold text-muted-foreground italic">
+              🌴 Voľný deň
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Hourly timeline */}
+      <div className="rounded-xl border-2 bg-white overflow-hidden">
+        <ul className="divide-y">
+          {hours.map((h) => {
+            const events = byHour.get(h) ?? [];
+            const isNow =
+              new Date().getHours() === h &&
+              date === new Date().toISOString().slice(0, 10);
+            return (
+              <li
+                key={h}
+                className={cn(
+                  "flex gap-3 px-3 py-2 min-h-[52px]",
+                  isNow && "bg-sky-50/70",
+                )}
+              >
+                {/* Hour label */}
+                <div
+                  className={cn(
+                    "shrink-0 w-14 text-right pr-2 pt-0.5",
+                    events.length > 0 || isNow
+                      ? "text-slate-800 font-black text-sm"
+                      : "text-slate-400 font-bold text-xs",
+                  )}
+                >
+                  {String(h).padStart(2, "0")}:00
+                  {isNow && (
+                    <div className="text-[9px] font-black uppercase text-sky-600 mt-0.5">
+                      TERAZ
+                    </div>
+                  )}
+                </div>
+                {/* Events */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  {events.length === 0 ? (
+                    <div
+                      className={cn(
+                        "h-full border-l-2 pl-3 py-1 text-xs italic",
+                        isNow
+                          ? "border-sky-400 text-sky-700"
+                          : "border-slate-100 text-slate-300",
+                      )}
+                    >
+                      —
+                    </div>
+                  ) : (
+                    events.map((n) => {
+                      const isInspection = /obhliadka|🔍/i.test(n.body);
+                      const isRealization = /realiz|🔨/i.test(n.body);
+                      const tint = isInspection
+                        ? {
+                            border: "border-violet-400",
+                            bg: "bg-violet-50",
+                            text: "text-violet-900",
+                            pill: "bg-violet-500",
+                          }
+                        : isRealization
+                          ? {
+                              border: "border-emerald-400",
+                              bg: "bg-emerald-50",
+                              text: "text-emerald-900",
+                              pill: "bg-emerald-500",
+                            }
+                          : {
+                              border: "border-sky-400",
+                              bg: "bg-sky-50",
+                              text: "text-sky-900",
+                              pill: "bg-sky-500",
+                            };
+                      const timeStr = n.starts_at
+                        ? new Date(n.starts_at).toLocaleTimeString("sk-SK", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "";
+                      const emoji = isInspection ? "🔍" : isRealization ? "🔨" : "📞";
+                      const memberName = n.target_user_name ?? "?";
+                      return (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={onOpenDayModal}
+                          className={cn(
+                            "w-full text-left rounded-lg border-l-4 pl-3 pr-3 py-2 hover:shadow-sm transition-all group",
+                            tint.border,
+                            tint.bg,
+                          )}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* User: "nech to zacina emoji lupy meno
+                                obhliadkara nemusi byt lead vidno". */}
+                            <span aria-hidden className="text-lg leading-none">
+                              {emoji}
+                            </span>
+                            <span className={cn("font-black text-sm truncate", tint.text)}>
+                              {memberName}
+                            </span>
+                            {timeStr && (
+                              <span
+                                className={cn(
+                                  "ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black text-white shadow-sm",
+                                  tint.pill,
+                                )}
+                              >
+                                {timeStr}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/**
  * CalendarFilterDropdown — obchod/admin toggle "Zobraz kalendár: všetkých /
  * konkrétneho realizatora / obhliadkára". User: "prehlad je picovina to sa
  * ma robit v tom kalendari tym ze prepnes". Setuje ?filter_user URL param
@@ -403,6 +613,10 @@ export type CalendarNote = {
   lead_phone?: string | null;
   lead_data?: Record<string, unknown> | null;
   lead_status?: string | null;
+  /** Meno cieľového člena tímu (obhliadkár/realizátor). Zobrazuje sa
+   * v mesačnom aj dennom náhľade kalendára (nie meno klienta — to je
+   * až v Day Modal detaili). */
+  target_user_name?: string | null;
 };
 
 export type CalendarCallback = {
@@ -484,6 +698,11 @@ export function CalendarGrid({
   const [localNotes, setLocalNotes] = React.useState<CalendarNote[]>(notes);
   const [addEventOpen, setAddEventOpen] = React.useState(false);
   const searchParams = useSearchParams();
+
+  // Dnes/Mesiac toggle (obchod/admin) — user: "ked obchodak alebo admin
+  // dnes nech mu to ukaze dnes na hodiny presne o kolkej ma kto co, a
+  // potom sa viem prekliknut spat na mesiac".
+  const [viewMode, setViewMode] = React.useState<"month" | "day">("month");
 
   React.useEffect(() => {
     setLocalNotes(notes);
@@ -757,18 +976,55 @@ export function CalendarGrid({
                 activeUserId={activeFilterUserId}
               />
             )}
-            <button
-              type="button"
-              onClick={() => {
-                const t = new Date();
-                setMonthStr(
-                  `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`,
-                );
-              }}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-muted/60 hover:bg-muted transition-colors"
-            >
-              Dnes
-            </button>
+            {/* Dnes / Mesiac toggle — iba obchod/admin. Ostatné role
+                (realizacie/obhliadky) majú vždy iba mesiac. */}
+            {canAssign ? (
+              <div className="inline-flex rounded-lg border-2 border-slate-200 p-0.5 bg-white">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode("day");
+                    const t = new Date();
+                    setMonthStr(
+                      `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`,
+                    );
+                  }}
+                  className={cn(
+                    "px-3 py-1 rounded-md text-xs font-black transition-colors",
+                    viewMode === "day"
+                      ? "bg-sky-500 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100",
+                  )}
+                >
+                  Dnes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("month")}
+                  className={cn(
+                    "px-3 py-1 rounded-md text-xs font-black transition-colors",
+                    viewMode === "month"
+                      ? "bg-sky-500 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100",
+                  )}
+                >
+                  Mesiac
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const t = new Date();
+                  setMonthStr(
+                    `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`,
+                  );
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-muted/60 hover:bg-muted transition-colors"
+              >
+                Dnes
+              </button>
+            )}
             <button
               type="button"
               onClick={prevMonth}
@@ -788,7 +1044,17 @@ export function CalendarGrid({
           </div>
         </div>
 
+        {/* DAY VIEW — hourly agenda pre dnes (iba obchod/admin) */}
+        {viewMode === "day" && canAssign && (
+          <DayAgendaView
+            date={todayStr}
+            notes={notesByDate.get(todayStr) ?? []}
+            onOpenDayModal={() => setSelected(todayStr)}
+          />
+        )}
+
         {/* Weekday header — bolder */}
+        {viewMode === "month" && (
         <div className="grid grid-cols-7 border-b-2 bg-muted/30 text-xs font-extrabold uppercase tracking-widest text-muted-foreground">
           {WEEKDAYS.map((d, i) => (
             <div
@@ -802,9 +1068,12 @@ export function CalendarGrid({
             </div>
           ))}
         </div>
+        )}
 
         {/* Day cells — väčšie, čitateľnejšie */}
+        {viewMode === "month" && (
         <div className="grid grid-cols-7 auto-rows-fr">
+        {/* Note: closing div moved to end via viewMode wrapper */}
           {cells.map((c, i) => {
             const isToday = c.date === todayStr;
             const notesOnDay = notesByDate.get(c.date) ?? [];
@@ -843,25 +1112,31 @@ export function CalendarGrid({
                       spoločného kalendára. Tento kalendár je pre priradenia
                       obhliadok / realizácií medzi rolami. */}
                   {notesOnDay.slice(0, 3).map((n, idx) => {
-                    const isInspection = n.kind === "meeting";
-                    const isCall = n.kind === "call";
+                    // User: "nech fialove su obhliadky nech to zacina emoji
+                    // lupy 🔍 meno obhliadkara a to nemusi byt ani vidno
+                    // v kalendari lead meno to az v Day Modal detail.
+                    // Zelene = realizacie s kladivom 🔨".
+                    const isInsp = /obhliadka|🔍/i.test(n.body);
+                    const isReal = /realiz|🔨/i.test(n.body);
+                    const emoji = isInsp ? "🔍" : isReal ? "🔨" : "📞";
+                    const label =
+                      n.target_user_name ??
+                      n.contact_name ??
+                      n.lead_name ??
+                      "";
                     return (
                       <div
                         key={`n-${idx}`}
                         className={cn(
-                          "text-[11px] leading-tight line-clamp-1 pl-1.5 border-l-2 rounded-r px-1 py-0.5",
-                          isInspection &&
-                            "border-violet-500 bg-violet-50 text-violet-900",
-                          isCall && "border-emerald-500 bg-emerald-50 text-emerald-900",
-                          !isInspection &&
-                            !isCall &&
+                          "text-[11px] font-bold leading-tight line-clamp-1 pl-1.5 border-l-2 rounded-r px-1 py-0.5 inline-flex items-center gap-1",
+                          isInsp && "border-violet-500 bg-violet-50 text-violet-900",
+                          isReal && "border-emerald-500 bg-emerald-50 text-emerald-900",
+                          !isInsp && !isReal &&
                             "border-sky-400 bg-sky-50/60 text-foreground/85",
                         )}
                       >
-                        {n.contact_name && (
-                          <span className="font-bold">{n.contact_name}: </span>
-                        )}
-                        {n.body}
+                        <span aria-hidden>{emoji}</span>
+                        <span className="truncate">{label}</span>
                       </div>
                     );
                   })}
@@ -875,6 +1150,7 @@ export function CalendarGrid({
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Add Hovor/Meeting modal */}
