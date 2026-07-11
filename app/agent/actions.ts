@@ -944,12 +944,19 @@ export async function completeInspectionAction(
     .eq("id", leadId);
   if (updErr) return { ok: false, error: `db_error: ${updErr.message}` };
 
-  await admin.from("lead_activities").insert({
-    lead_id: leadId,
-    user_id: user.id,
-    type: "inspection_completed",
-    data: { feasible, result },
-  });
+  // Audit log — FIRE-AND-FORGET (žiadny await). Ak toto hangne, ok že to
+  // klientovi neblokuje. Ak fail-ne, len chýba audit riadok, nič zásadné.
+  admin
+    .from("lead_activities")
+    .insert({
+      lead_id: leadId,
+      user_id: user.id,
+      type: "inspection_completed",
+      data: { feasible, result },
+    })
+    .then(() => {
+      /* fire-and-forget */
+    });
 
   // POZOR: revalidatePath v edge runtime na CF Pages hangol server action
   // (pozorované 2026-07-11 — DB update prebehol ale klient nedostal

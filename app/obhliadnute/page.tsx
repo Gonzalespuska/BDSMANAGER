@@ -371,15 +371,19 @@ export default async function ObhliadnutePage() {
                     </div>
                   </div>
 
-                  {/* Poznámka obhliadkára */}
+                  {/* Poznámka obhliadkára — VÝRAZNÁ. Obchodák si ju musí
+                      všimnúť pred posielaním CP (napr. "prístup zo dvora
+                      OK", "klient chce začať v septembri"). */}
                   {agentNote && agentNote !== "OK — pripravené na CP." && (
-                    <div className="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
-                      <div className="text-[10px] font-black uppercase tracking-wider text-amber-700 inline-flex items-center gap-1 mb-1">
-                        <StickyNote className="w-3 h-3" />
-                        Poznámka obhliadkára
+                    <div className="mx-4 mb-3 rounded-xl border-2 border-amber-400 bg-gradient-to-br from-amber-50 via-amber-100/60 to-amber-50 p-4 shadow-sm">
+                      <div className="text-xs font-black uppercase tracking-widest text-amber-800 inline-flex items-center gap-1.5 mb-2">
+                        <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0">
+                          <StickyNote className="w-3.5 h-3.5" />
+                        </div>
+                        Poznámka od obhliadkára
                       </div>
-                      <div className="text-sm text-amber-900 leading-snug whitespace-pre-wrap">
-                        {agentNote}
+                      <div className="text-base font-bold text-amber-950 leading-relaxed whitespace-pre-wrap pl-8">
+                        „{agentNote}"
                       </div>
                     </div>
                   )}
