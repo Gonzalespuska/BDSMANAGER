@@ -565,9 +565,22 @@ export function CalendarGrid({
           <div className="flex items-center gap-2 flex-wrap">
             {canAssign && (
               <>
+                {/* Manual add — user "toto nech je moznost manualne pridat
+                    obhliadku a realizaciu aj to tam napis niekde manualne
+                    pridanie". Rôzne od normálneho flow (kde sa realizácia
+                    priradí z /obhliadnute Finálna CP tab s kompletnými
+                    lead dátami) — tu je ručný vstup pre lead ktorý neprešiel
+                    cez CRM pipeline (napr. malá garáž od známeho). */}
+                <span
+                  className="hidden md:inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 mr-1"
+                  title="Ručné pridanie obhliadky/realizácie mimo štandardného lead pipeline-u"
+                >
+                  ✏ Manuálne pridanie:
+                </span>
                 <Link
                   href="/calendar?assign=inspection&manual=1"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white transition-colors shadow-sm"
+                  title="Manuálne pridať obhliadku — vyber lead + dátum + obhliadkára"
                 >
                   <ClipboardList className="w-3.5 h-3.5" aria-hidden />
                   Nová obhliadka
@@ -575,6 +588,7 @@ export function CalendarGrid({
                 <Link
                   href="/calendar?assign=realization&manual=1"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm"
+                  title="Manuálne pridať realizáciu — vyber lead + dátum + realizátora"
                 >
                   <Hammer className="w-3.5 h-3.5" aria-hidden />
                   Nová realizácia
