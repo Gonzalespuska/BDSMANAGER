@@ -215,8 +215,9 @@ export function PlanPrintView({
                     day: "2-digit",
                     month: "2-digit",
                     year: "numeric",
+                    timeZone: "Europe/Bratislava",
                   })
-                : new Date().toLocaleDateString("sk-SK")}
+                : "—"}
             </div>
             {lokalita && (
               <div>
@@ -598,11 +599,17 @@ function ResponsibilityProtocol({
   const steps = baseSteps.filter((s) => !s.chipsOnly || isChipsFloor);
   const withAssignees = assignResponsibilities(steps, teamMembers);
 
+  // User (2026-07-11): "datum realizacie je datum ktory je na realizacii
+  // nie ze ked stlaci na ten papier vytlacit ho chce a bude to den
+  // dopredu bude tam o den menej". Použi realization_at z DB s timeZone
+  // Europe/Bratislava aby sa nedostal off-by-one deň keď je server v UTC
+  // ale user testuje v SK timezone. Nikdy NIE dnešný dátum tlače.
   const dateStr = realizationDate
     ? new Date(realizationDate).toLocaleDateString("sk-SK", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
+        timeZone: "Europe/Bratislava",
       })
     : "";
 

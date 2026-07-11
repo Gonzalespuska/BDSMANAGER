@@ -167,7 +167,9 @@ export default async function RealizaciaDetailPage({
           {l.realization_at && (
             <div className="text-[11px] text-sky-800 mt-2 font-semibold">
               🔨 Termín realizácie:{" "}
-              {new Date(l.realization_at).toLocaleString("sk-SK")}
+              {new Date(l.realization_at).toLocaleString("sk-SK", {
+                timeZone: "Europe/Bratislava",
+              })}
             </div>
           )}
         </div>

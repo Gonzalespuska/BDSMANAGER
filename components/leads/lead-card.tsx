@@ -358,6 +358,7 @@ export function LeadCard({
                       month: "2-digit",
                       hour: "2-digit",
                       minute: "2-digit",
+                      timeZone: "Europe/Bratislava",
                     })}
                   </span>
                   {lead.inspection_by_name && (
@@ -382,6 +383,7 @@ export function LeadCard({
                       month: "2-digit",
                       hour: "2-digit",
                       minute: "2-digit",
+                      timeZone: "Europe/Bratislava",
                     })}
                   </span>
                   {lead.realization_by_name && (

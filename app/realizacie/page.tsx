@@ -123,9 +123,13 @@ export default async function RealizacieDashboard() {
         const laterItems: typeof active = [];
         for (const l of active) {
           const at = new Date(l.realization_at);
-          const isoDay = new Date(at.getFullYear(), at.getMonth(), at.getDate())
-            .toISOString()
-            .slice(0, 10);
+          // Použi SK dátumovú časť z realization_at (nie UTC) — inak sa
+          // udalosti neprávne priradia do dňa keď server beží v UTC ale
+          // termín je SK-time.
+          const skDate = at.toLocaleDateString("en-CA", {
+            timeZone: "Europe/Bratislava",
+          }); // YYYY-MM-DD
+          const isoDay = skDate;
           const slot = week.find((w) => w.iso === isoDay);
           if (slot) slot.items.push(l);
           else if (at >= in7d) laterItems.push(l);
@@ -197,7 +201,7 @@ export default async function RealizacieDashboard() {
                         const data = (l.data ?? {}) as Record<string, string>;
                         const timeStr = new Date(l.realization_at).toLocaleTimeString(
                           "sk-SK",
-                          { hour: "2-digit", minute: "2-digit" },
+                          { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bratislava" },
                         );
                         return (
                           <li
