@@ -109,6 +109,11 @@ export function InspectionWizard({
   const [photos, setPhotos] = React.useState<PhotoItem[]>(existingPhotos);
   const [note, setNote] = React.useState(ex.agent_note ?? "");
   const [submitting, setSubmitting] = React.useState(false);
+  // 3-fázový overlay: null = skrytý, "sending" = spinner, "done" = zelený ✓.
+  // Prežije transition medzi wizard page a destination /obhliadky.
+  const [overlayPhase, setOverlayPhase] = React.useState<
+    null | "sending" | "done"
+  >(null);
 
   // ─── Modaly (open state) ───
   const [testsOpen, setTestsOpen] = React.useState(false);
@@ -129,6 +134,10 @@ export function InspectionWizard({
       toast.error("Najprv doplň všetky 3 sekcie: Testy · Zameranie · Nafotenie");
       return;
     }
+    // OKAMŽITE ukáž overlay — nech user nevidí "mŕtvu" stránku počas 1-3 s
+    // trvania server action + navigation. Overlay má fixed inset-0 z-[100]
+    // takže prekryje wizard aj počas re-renderu.
+    setOverlayPhase("sending");
     setSubmitting(true);
     const result = {
       measured_m2: measurement.total_m2,
@@ -145,12 +154,15 @@ export function InspectionWizard({
       leadId,
       result as unknown as Record<string, unknown>,
     );
-    setSubmitting(false);
     if (!res.ok) {
+      setOverlayPhase(null);
+      setSubmitting(false);
       toast.error(`Chyba: ${res.error}`);
       return;
     }
-    // Haptic (mobile)
+    // ── SUCCESS ──
+    // Prepni overlay na "done" — zelený ✓ celebration.
+    setOverlayPhase("done");
     try {
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         navigator.vibrate?.([80, 40, 120]);
@@ -158,12 +170,9 @@ export function InspectionWizard({
     } catch {
       /* not supported */
     }
-    // Inline toast (okamžitá vizuálna spätná väzba)
-    toast.success("Obhliadka odoslaná — obchodník dostal notifikáciu.");
-    // NAVIGATE-then-celebrate: revalidatePath v server action re-renderoval
-    // stránku a wizard sa unmounted skôr než overlay stihol zobraziť.
-    // Preto ihneď navigujeme na /obhliadky s justSubmitted param → tam
-    // sa zobrazí celebration banner ktorý PREŽIJE cez F5.
+    // Krátky moment (1.2 s) aby user videl ✓, potom hard-nav.
+    // Používame window.location namiesto router.push aby CF Pages Next.js
+    // transition nemal 2-3 s medzery (počas RSC fetch). Hard nav je instant.
     const summary = new URLSearchParams({
       justSubmitted: leadId,
       m2: measurement.total_m2.toFixed(2),
@@ -171,9 +180,13 @@ export function InspectionWizard({
       adh: String(tests.adhesion_mpa ?? ""),
       photos: String(photos.length),
     });
-    // Navrat na /obhliadky (Aktívne tab default) — obhliadkár vidí zoznam
-    // ďalších obhliadok ktoré má spraviť. Banner ukáže potvrdenie hore.
-    router.push(`/obhliadky?${summary.toString()}`);
+    setTimeout(() => {
+      if (typeof window !== "undefined") {
+        window.location.href = `/obhliadky?${summary.toString()}`;
+      } else {
+        router.push(`/obhliadky?${summary.toString()}`);
+      }
+    }, 1200);
   }
 
   return (
@@ -317,7 +330,63 @@ export function InspectionWizard({
           }}
         />
       )}
+      {overlayPhase && <SendingOverlay phase={overlayPhase} />}
     </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SendingOverlay — full-screen overlay pri odosielaní obhliadky.
+// Fáza "sending": spinner + text "Odosielam..."
+// Fáza "done":    animovaný ✓ + text "Odoslané! Presmerujem..."
+// Prežije RSC re-render lebo je fixed inset-0 z-[100] a wizard sa
+// neunmountuje kým sa nedokončí navigate.
+// ═══════════════════════════════════════════════════════════════════════
+function SendingOverlay({ phase }: { phase: "sending" | "done" }) {
+  const isDone = phase === "done";
+  return (
+    <div
+      className={cn(
+        "fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-md transition-colors duration-300",
+        isDone ? "bg-emerald-600/95" : "bg-slate-900/90",
+      )}
+      role="alert"
+      aria-live="assertive"
+    >
+      <div className="max-w-sm w-full text-center text-white">
+        {isDone ? (
+          <>
+            <div className="w-24 h-24 mx-auto rounded-full bg-white/20 border-4 border-white flex items-center justify-center mb-4 animate-pulse">
+              <Check className="w-14 h-14 text-white stroke-[3]" aria-hidden />
+            </div>
+            <h2 className="text-3xl font-black tracking-tight mb-2">
+              Odoslané! ✓
+            </h2>
+            <p className="text-emerald-50 font-semibold">
+              Obchodník dostal notifikáciu.
+            </p>
+            <p className="text-emerald-100 text-sm mt-1 opacity-80">
+              Presmerujem ťa na zoznam obhliadok…
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="w-24 h-24 mx-auto rounded-full bg-white/10 border-4 border-white/50 flex items-center justify-center mb-4">
+              <Loader2 className="w-14 h-14 text-white animate-spin" aria-hidden />
+            </div>
+            <h2 className="text-3xl font-black tracking-tight mb-2">
+              Odosielam obhliadku…
+            </h2>
+            <p className="text-slate-300 font-semibold">
+              Ukladám testy, zameranie a fotky do databázy.
+            </p>
+            <p className="text-slate-400 text-sm mt-1">
+              Chvíľu vydrž.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
