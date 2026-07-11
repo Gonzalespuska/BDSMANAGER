@@ -38,11 +38,14 @@ export interface CalendarStatsData {
 export async function CalendarStats({
   role,
   activeFilterUserId,
+  monthStr,
 }: {
   role: AppUserRole;
   stats?: CalendarStatsData;
   /** Ak je set, riadok toho člena je zvýraznený (obchodák filtruje). */
   activeFilterUserId?: string | null;
+  /** YYYY-MM aktuálne zobrazovaný mesiac. Pre real počty v tile-och. */
+  monthStr?: string;
 }) {
   const isObchod = role === "obchod" || role === "admin";
 
@@ -142,6 +145,29 @@ export async function CalendarStats({
 
   const showFilter = role === "obchod" || role === "admin";
 
+  // Real počty obhliadok + realizácií v aktuálnom mesiaci (calendar_notes)
+  let obhliadkyCount = 0;
+  let realizacieCount = 0;
+  if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
+    const [yStr, mStr] = monthStr.split("-");
+    const y = Number(yStr);
+    const m = Number(mStr);
+    const from = `${yStr}-${mStr}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const to = `${yStr}-${mStr}-${String(lastDay).padStart(2, "0")}`;
+    const { data: monthNotes } = await sb
+      .from("calendar_notes")
+      .select("body")
+      .gte("date", from)
+      .lte("date", to)
+      .eq("kind", "meeting");
+    for (const n of monthNotes ?? []) {
+      const body = (n.body as string) ?? "";
+      if (/obhliadka|🔍/i.test(body)) obhliadkyCount++;
+      if (/realiz|🔨/i.test(body)) realizacieCount++;
+    }
+  }
+
   return (
     <section className="rounded-2xl border-2 bg-background overflow-hidden shadow-sm">
       <header className="px-5 py-3.5 border-b-2 bg-gradient-to-b from-amber-50/50 to-transparent flex items-center gap-2">
@@ -160,20 +186,21 @@ export async function CalendarStats({
                 v tom smere = úspora dopravných nákladov). */}
             <PrehladSmartSuggest />
 
-            {/* TOTAL tiles — počty za AKTÍVNY MESIAC (ten čo vidíš
-                v kalendári hore). Nie fixných 7/30 dní. */}
+            {/* TOTAL tiles — real počty za aktuálne zobrazený mesiac */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <PlaceholderTile
+              <ValueTile
                 icon={<ClipboardList className="w-5 h-5 text-violet-600" />}
                 label="Obhliadky TOTAL"
+                value={obhliadkyCount}
                 tint="violet"
-                note="Za aktívny mesiac v kalendári vyššie"
+                note="Priradené v tomto mesiaci"
               />
-              <PlaceholderTile
+              <ValueTile
                 icon={<Hammer className="w-5 h-5 text-emerald-600" />}
                 label="Realizácie TOTAL"
+                value={realizacieCount}
                 tint="emerald"
-                note="Za aktívny mesiac v kalendári vyššie"
+                note="Priradené v tomto mesiaci"
               />
             </div>
           </>
@@ -390,6 +417,36 @@ function StatChip({
 // ────────────────────────────────────────────────────────────────────────
 
 type Tint = "sky" | "violet" | "emerald" | "amber" | "rose";
+
+function ValueTile({
+  icon,
+  label,
+  value,
+  tint,
+  note,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  tint: Tint;
+  note?: string;
+}) {
+  const bg = TINT_BG[tint];
+  return (
+    <div className={cn("rounded-xl border-2 p-4 shadow-sm", bg)}>
+      <div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-wider font-bold text-slate-700">
+        {icon}
+        {label}
+      </div>
+      <div className="text-4xl font-black tabular-nums mt-1 text-slate-900">
+        {value}
+      </div>
+      <div className="text-[10px] text-slate-600 mt-0.5">
+        {note ?? "aktuálny mesiac"}
+      </div>
+    </div>
+  );
+}
 
 function PlaceholderTile({
   icon,

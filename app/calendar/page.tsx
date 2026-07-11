@@ -339,7 +339,11 @@ export default async function CalendarPage({ searchParams }: Props) {
       {/* Prehľad — IBA pre obchod/admin. User: "tento prehlad v kalendari
           je len pre obchodaka nie pre realizatorov ani obhliadkarov". */}
       {(me.role === "obchod" || me.role === "admin") && (
-        <CalendarStats role={me.role} activeFilterUserId={filterUserInfo?.id ?? null} />
+        <CalendarStats
+          role={me.role}
+          activeFilterUserId={filterUserInfo?.id ?? null}
+          monthStr={initialMonth}
+        />
       )}
     </div>
   );

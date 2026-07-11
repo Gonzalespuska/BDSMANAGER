@@ -976,55 +976,42 @@ export function CalendarGrid({
                 activeUserId={activeFilterUserId}
               />
             )}
-            {/* Dnes / Mesiac toggle — iba obchod/admin. Ostatné role
-                (realizacie/obhliadky) majú vždy iba mesiac. */}
-            {canAssign ? (
-              <div className="inline-flex rounded-lg border-2 border-slate-200 p-0.5 bg-white">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewMode("day");
-                    const t = new Date();
-                    setMonthStr(
-                      `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`,
-                    );
-                  }}
-                  className={cn(
-                    "px-3 py-1 rounded-md text-xs font-black transition-colors",
-                    viewMode === "day"
-                      ? "bg-sky-500 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-100",
-                  )}
-                >
-                  Dnes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("month")}
-                  className={cn(
-                    "px-3 py-1 rounded-md text-xs font-black transition-colors",
-                    viewMode === "month"
-                      ? "bg-sky-500 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-100",
-                  )}
-                >
-                  Mesiac
-                </button>
-              </div>
-            ) : (
+            {/* Dnes / Mesiac toggle — VŠETKY role (obchod, admin,
+                obhliadkár, realizátor). User: "realizator ma viac veci
+                na dnes tak nech kukne cas". Obhliadkár tiež — vidí
+                svoje priradené obhliadky pod sebou. */}
+            <div className="inline-flex rounded-lg border-2 border-slate-200 p-0.5 bg-white">
               <button
                 type="button"
                 onClick={() => {
+                  setViewMode("day");
                   const t = new Date();
                   setMonthStr(
                     `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`,
                   );
                 }}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-muted/60 hover:bg-muted transition-colors"
+                className={cn(
+                  "px-3 py-1 rounded-md text-xs font-black transition-colors",
+                  viewMode === "day"
+                    ? "bg-sky-500 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100",
+                )}
               >
                 Dnes
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => setViewMode("month")}
+                className={cn(
+                  "px-3 py-1 rounded-md text-xs font-black transition-colors",
+                  viewMode === "month"
+                    ? "bg-sky-500 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100",
+                )}
+              >
+                Mesiac
+              </button>
+            </div>
             <button
               type="button"
               onClick={prevMonth}
@@ -1044,8 +1031,9 @@ export function CalendarGrid({
           </div>
         </div>
 
-        {/* DAY VIEW — hourly agenda pre dnes (iba obchod/admin) */}
-        {viewMode === "day" && canAssign && (
+        {/* DAY VIEW — hourly agenda pre dnes. User: "realizator ma viac
+            veci na dnes tak nech kukne cas". Všetky role. */}
+        {viewMode === "day" && (
           <DayAgendaView
             date={todayStr}
             notes={notesByDate.get(todayStr) ?? []}
@@ -1983,61 +1971,21 @@ function DayModal({
         )}
       </div>
 
-      {/* Add note composer — v ASSIGN móde skryté (poznámka je inline
-          vyššie, súčasť handoveru). */}
+      {/* User: "poznamky ku dnu dajme prec nevidim v tom vyuzitie".
+          Namiesto textarea iba jednoduchy "Hotovo" close button v day
+          modaloch (mimo assign mode). Assign mode ma vlastnu inline
+          poznamku pri handovere vyššie. */}
       {!isAssign && (
-      <div className="border-t p-3 bg-muted/20">
-        {error && (
-          <div className="mb-2 text-xs text-destructive">⚠ {error}</div>
-        )}
-        <div className="flex gap-2 items-end">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                if (input.trim()) saveNote();
-                else onClose();
-              }
-            }}
-            rows={2}
-            placeholder="Voliteľne — napíš poznámku k dňu… (⌘+Enter)"
-            className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm resize-none"
-          />
-          <div className="flex flex-col gap-1.5">
-            {/* Ak je textarea prázdny → button závrie modal (Hotovo).
-                Ak text je vyplnený → uloží ako poznámku (Pridať).
-                User: "poznamka je optional preco mi nedovoli to submitnut"
-                — teraz aj bez textu môže submitnúť (= zavrie modal). */}
-            <button
-              type="button"
-              onClick={() => (input.trim() ? saveNote() : onClose())}
-              disabled={saving}
-              className={cn(
-                "h-10 px-4 rounded-lg text-white transition-colors inline-flex items-center gap-1.5 text-sm font-bold shadow-sm disabled:opacity-40",
-                input.trim()
-                  ? "bg-sky-600 hover:bg-sky-700"
-                  : "bg-emerald-600 hover:bg-emerald-700",
-              )}
-            >
-              {saving ? (
-                "…"
-              ) : input.trim() ? (
-                <>
-                  <Plus className="w-4 h-4" aria-hidden />
-                  Pridať
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" aria-hidden />
-                  Hotovo
-                </>
-              )}
-            </button>
-          </div>
+        <div className="border-t p-3 bg-muted/20 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 px-5 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 transition-colors inline-flex items-center gap-1.5 text-sm font-bold shadow-sm"
+          >
+            <Check className="w-4 h-4" aria-hidden />
+            Hotovo
+          </button>
         </div>
-      </div>
       )}
       </div>
     </div>

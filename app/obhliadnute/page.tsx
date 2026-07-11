@@ -71,8 +71,12 @@ export default async function ObhliadnutePage({
   }
 
   const sp = await searchParams;
-  const activeTab: "caka" | "finalna" =
-    sp.tab === "finalna" ? "finalna" : "caka";
+  const activeTab: "caka" | "finalna" | "realizacii" =
+    sp.tab === "finalna"
+      ? "finalna"
+      : sp.tab === "realizacii"
+        ? "realizacii"
+        : "caka";
 
   // Ak user práve poslal CP, tab=finalna param je set + justSent=<leadId>.
   // Načítame meno pre banner.
@@ -93,11 +97,32 @@ export default async function ObhliadnutePage({
 
   const sb = createAdminClient();
 
-  // Dva tabby:
-  //   • "Čaká na CP" — status='inspected' — čerstvo obhliadnuté, môj krok
-  //   • "Finálna CP ✅" — status='quote_sent' — už poslaná CP, archív
-  // Won/lost/archived nezobrazujeme (finálne stavy — patria do /agent).
-  const targetStatus = activeTab === "finalna" ? "quote_sent" : "inspected";
+  // AUTO-TRANSITION in_realization → won ak realization_at prešiel.
+  // User: "ked prejde ten datum realizacie nech sa autoamticky daju do
+  // won v leadoch". Won nedá sa manuálne — iba touto cestou.
+  const nowIso = new Date().toISOString();
+  try {
+    await sb
+      .from("leads")
+      .update({ status: "won", last_activity_at: nowIso })
+      .eq("status", "in_realization")
+      .lt("realization_at", nowIso);
+  } catch (e) {
+    console.warn("[obhliadnute] auto-transition to won failed:", e);
+  }
+
+  // Tri taby:
+  //   • "Čaká na CP" — status='inspected'
+  //   • "Finálna CP ✅" — status='quote_sent' (poslaná CP)
+  //   • "V realizácii" — status='in_realization' (klient súhlasil s cenou
+  //     obchodák priradil realizatora)
+  //   Won po prešlom termíne sa presunie do /agent (Leady) tab "Won".
+  const targetStatus =
+    activeTab === "finalna"
+      ? "quote_sent"
+      : activeTab === "realizacii"
+        ? "in_realization"
+        : "inspected";
   const baseQuery = sb
     .from("leads")
     .select("*")
@@ -110,7 +135,6 @@ export default async function ObhliadnutePage({
   const { data: leadsRaw } = await q;
   const leads = leadsRaw ?? [];
 
-  // Counts pre tab bedge — koľko čaká na CP vs. koľko je hotových
   const countQ = (status: string) => {
     const b = sb
       .from("leads")
@@ -119,9 +143,14 @@ export default async function ObhliadnutePage({
       .not("inspection_result", "is", null);
     return user.role === "admin" ? b : b.eq("assigned_to", user.id);
   };
-  const [{ count: countCaka }, { count: countFinalna }] = await Promise.all([
+  const [
+    { count: countCaka },
+    { count: countFinalna },
+    { count: countRealiz },
+  ] = await Promise.all([
     countQ("inspected"),
     countQ("quote_sent"),
+    countQ("in_realization"),
   ]);
 
   // Fotky pre všetky leady batch — public URL (bucket je public od 2026-07-11)
