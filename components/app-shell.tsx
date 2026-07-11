@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Hammer,
   Headphones,
+  MessageCircle,
   Phone,
   ShieldCheck,
   Users as UsersIcon,
@@ -76,6 +77,11 @@ const NAV_TAB_DEFS: Record<
     href: "/agent/team",
     label: "Tím chat",
     icon: <UsersIcon className="w-4 h-4" />,
+  },
+  spravy: {
+    href: "/spravy",
+    label: "Správy",
+    icon: <MessageCircle className="w-4 h-4" />,
   },
   notifikacie: {
     href: "/notifikacie",

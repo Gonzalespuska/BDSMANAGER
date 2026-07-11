@@ -110,28 +110,29 @@ export function navTabsForRole(role: AppUserRole): NavTabId[] {
         "calendar",
         "generator",
         "podklady",
-        "team",
+        "spravy",
         "notifikacie",
         "admin",
       ];
     case "obchod":
       // "Obhliadnuté" — obhliadka HOTOVÁ obhliadkárom, obchodák musí spraviť
       // ďalší krok (poslať CP, alebo označiť lost). Sedí medzi Leady a Kalendár.
+      // "Správy" — Messenger inbox pre DM od obhliadkárov (napr. „prístup?").
       return [
         "agent",
         "obhliadnute",
         "calendar",
         "generator",
         "podklady",
-        "team",
+        "spravy",
         "notifikacie",
       ];
     case "obhliadky":
-      return ["obhliadky", "calendar", "podklady", "team", "notifikacie"];
+      return ["obhliadky", "calendar", "podklady", "spravy", "notifikacie"];
     case "realizacie":
-      return ["realizacie", "calendar", "podklady", "team"];
+      return ["realizacie", "calendar", "podklady", "spravy"];
     case "office":
-      return ["office", "calendar", "podklady", "team", "notifikacie"];
+      return ["office", "calendar", "podklady", "spravy", "notifikacie"];
   }
 }
 
@@ -145,5 +146,6 @@ export type NavTabId =
   | "calendar"
   | "generator"
   | "team"
+  | "spravy"
   | "notifikacie"
   | "admin";
