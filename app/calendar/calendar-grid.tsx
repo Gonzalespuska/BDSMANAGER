@@ -4,16 +4,21 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
   Check,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Clock,
   Hammer,
   Loader2,
+  MapPin,
   Pencil,
   Phone,
   Plus,
+  Ruler,
   Send,
+  StickyNote,
   Trash2,
   X,
 } from "lucide-react";
@@ -257,6 +262,14 @@ export type CalendarNote = {
   starts_at?: string | null;
   contact_name?: string | null;
   created_at: string;
+  // Ak note bola vytvorena z lead handover (kind='meeting'), tieto polia
+  // sa preplní na serveri v /app/calendar/page.tsx — aby Day Modal
+  // vedel zobraziť rich kartu klienta (telefón, m², typ, priestor).
+  lead_id?: string | null;
+  lead_name?: string | null;
+  lead_phone?: string | null;
+  lead_data?: Record<string, unknown> | null;
+  lead_status?: string | null;
 };
 
 export type CalendarCallback = {
@@ -1272,18 +1285,25 @@ function DayModal({
                 Žiadne poznámky na tento deň.
               </p>
             ) : (
-              <ul className="space-y-2">
-                {notes.map((n) => (
-                  <EditableNoteRow
-                    key={n.id}
-                    note={n}
-                    onDelete={() => removeNote(n.id)}
-                    onSave={(newBody) => {
-                      // optimistic — predpoklad že save prejde
-                      n.body = newBody;
-                    }}
-                  />
-                ))}
+              <ul className="space-y-3">
+                {notes.map((n) =>
+                  n.lead_id && n.kind === "meeting" ? (
+                    <LeadEventCard
+                      key={n.id}
+                      note={n}
+                      onDelete={() => removeNote(n.id)}
+                    />
+                  ) : (
+                    <EditableNoteRow
+                      key={n.id}
+                      note={n}
+                      onDelete={() => removeNote(n.id)}
+                      onSave={(newBody) => {
+                        n.body = newBody;
+                      }}
+                    />
+                  ),
+                )}
               </ul>
             )}
           </section>
@@ -1342,6 +1362,196 @@ function pluralHovor(n: number): string {
   if (n === 1) return "1 hovor";
   if (n >= 2 && n <= 4) return `${n} hovory`;
   return `${n} hovorov`;
+}
+
+/**
+ * Rich karta obhliadka/realizácia eventu v DayModal — namiesto plain
+ * textovej poznámky zobrazí všetko čo obchodák/obhliadkár/realizator
+ * potrebuje pri otvorení: KAM ideš, ČAS, KLIENT + TEL:, m², typ, priestor,
+ * poznámka, tlačidlo Otvoriť detail.
+ */
+function LeadEventCard({
+  note,
+  onDelete,
+}: {
+  note: CalendarNote;
+  onDelete: () => void;
+}) {
+  const data = (note.lead_data ?? {}) as Record<string, unknown>;
+  const isInspection = /obhliadka|🔍/i.test(note.body);
+  const isRealization = /realiz|🔨/i.test(note.body);
+  const timeStr = note.starts_at
+    ? new Date(note.starts_at).toLocaleTimeString("sk-SK", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  // Extract z data JSONB
+  const m2 = coerceStr(data.plocha);
+  const priestor = coerceStr(data.priestor);
+  const typPodlahy = coerceStr(data.typ_podlahy);
+  const lokalita = coerceStr(data.lokalita);
+  const inspNote = coerceStr(data.inspection_note);
+  const agentNote = coerceStr(data.agent_note);
+
+  const detailHref =
+    note.lead_id && isInspection
+      ? `/obhliadky/${note.lead_id}`
+      : note.lead_id && isRealization
+        ? `/realizacie/${note.lead_id}`
+        : note.lead_id
+          ? `/agent/leads/${note.lead_id}`
+          : "#";
+
+  const accent = isInspection
+    ? {
+        border: "border-violet-300",
+        bg: "bg-violet-50/60",
+        icon: "bg-violet-500",
+        text: "text-violet-700",
+        pill: "bg-violet-100 text-violet-800",
+        emoji: "🔍",
+        label: "Obhliadka",
+      }
+    : isRealization
+      ? {
+          border: "border-emerald-300",
+          bg: "bg-emerald-50/60",
+          icon: "bg-emerald-500",
+          text: "text-emerald-700",
+          pill: "bg-emerald-100 text-emerald-800",
+          emoji: "🔨",
+          label: "Realizácia",
+        }
+      : {
+          border: "border-sky-300",
+          bg: "bg-sky-50/60",
+          icon: "bg-sky-500",
+          text: "text-sky-700",
+          pill: "bg-sky-100 text-sky-800",
+          emoji: "📞",
+          label: "Meeting",
+        };
+
+  return (
+    <li className={cn("rounded-xl border-2 overflow-hidden shadow-sm", accent.border, accent.bg)}>
+      {/* Header — emoji + label + čas + delete */}
+      <div className="px-3.5 py-2.5 flex items-center gap-2 bg-white/60 border-b border-inherit">
+        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-white text-lg shrink-0", accent.icon)}>
+          {accent.emoji}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={cn("text-[10px] font-black uppercase tracking-wider", accent.text)}>
+            {accent.label}
+          </div>
+          {timeStr && (
+            <div className="text-base font-black tabular-nums inline-flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 opacity-60" />
+              {timeStr}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="w-7 h-7 rounded-md hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center transition-colors"
+          aria-label="Zmazať poznámku"
+          title="Zmazať"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Klient meno + telefón */}
+      <div className="px-3.5 py-3 space-y-2">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
+            Klient
+          </div>
+          <div className="font-extrabold text-lg leading-tight">
+            {note.lead_name ?? note.contact_name ?? "—"}
+          </div>
+        </div>
+
+        {note.lead_phone && (
+          <a
+            href={`tel:${note.lead_phone}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 text-sm font-black shadow-sm transition-colors"
+          >
+            <Phone className="w-4 h-4" />
+            {formatPhoneSK(note.lead_phone)}
+          </a>
+        )}
+
+        {/* Info chipsy */}
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {lokalita && (
+            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold", accent.pill)}>
+              <MapPin className="w-3 h-3" />
+              {lokalita}
+            </span>
+          )}
+          {m2 && (
+            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold", accent.pill)}>
+              <Ruler className="w-3 h-3" />
+              {m2} m²
+            </span>
+          )}
+          {priestor && (
+            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold", accent.pill)}>
+              🏠 {priestor}
+            </span>
+          )}
+          {typPodlahy && (
+            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold", accent.pill)}>
+              🎨 {typPodlahy}
+            </span>
+          )}
+        </div>
+
+        {/* Poznámka od obchodníka (inspection_note) */}
+        {inspNote && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 flex items-start gap-2 mt-2">
+            <StickyNote className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+            <div className="text-[12px] text-amber-900 leading-snug">
+              <strong className="font-bold">Poznámka:</strong> {inspNote}
+            </div>
+          </div>
+        )}
+        {!inspNote && agentNote && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 flex items-start gap-2 mt-2">
+            <StickyNote className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+            <div className="text-[12px] text-amber-900 leading-snug">
+              <strong className="font-bold">Poznámka:</strong> {agentNote}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* CTA — Otvoriť detail */}
+      {detailHref !== "#" && (
+        <Link
+          href={detailHref}
+          className={cn(
+            "flex items-center justify-between px-3.5 py-2.5 bg-white/70 hover:bg-white border-t border-inherit font-bold text-sm transition-colors",
+            accent.text,
+          )}
+        >
+          <span>Otvoriť detail</span>
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+      )}
+    </li>
+  );
+}
+
+function coerceStr(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "string") return v.trim() || null;
+  if (typeof v === "number") return isFinite(v) ? String(v) : null;
+  return null;
 }
 
 /**

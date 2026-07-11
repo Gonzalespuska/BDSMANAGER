@@ -164,15 +164,53 @@ export default async function CalendarPage({ searchParams }: Props) {
     effectiveNotes = fb.data;
   }
 
-  const calendarNotes: CalendarNote[] = (effectiveNotes ?? []).map((n) => ({
-    id: n.id as string,
-    date: n.date as string,
-    body: n.body as string,
-    kind: ((n.kind as string) ?? "note") as "note" | "call" | "meeting",
-    starts_at: (n.starts_at as string | null) ?? null,
-    contact_name: (n.contact_name as string | null) ?? null,
-    created_at: n.created_at as string,
-  }));
+  // Zbierame lead_ids aby sme mohli fetchnúť lead info (telefón, m², typ,
+  // priestor, lokalita) — pre "meeting" notes s naviazaným leadom sa
+  // Day Modal zobrazí ako rich karta klienta.
+  const leadIdsInNotes = new Set<string>();
+  for (const n of effectiveNotes ?? []) {
+    const lid = n.lead_id as string | null;
+    if (lid) leadIdsInNotes.add(lid);
+  }
+  const leadInfoMap = new Map<string, {
+    name: string;
+    phone: string | null;
+    data: Record<string, unknown>;
+    status: string;
+  }>();
+  if (leadIdsInNotes.size > 0) {
+    const { data: leadRows } = await admin
+      .from("leads")
+      .select("id, name, phone, data, status")
+      .in("id", Array.from(leadIdsInNotes));
+    for (const row of leadRows ?? []) {
+      leadInfoMap.set(row.id as string, {
+        name: (row.name as string) ?? "",
+        phone: (row.phone as string | null) ?? null,
+        data: (row.data as Record<string, unknown> | null) ?? {},
+        status: (row.status as string) ?? "",
+      });
+    }
+  }
+
+  const calendarNotes: CalendarNote[] = (effectiveNotes ?? []).map((n) => {
+    const lid = (n.lead_id as string | null) ?? null;
+    const lead = lid ? leadInfoMap.get(lid) : undefined;
+    return {
+      id: n.id as string,
+      date: n.date as string,
+      body: n.body as string,
+      kind: ((n.kind as string) ?? "note") as "note" | "call" | "meeting",
+      starts_at: (n.starts_at as string | null) ?? null,
+      contact_name: (n.contact_name as string | null) ?? null,
+      created_at: n.created_at as string,
+      lead_id: lid,
+      lead_name: lead?.name ?? null,
+      lead_phone: lead?.phone ?? null,
+      lead_data: lead?.data ?? null,
+      lead_status: lead?.status ?? null,
+    };
+  });
 
   // Callbacky sú v /notifikacie (zvonček), nie v kalendári — kalendár
   // slúži pre cross-role priradenia (obhliadka / realizácia).
