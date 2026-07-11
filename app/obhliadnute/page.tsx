@@ -352,9 +352,36 @@ export default async function ObhliadnutePage({
                     )}
                   </div>
 
-                  {/* Body — 3 stĺpce: kontakt+chipy | testy | fotky */}
+                  {/* CHIPS — FULL WIDTH row (mesto/m²/priestor/typ) — vždy
+                      sa všetko zmestí na jeden riadok pretože má celú
+                      šírku karty (nie iba 1/3 z 3-col grid). Wrap na
+                      malých telefónoch je OK (menej zlé ako cut-off). */}
+                  <div className="px-4 pt-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {typeof m2 === "number" && m2 > 0 && (
+                        <Chip
+                          icon={<Ruler className="w-3.5 h-3.5" />}
+                          label={`${m2.toFixed(2)} m²`}
+                        />
+                      )}
+                      {lokalita && lokalita !== "—" && (
+                        <Chip
+                          icon={<MapPin className="w-3.5 h-3.5" />}
+                          label={lokalita}
+                        />
+                      )}
+                      {priestor && (
+                        <Chip icon={<span>🏠</span>} label={priestor} />
+                      )}
+                      {typ && (
+                        <Chip icon={<span>🎨</span>} label={typ} />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Body — 3 stĺpce: kontakt (bez chipov) | testy | fotky */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-                    {/* Ľavý stĺpec: kontakt + chipy */}
+                    {/* Ľavý stĺpec: iba kontakt + info */}
                     <div className="space-y-2">
                       {l.phone && (
                         <a
@@ -365,26 +392,6 @@ export default async function ObhliadnutePage({
                           {formatPhoneSK(l.phone as string)}
                         </a>
                       )}
-                      <div className="flex flex-nowrap items-center gap-2 mt-2 overflow-x-auto scrollbar-hide">
-                        {typeof m2 === "number" && m2 > 0 && (
-                          <Chip
-                            icon={<Ruler className="w-3.5 h-3.5" />}
-                            label={`${m2.toFixed(2)} m²`}
-                          />
-                        )}
-                        {lokalita && lokalita !== "—" && (
-                          <Chip
-                            icon={<MapPin className="w-3.5 h-3.5" />}
-                            label={lokalita}
-                          />
-                        )}
-                        {priestor && (
-                          <Chip icon={<span>🏠</span>} label={priestor} />
-                        )}
-                        {typ && (
-                          <Chip icon={<span>🎨</span>} label={typ} />
-                        )}
-                      </div>
                       {shapes.length > 1 && (
                         <div className="text-sm font-semibold text-slate-700 mt-3">
                           Zamerané v {shapes.length} tvaroch (atypika)
