@@ -233,7 +233,7 @@ export default async function ObhliadkyDashboard({
           title="Obhliadky ktoré si dokončil a obchodák už poslal klientovi cenovú ponuku."
         >
           <CheckCircle2 className="w-4 h-4" aria-hidden />
-          Archivované ✓
+          Finálna CP ✅
           <span
             className={cn(
               "text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded",
