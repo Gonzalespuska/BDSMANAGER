@@ -404,11 +404,11 @@ export default async function ObhliadnutePage() {
                       {isNew ? "Poslať cenovú ponuku" : "Otvoriť ponuku znova"}
                     </Link>
                     <Link
-                      href={`/agent?lead=${l.id}`}
+                      href={`/obhliadky/${l.id}`}
                       className="inline-flex items-center gap-1.5 rounded-lg border-2 border-slate-200 hover:bg-slate-100 text-slate-700 px-3 py-2 text-sm font-bold transition-colors"
                     >
                       <ClipboardList className="w-4 h-4" />
-                      Otvoriť lead
+                      Otvoriť detail
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>

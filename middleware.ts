@@ -51,13 +51,52 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
 }
 
 /**
+ * Trasy ktoré NIKDY nesmieme cachovať — obchodák/obhliadkár musí vidieť
+ * čerstvé stavy hneď po zmenách (obhliadka odoslaná, CP odoslaná, badge
+ * update, notifikácie). Bez explicit no-store CF Pages / browser môžu
+ * držať staré snapshoty a user hlási "nič sa neupdatlo, musím F5".
+ */
+const NO_CACHE_PREFIXES = [
+  "/agent",
+  "/obhliadky",
+  "/obhliadnute",
+  "/realizacie",
+  "/calendar",
+  "/notifikacie",
+  "/spravy",
+  "/dm/",
+  "/office",
+  "/admin",
+];
+
+function applyNoCache(request: NextRequest, response: NextResponse): void {
+  const path = request.nextUrl.pathname;
+  const isDynamic = NO_CACHE_PREFIXES.some(
+    (p) => path === p || path.startsWith(p + "/") || path.startsWith(p),
+  );
+  if (!isDynamic) return;
+  response.headers.set(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, max-age=0",
+  );
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  // CDN úrovne — Cloudflare rešpektuje CDN-Cache-Control
+  response.headers.set("CDN-Cache-Control", "no-store");
+  response.headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+}
+
+/**
  * Next.js middleware — beží pri každom matchnutom requeste pred renderom.
  *  1. Volá Supabase session refresh helper (čerstvé tokeny).
  *  2. Pridá security headers na výsledný response.
+ *  3. Aplikuje no-store na dynamické stránky.
  */
 export async function middleware(request: NextRequest) {
   const response = await updateSession(request);
-  return applySecurityHeaders(response);
+  applySecurityHeaders(response);
+  applyNoCache(request, response);
+  return response;
 }
 
 export const config = {
