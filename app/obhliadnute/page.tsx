@@ -25,6 +25,7 @@ import { formatPhoneSK } from "@/lib/phone-format";
 import { SafePhoto } from "@/components/safe-photo";
 import { JustSentBanner } from "./just-sent-banner";
 import { JustAssignedBanner } from "./just-assigned-banner";
+import { SystemPickerButton } from "./system-picker-button";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -550,18 +551,17 @@ export default async function ObhliadnutePage({
                       <Calculator className="w-4 h-4" />
                       {isNew ? "Poslať cenovú ponuku" : "Otvoriť ponuku znova"}
                     </Link>
-                    {/* Poslať na realizáciu — LEN v "Finálna CP" tabe (isNew=false,
-                        status='quote_sent'). Klient prijal CP → obchodák priradí
-                        realizatora + dátum → status='in_realization'. */}
+                    {/* Poslať na realizáciu — obchodák najprv vyberie
+                        SYSTEM (typ + živica + konkrétny kód), auto sa
+                        vypočíta inventúra, potom redirect na kalendár. */}
                     {!isNew && (
-                      <Link
-                        href={`/calendar?assign=realization&lead=${l.id}${lokalita !== "—" ? `&city=${encodeURIComponent(lokalita)}` : ""}`}
-                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black transition-colors shadow-sm"
-                      >
-                        <span>🔨</span>
-                        Poslať na realizáciu
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
+                      <SystemPickerButton
+                        leadId={l.id as string}
+                        leadName={(l.name as string) ?? ""}
+                        initialType={typ}
+                        m2={typeof m2 === "number" ? m2 : null}
+                        city={lokalita !== "—" ? lokalita : null}
+                      />
                     )}
                     <Link
                       href={`/obhliadky/${l.id}`}
