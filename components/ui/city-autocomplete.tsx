@@ -145,7 +145,18 @@ export function CityAutocomplete({
           onChange(e.target.value);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          // Ak je input už vyplnený s PRESNOU zhodou existujúceho mesta
+          // (napr. prefill z leadu — "Trnava"), NEOTVÁRAME dropdown.
+          // User má hodnotu ktorú chce, netreba mu ju "opravovať" ponukou.
+          // Dropdown sa otvorí až keď užívateľ začne písať alebo použije
+          // šípky (viď onKeyDown ArrowDown).
+          const trimmed = value.trim();
+          const isExactMatch =
+            trimmed.length > 0 &&
+            CITY_LIST.some((c) => c.display === trimmed);
+          if (!isExactMatch) setOpen(true);
+        }}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         autoFocus={autoFocus}

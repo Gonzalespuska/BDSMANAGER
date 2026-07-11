@@ -257,10 +257,17 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
         if (
           leadRow &&
-          // Neprepisujeme finalne statusy ani vyssie kroky pipeline.
-          // needs_inspection / in_realization su vyssie ako quote_sent —
-          // nechceme downgrade po poslani novej upraveny CP.
-          !["won", "lost", "archived", "needs_inspection", "in_realization", "inspected"].includes(
+          // Neprepisujeme LEN skutočne finálne stavy alebo vyššie kroky
+          // pipeline (in_realization).
+          //   • 'inspected'   → MÔŽE ísť do quote_sent (obchodák pošle CP
+          //                    z /obhliadnute po dokončenej obhliadke) —
+          //                    predtým tu blokované, čo bol BUG.
+          //   • needs_inspection → tiež môže (ak by obchodák poslal ori-
+          //                    entačnú CP pred obhliadkou — nechceme
+          //                    blokovať UX).
+          //   • won/lost/archived → finálne stavy, nepovoľujeme
+          //   • in_realization → prebieha realizácia, nekonzistentné
+          !["won", "lost", "archived", "in_realization"].includes(
             leadRow.status,
           )
         ) {

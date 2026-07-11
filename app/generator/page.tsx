@@ -186,6 +186,10 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
           floor_type: floorType,
           lokalita: typeof data.lokalita === "string" ? data.lokalita : null,
           priestor: typeof data.priestor === "string" ? data.priestor : null,
+          // True ak lead má inspection_result — otvoril sa cez /obhliadnute
+          // "Poslať cenovú ponuku". Ovplyvňuje redirect po CP send: ide
+          // späť do Finálna CP tabu miesto /agent.
+          hasInspection: !!lead.inspection_result,
         };
 
         // Ak lead má uloženú predchádzajúcu CP a klient prišiel s ?resend=1,

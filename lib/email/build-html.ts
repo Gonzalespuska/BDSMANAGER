@@ -69,10 +69,14 @@ export function buildHtmlFromPlainText(
 ${bodyHtml}
 </div>
 
-<!-- Signature — brand block s EPOXIDOVO.SK logom -->
+<!-- Signature — brand block. User: "to logo preco je take ze na pozadi
+     ono to musi byt len ten napis epoxidovo.sk" — PNG logo malo biele
+     pozadie ktoré na tmavom email UI (mobile dark mode) tvorilo škaredý
+     rámik. Prehodené na plain HTML text — čistý transparentný render
+     v každom email klientovi (Gmail, Outlook, Apple Mail, Superhuman). -->
 <div style="margin-top: 32px; padding-top: 20px; border-top: 2px solid #e2e8f0;">
   <div style="font-size: 15px; margin-bottom: 12px;">S pozdravom,</div>
-  <div style="margin-bottom: 12px;"><img src="https://app.najcrm.sk/epoxidovo-logo.png" alt="EPOXIDOVO.SK" width="180" height="66" style="display: block; width: 180px; height: 66px; border: 0;"></div>
+  <div style="font-size: 24px; font-weight: 900; color: #0284c7; letter-spacing: -0.5px; margin-bottom: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">EPOXIDOVO<span style="color: #0f172a;">.SK</span></div>
   <div style="font-size: 15px; font-weight: 700; color: #0f172a;">${escapeHtml(agentName)}</div>
   ${phoneLine ? `<div style="font-size: 14px; color: #475569; margin-top: 4px; font-variant-numeric: tabular-nums;">${escapeHtml(phoneLine.trim())}</div>` : ""}
   <div style="font-size: 14px; margin-top: 4px;"><a href="mailto:${escapeHtml(emailLine.trim())}" style="color: #0284c7; text-decoration: none;">${escapeHtml(emailLine.trim())}</a></div>

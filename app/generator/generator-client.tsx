@@ -65,6 +65,9 @@ export interface LeadContext {
   floor_type: FloorType | null;
   lokalita: string | null;
   priestor: string | null;
+  /** True ak lead prišiel z /obhliadnute (má inspection_result). Ovplyvňuje
+   * redirect po send — namiesto /agent ide na /obhliadnute?tab=finalna. */
+  hasInspection?: boolean;
 }
 
 /** Snapshot generátorového stavu — ukladá sa do lead.data.last_quote
@@ -804,7 +807,15 @@ ${signatureLines.join("\n")}`;
       const { generator, input } = await buildPdfInput();
       const { blob, filename } = generator(input);
 
-      const subject = `EPOXIDOVO.SK – Cenová ponuka`;
+      // FINÁLNA vs ORIENTAČNÁ — kľúčové rozlíšenie:
+      //   • leadContext.hasInspection = obhliadka bola dokončená
+      //     → FINÁLNA CP (obchodák pošle po obhliadke z /obhliadnute)
+      //   • bez obhliadky = ORIENTAČNÁ (rýchla po prvom telefonáte)
+      const isFinal = !!leadContext?.hasInspection;
+
+      const subject = isFinal
+        ? `EPOXIDOVO.SK – Finálna cenová ponuka po obhliadke`
+        : `EPOXIDOVO.SK – Orientačná cenová ponuka`;
       // Akuzatív — "na jednofarebnú/chipsovú/mramorovú/metalickú podlahu"
       const accusative =
         floorType && FLOOR_TYPE_ACCUSATIVE[floorType]
@@ -818,7 +829,18 @@ ${signatureLines.join("\n")}`;
         input.agent_email,
         "www.epoxidovo.sk",
       ].filter(Boolean);
-      const bodyText = `Dobrý deň prajeme,
+      const bodyText = isFinal
+        ? `Dobrý deň prajeme,
+
+Ďakujeme za obhliadku. V prílohe Vám posielam FINÁLNU cenovú ponuku na ${accusative} podlahu.
+
+Ponuka je vypracovaná na základe presného zamerania a testov podkladu, ktoré náš technik vykonal priamo na mieste. Uvedené ceny sú konečné — nebudú sa už meniť.
+
+V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
+
+S pozdravom,
+${signatureLines.join("\n")}`
+        : `Dobrý deň prajeme,
 
 Na základe nášho telefonátu Vám v prílohe posielam ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu.
 
@@ -901,8 +923,15 @@ ${signatureLines.join("\n")}`;
 
       // ✅ Odoslané cez Resend s PDF prílohou
       toast.success(`✉️ CP odoslaná zákazníkovi na ${recipient} · 📎 PDF v prílohe`);
-      setTimeout(() => router.push("/agent?tab=kontakt"), 400);
-      return; // send flow ends here — legacy Gmail compose flow bol odstránený
+      // Redirect: ak lead prišiel z obhliadky, ideme späť do /obhliadnute
+      // (tab=finalna, kde sa práve objavil ako CP odoslaná). Inak /agent.
+      const backTo = leadContext?.hasInspection
+        ? `/obhliadnute?tab=finalna&justSent=${encodeURIComponent(leadContext.id)}`
+        : "/agent?tab=kontakt";
+      setTimeout(() => {
+        window.location.href = backTo; // hard nav — no-cache middleware fetches fresh
+      }, 500);
+      return;
     } catch (e) {
       toast.error(
         `Email chyba: ${e instanceof Error ? e.message : "unknown"}`,

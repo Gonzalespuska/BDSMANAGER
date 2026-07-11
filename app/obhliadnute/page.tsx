@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { formatPhoneSK } from "@/lib/phone-format";
 
 import { SafePhoto } from "@/components/safe-photo";
+import { JustSentBanner } from "./just-sent-banner";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export const dynamic = "force-dynamic";
 export default async function ObhliadnutePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; justSent?: string }>;
 }) {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
@@ -63,6 +64,23 @@ export default async function ObhliadnutePage({
   const sp = await searchParams;
   const activeTab: "caka" | "finalna" =
     sp.tab === "finalna" ? "finalna" : "caka";
+
+  // Ak user práve poslal CP, tab=finalna param je set + justSent=<leadId>.
+  // Načítame meno pre banner.
+  let justSentName: string | null = null;
+  if (sp.justSent) {
+    try {
+      const admin = createAdminClient();
+      const { data: l } = await admin
+        .from("leads")
+        .select("name")
+        .eq("id", sp.justSent)
+        .maybeSingle();
+      justSentName = (l?.name as string) ?? null;
+    } catch {
+      /* ignore */
+    }
+  }
 
   const sb = createAdminClient();
 

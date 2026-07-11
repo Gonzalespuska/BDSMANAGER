@@ -121,21 +121,16 @@ export function InspectionReview({
                 </div>
               </div>
               {moistureVerdict && (
-                <div
-                  className={
+                <VerdictPill
+                  variant={moistureVerdict}
+                  label={
                     moistureVerdict === "ok"
-                      ? "text-[11px] font-bold text-emerald-700 mt-1"
+                      ? "V norme"
                       : moistureVerdict === "warn"
-                        ? "text-[11px] font-bold text-amber-700 mt-1"
-                        : "text-[11px] font-bold text-rose-700 mt-1"
+                        ? "Hraničná — parobrzda odporúčaná"
+                        : "Vysoká — parobrzda povinná"
                   }
-                >
-                  {moistureVerdict === "ok"
-                    ? "✅ V norme"
-                    : moistureVerdict === "warn"
-                      ? "⚠ Hraničná — parobrzda odporúčaná"
-                      : "⛔ Vysoká — parobrzda povinná"}
-                </div>
+                />
               )}
             </div>
             <div className="border-t pt-3">
@@ -152,21 +147,16 @@ export function InspectionReview({
                 </div>
               </div>
               {adhVerdict && (
-                <div
-                  className={
+                <VerdictPill
+                  variant={adhVerdict}
+                  label={
                     adhVerdict === "ok"
-                      ? "text-[11px] font-bold text-emerald-700 mt-1"
+                      ? "Podklad drží"
                       : adhVerdict === "warn"
-                        ? "text-[11px] font-bold text-amber-700 mt-1"
-                        : "text-[11px] font-bold text-rose-700 mt-1"
+                        ? "Hraničná — riziko odlupnutia"
+                        : "Slabý — treba brúsenie + primer 151"
                   }
-                >
-                  {adhVerdict === "ok"
-                    ? "✅ Podklad drží"
-                    : adhVerdict === "warn"
-                      ? "⚠ Hraničná — riziko odlupnutia"
-                      : "⛔ Slabý — treba brúsenie + primer 151"}
-                </div>
+                />
               )}
             </div>
           </div>
@@ -305,6 +295,36 @@ function PhotoGrid({
           </a>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// VerdictPill — farebná bublina s verdiktom pre vlhkosť / odtrh.
+// OK  → emerald tint, ✓
+// Warn → amber   tint, ⚠  (predtým malý text — user "nech je v bubline")
+// Bad → rose    tint, ⛔ (výrazný červený pruh)
+// ═══════════════════════════════════════════════════════════════════════
+function VerdictPill({
+  variant,
+  label,
+}: {
+  variant: "ok" | "warn" | "bad";
+  label: string;
+}) {
+  const cls =
+    variant === "ok"
+      ? "bg-emerald-100 border-emerald-300 text-emerald-900"
+      : variant === "warn"
+        ? "bg-amber-100 border-amber-400 text-amber-900"
+        : "bg-rose-100 border-rose-400 text-rose-900 shadow-sm shadow-rose-200";
+  const icon = variant === "ok" ? "✓" : variant === "warn" ? "⚠" : "⛔";
+  return (
+    <div
+      className={`mt-2 inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-black tracking-tight ${cls}`}
+    >
+      <span className="text-sm">{icon}</span>
+      <span>{label}</span>
     </div>
   );
 }
