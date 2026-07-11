@@ -1231,6 +1231,15 @@ function DayModal({
   const [singleDay, setSingleDay] = React.useState(true);
   const [assignBusy, setAssignBusy] = React.useState(false);
   const [assignError, setAssignError] = React.useState<string | null>(null);
+  // Konflikt dialog — ak submitAssign detekuje warn/block, otvorí sa modal
+  // s vysvetlením + user možnosťami: potvrdiť aj tak / napísať tímu / zrušiť.
+  const [conflictInfo, setConflictInfo] = React.useState<{
+    verdict: "warn" | "block";
+    reasons: string[];
+    existingCount: number;
+    totalM2: number;
+    maxDistanceKm: number;
+  } | null>(null);
 
   // Load users pri prvom otvorení assign-mode modal-u + auto-preselect
   React.useEffect(() => {
@@ -1260,17 +1269,8 @@ function DayModal({
     };
   }, [isAssign, assignMode, assignLead?.city]);
 
-  async function submitAssign() {
-    // Debug log — nech vidime v konzole aky je stav pri click
-    console.log("[submitAssign] click:", {
-      isAssign,
-      assignLead: assignLead?.id,
-      pickedUserId,
-      pickedTime,
-      assignMode,
-    });
+  async function submitAssign(bypassConflict = false) {
     if (!isAssign || !assignLead || !pickedUserId || !assignMode) {
-      // Namiesto silent return zobrazime PRESNU chybu userovi
       const missing: string[] = [];
       if (!isAssign) missing.push("assign mode");
       if (!assignLead) missing.push("lead");
@@ -1283,6 +1283,46 @@ function DayModal({
       setAssignError("Vyplň čas (HH : MM) pred potvrdením.");
       return;
     }
+
+    // KONFLIKT CHECK — user: "ak mu tam da rovnakemu timu dalsiu zakazku
+    // v ten isty den na druhej strane slovenska neda to zmysel". Server
+    // heuristika (m² + vzdialenosť) vráti verdict ok/warn/block.
+    if (!bypassConflict) {
+      try {
+        const r = await fetch("/api/calendar/check-conflict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            target_user_id: pickedUserId,
+            date,
+            city: assignLead.city ?? null,
+            m2: assignLead.m2 ?? null,
+          }),
+        });
+        const j = (await r.json().catch(() => null)) as null | {
+          ok: boolean;
+          verdict: "ok" | "warn" | "block";
+          reasons: string[];
+          existing_count: number;
+          total_m2: number;
+          max_distance_km: number;
+        };
+        if (j?.ok && j.verdict !== "ok") {
+          setConflictInfo({
+            verdict: j.verdict,
+            reasons: j.reasons,
+            existingCount: j.existing_count,
+            totalM2: j.total_m2,
+            maxDistanceKm: j.max_distance_km,
+          });
+          return; // Prerušíme submit — user musí potvrdiť v conflict dialógu
+        }
+      } catch (e) {
+        // Ak check zlyhá, nechajme priradenie prejsť — nechceme blokovať flow
+        console.warn("[submitAssign] conflict check failed:", e);
+      }
+    }
+
     setAssignBusy(true);
     setAssignError(null);
     try {
@@ -1766,6 +1806,104 @@ function DayModal({
               )}
             </button>
           </section>
+        )}
+
+        {/* KONFLIKT DIALOG — server heuristika detekovala prekročenie
+            kapacity za deň (m² + vzdialenosť). Modal ukáže dôvody +
+            umožní: potvrdiť aj tak / napísať tímu (DM) / zrušiť. */}
+        {conflictInfo && pickedUserId && assignLead && (
+          <div
+            className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setConflictInfo(null)}
+          >
+            <div
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className={cn(
+                  "px-5 py-4 text-white",
+                  conflictInfo.verdict === "block"
+                    ? "bg-gradient-to-br from-rose-500 to-rose-700"
+                    : "bg-gradient-to-br from-amber-500 to-amber-700",
+                )}
+              >
+                <div className="text-2xl mb-1">
+                  {conflictInfo.verdict === "block" ? "⛔" : "⚠"}
+                </div>
+                <div className="text-lg font-black leading-tight">
+                  {conflictInfo.verdict === "block"
+                    ? "Nedá sa stihnúť"
+                    : "Pozor — stihnú dve zákazky v ten deň?"}
+                </div>
+                <div className="text-sm opacity-90 mt-0.5">
+                  {conflictInfo.existingCount} existujúc
+                  {conflictInfo.existingCount === 1 ? "a" : "e"} zákazk
+                  {conflictInfo.existingCount === 1 ? "a" : "y"} · celkom{" "}
+                  {conflictInfo.totalM2.toFixed(0)} m²
+                  {conflictInfo.maxDistanceKm > 0 &&
+                    ` · vzdialenosť ${conflictInfo.maxDistanceKm.toFixed(0)} km`}
+                </div>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {conflictInfo.reasons.map((r, i) => (
+                  <div
+                    key={i}
+                    className="text-sm text-slate-800 leading-snug"
+                  >
+                    • {r}
+                  </div>
+                ))}
+              </div>
+              <div className="border-t px-4 py-3 bg-slate-50 flex flex-wrap gap-2">
+                {conflictInfo.verdict === "warn" && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setConflictInfo(null);
+                      await submitAssign(true);
+                    }}
+                    className="flex-1 min-w-[120px] inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-sm font-black transition-colors"
+                  >
+                    ✓ Aj tak potvrdiť
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    // Otvor DM s realizatorom — pre-filled správa
+                    setConflictInfo(null);
+                    try {
+                      const r = await fetch("/api/chat/dm", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ peer_id: pickedUserId }),
+                      });
+                      const jj = (await r.json()) as {
+                        ok?: boolean;
+                        room_id?: string;
+                      };
+                      if (jj.ok && jj.room_id) {
+                        window.location.href = `/dm/${jj.room_id}`;
+                      }
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  className="flex-1 min-w-[120px] inline-flex items-center justify-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 text-sm font-black transition-colors"
+                >
+                  💬 Napísať tímu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConflictInfo(null)}
+                  className="rounded-lg border-2 border-slate-200 hover:bg-slate-100 text-slate-700 px-4 py-2.5 text-sm font-bold transition-colors"
+                >
+                  Zrušiť
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Callbacks */}

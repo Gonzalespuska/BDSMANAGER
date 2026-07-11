@@ -102,13 +102,13 @@ export function ManualAssignModal({
         setSaving(false);
         return;
       }
-      // Cleanup URL manuál params + redirect s newlead id
-      const url = new URL(window.location.href);
-      url.searchParams.delete("manual");
-      url.searchParams.set("assign", kind);
-      url.searchParams.set("lead", j.lead_id);
-      if (city.trim()) url.searchParams.set("city", city.trim());
-      window.location.href = url.pathname + url.search;
+      // User: "ked davam manualne vytvorit obhliadku alebo realizaciu
+      // nech ma po vytvoreni nevravi na leady ale na kalendar cisto".
+      // Explicitne redirectni na /calendar s assign params — bez
+      // ohľadu na aktuálnu URL.
+      const params = new URLSearchParams({ assign: kind, lead: j.lead_id });
+      if (city.trim()) params.set("city", city.trim());
+      window.location.href = `/calendar?${params.toString()}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : "network");
       setSaving(false);
