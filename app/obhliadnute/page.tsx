@@ -356,6 +356,13 @@ export default async function ObhliadnutePage({
                             tone="sky"
                           />
                         )}
+                        {lokalita && lokalita !== "—" && (
+                          <Chip
+                            icon={<MapPin className="w-3 h-3" />}
+                            label={lokalita}
+                            tone="emerald"
+                          />
+                        )}
                         {priestor && (
                           <Chip
                             icon={<span>🏠</span>}
