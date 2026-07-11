@@ -1,5 +1,6 @@
 export const runtime = "edge";
 
+import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -94,6 +95,16 @@ export async function POST(request: NextRequest) {
         .from("leads")
         .update({ status: "quote_sent", last_activity_at: nowIso })
         .eq("id", body.lead_id);
+    }
+
+    // Revaliduj — badge "Obhliadnuté" v nav-e zhasne (lead už nie je 'inspected')
+    try {
+      revalidatePath("/obhliadnute");
+      revalidatePath("/notifikacie");
+      revalidatePath("/calendar");
+      revalidatePath("/agent");
+    } catch {
+      /* edge cache — ignore */
     }
 
     return NextResponse.json({ ok: true, mode: "logged" });

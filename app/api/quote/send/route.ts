@@ -1,5 +1,6 @@
 export const runtime = "edge";
 
+import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -292,6 +293,17 @@ export async function POST(request: NextRequest) {
       } catch (e) {
         console.warn("[quote/send] activity log / status update failed:", e);
       }
+    }
+
+    // Revaliduj kľúčové stránky — obchodákovi zhasne badge "Obhliadnuté",
+    // /obhliadnute karty aktualizuju status, kalendár vyfarbí LeadEventCard.
+    try {
+      revalidatePath("/obhliadnute");
+      revalidatePath("/notifikacie");
+      revalidatePath("/calendar");
+      revalidatePath("/agent");
+    } catch {
+      /* revalidatePath môže failnúť pri edge runtime bez cache — ignoruj */
     }
 
     return NextResponse.json({

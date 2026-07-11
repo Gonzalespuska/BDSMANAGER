@@ -39,22 +39,26 @@ export function NavPillClient({
   icon,
   children,
   tint,
+  badge,
 }: {
   href: string;
   icon: React.ReactNode;
   children: React.ReactNode;
   /** Farba tabu — default sky, admin=rose. */
   tint?: "sky" | "rose";
+  /** Ak > 0, zobrazí červený bubble s počítadlom (napr. 3 nové obhliadky). */
+  badge?: number;
 }) {
   const pathname = usePathname();
   const active = isActive(pathname, href);
   const useRose = tint === "rose";
+  const showBadge = typeof badge === "number" && badge > 0;
 
   return (
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-3 md:px-4 py-2 text-sm font-semibold transition-all whitespace-nowrap shrink-0",
+        "relative inline-flex items-center gap-1.5 rounded-full px-3 md:px-4 py-2 text-sm font-semibold transition-all whitespace-nowrap shrink-0",
         active
           ? useRose
             ? "bg-rose-600 text-white border border-rose-600 shadow-[0_4px_14px_rgba(225,29,72,0.35)]"
@@ -66,6 +70,19 @@ export function NavPillClient({
     >
       {icon}
       {children}
+      {showBadge && (
+        <span
+          className={cn(
+            "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-black tabular-nums shadow-md ring-2 ring-white",
+            active
+              ? "bg-white text-rose-600"
+              : "bg-rose-500 text-white animate-pulse",
+          )}
+          aria-label={`${badge} ${badge === 1 ? "nová položka" : "nových položiek"}`}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   );
 }

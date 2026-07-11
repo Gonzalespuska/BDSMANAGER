@@ -167,6 +167,27 @@ export async function AppShell({
   }
   const homeHref = dashboardPathForRole(user.role);
 
+  // "Obhliadnuté" badge count — obchodák (a admin) vidí červený bubble
+  // s počtom leadov ktoré obhliadkár PRÁVE odoslal (status='inspected')
+  // a čakajú na jeho CP. Bubble zhasne keď pošle CP → status='quote_sent'.
+  let obhliadnuteBadge = 0;
+  if (visibleTabs.includes("obhliadnute")) {
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      const sb = createAdminClient();
+      const q = sb
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "inspected");
+      const scoped =
+        user.role === "admin" ? q : q.eq("assigned_to", user.id);
+      const { count } = await scoped;
+      obhliadnuteBadge = count ?? 0;
+    } catch {
+      /* fail silently — badge zostane 0 */
+    }
+  }
+
   return (
     <div className="flex flex-col bg-muted/30 min-h-screen">
       {/* Global toast notifikacie (top-right) — dostupné z každého client
@@ -236,12 +257,14 @@ export async function AppShell({
                 </span>
               );
             }
+            const badge = tabId === "obhliadnute" ? obhliadnuteBadge : undefined;
             return (
               <NavPill
                 key={tabId}
                 href={def.href}
                 icon={def.icon}
                 tint={tabId === "admin" ? "rose" : "sky"}
+                badge={badge}
               >
                 {def.label}
               </NavPill>
@@ -273,6 +296,7 @@ function NavPill(props: {
   icon: React.ReactNode;
   children: React.ReactNode;
   tint?: "sky" | "rose";
+  badge?: number;
 }) {
   return <NavPillClient {...props} />;
 }

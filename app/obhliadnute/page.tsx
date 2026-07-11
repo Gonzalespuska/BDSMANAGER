@@ -56,11 +56,17 @@ export default async function ObhliadnutePage() {
 
   const sb = createAdminClient();
 
-  // Leady status='inspected' priradené tomuto obchodákovi (admin vidí všetky)
+  // Leady kde bola obhliadka DOKONČENÁ (obhliadkár klikol Odoslať).
+  // Zahrňujeme:
+  //   • status='inspected' — čerstvo obhliadnuté, čakajú na CP (⚡ NOVÉ)
+  //   • status='quote_sent' — obchodák už poslal CP (zostávajú tu ako
+  //     história aby obchodák videl "toto som poslal, kedy, čo tam bolo")
+  // Won/lost/archived nezobrazujeme (finálne stavy — patria do /agent).
   const baseQuery = sb
     .from("leads")
     .select("*")
-    .eq("status", "inspected")
+    .in("status", ["inspected", "quote_sent"])
+    .not("inspection_result", "is", null)
     .order("last_activity_at", { ascending: false })
     .limit(100);
   const q =
@@ -129,17 +135,19 @@ export default async function ObhliadnutePage() {
     >
       <div className="space-y-6">
         <header>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2 flex-wrap">
             <CheckCheck className="w-6 h-6 text-emerald-600" aria-hidden />
             Obhliadnuté
-            <span className="text-[11px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 px-2 py-1 rounded ml-1">
-              {leads.length}× čaká na CP
-            </span>
+            {leads.filter((l) => l.status === "inspected").length > 0 && (
+              <span className="text-[11px] font-black uppercase tracking-widest bg-rose-500 text-white px-2 py-1 rounded ml-1 animate-pulse">
+                {leads.filter((l) => l.status === "inspected").length}× NOVÉ — pošli CP
+              </span>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
             Obhliadkár už bol na mieste, spísal testy + presné m² + fotky.
-            Tvoj krok: pozrieť dáta → poslať klientovi cenovú ponuku (alebo
-            označiť ako lost ak už zákazku odmietol).
+            Nové (červená bublina) čakajú na tvoju CP. Odoslané CP (sivé)
+            zostávajú tu ako archív.
           </p>
         </header>
 
@@ -189,16 +197,41 @@ export default async function ObhliadnutePage() {
                   )
                 : null;
 
+              const isNew = l.status === "inspected"; // ešte neposlaná CP
               return (
                 <li
                   key={l.id as string}
-                  className="rounded-2xl border-2 bg-white shadow-sm overflow-hidden"
+                  className={cn(
+                    "rounded-2xl border-2 shadow-sm overflow-hidden transition-all",
+                    isNew
+                      ? "bg-white border-rose-300 shadow-rose-100/50 shadow-md ring-2 ring-rose-200/50"
+                      : "bg-slate-50/70 border-slate-200 opacity-90",
+                  )}
                 >
                   {/* Header — meno klienta + status pill + čas */}
-                  <div className="bg-gradient-to-r from-emerald-50 to-sky-50 px-4 py-3 border-b flex items-center gap-3 flex-wrap">
+                  <div
+                    className={cn(
+                      "px-4 py-3 border-b flex items-center gap-3 flex-wrap",
+                      isNew
+                        ? "bg-gradient-to-r from-rose-50 via-emerald-50 to-sky-50"
+                        : "bg-slate-100/60",
+                    )}
+                  >
                     <div className="flex-1 min-w-0">
-                      <div className="text-base md:text-lg font-black leading-tight truncate">
-                        {l.name}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isNew && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-rose-500 text-white px-1.5 py-0.5 rounded animate-pulse">
+                            ⚡ NOVÉ
+                          </span>
+                        )}
+                        {!isNew && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-slate-400 text-white px-1.5 py-0.5 rounded">
+                            ✉ CP odoslaná
+                          </span>
+                        )}
+                        <div className="text-base md:text-lg font-black leading-tight truncate">
+                          {l.name}
+                        </div>
                       </div>
                       <div className="text-[11px] font-semibold text-muted-foreground inline-flex items-center gap-1.5 mt-0.5">
                         <MapPin className="w-3 h-3" aria-hidden />
@@ -206,7 +239,7 @@ export default async function ObhliadnutePage() {
                         {activityAt && (
                           <>
                             <span className="mx-1">·</span>
-                            Obhliadnuté {activityAt}
+                            {isNew ? "Obhliadnuté" : "CP poslaná"} {activityAt}
                           </>
                         )}
                       </div>
@@ -363,13 +396,23 @@ export default async function ObhliadnutePage() {
                   )}
 
                   {/* Actions */}
-                  <div className="border-t bg-slate-50/50 px-4 py-3 flex items-center gap-2 flex-wrap">
+                  <div
+                    className={cn(
+                      "border-t px-4 py-3 flex items-center gap-2 flex-wrap",
+                      isNew ? "bg-emerald-50/50" : "bg-slate-100/40",
+                    )}
+                  >
                     <Link
                       href={`/generator?lead=${l.id}`}
-                      className="inline-flex items-center gap-2 rounded-lg bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 text-sm font-black transition-colors shadow-sm"
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-black transition-colors shadow-sm",
+                        isNew
+                          ? "bg-sky-500 hover:bg-sky-600 text-white"
+                          : "bg-slate-200 hover:bg-slate-300 text-slate-700",
+                      )}
                     >
                       <Calculator className="w-4 h-4" />
-                      Poslať cenovú ponuku
+                      {isNew ? "Poslať cenovú ponuku" : "Otvoriť ponuku znova"}
                     </Link>
                     <Link
                       href={`/agent?lead=${l.id}`}
