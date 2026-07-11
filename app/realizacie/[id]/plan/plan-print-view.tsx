@@ -619,6 +619,16 @@ function ResponsibilityProtocol({
   const steps = baseSteps.filter((s) => !s.chipsOnly || isChipsFloor);
   const withAssignees = assignResponsibilities(steps, teamMembers);
 
+  // Evidencia materiálu / šarže — LEN pri väčších zákazkách (150+ m²)
+  // aby sa malé zákazky nezabalovali papierovaním. User: "pri
+  // zakazchach nad 150m nech toto pridava".
+  const plochaNum = plocha ? parseFloat(plocha.replace(",", ".")) : 0;
+  const showEvidenceSection = plochaNum >= 150;
+
+  // Dynamické čísla sekcií — bez evidencie sú 2-5, s evidenciou 2-6.
+  const secN = (base: number) => (showEvidenceSection ? base : base - 1);
+  void secN;
+
   // User (2026-07-11): "datum realizacie je datum ktory je na realizacii
   // nie ze ked stlaci na ten papier vytlacit ho chce a bude to den
   // dopredu bude tam o den menej". Použi realization_at z DB s timeZone
@@ -701,36 +711,38 @@ function ResponsibilityProtocol({
         </tbody>
       </table>
 
-      {/* 2. PODMIENKY PROSTREDIA */}
-      {/* 2. EVIDENCIA MATERIÁLU / ŠARŽE
-          (Podmienky prostredia — teplota, RH, rosný bod, CM — robí
-          obhliadkár na obhliadke. Realizator to nerobí, takže na tomto
-          protokole nepotrebuje. Prípadné hodnoty sú v inspection_result
-          a obchodák/admin ich vidí na /obhliadnute karte.) */}
-      <h2>2. Evidencia materiálu / šarže</h2>
-      <table>
-        <thead>
-          <tr>
-            <th style={{ width: "35%" }}>Produkt</th>
-            <th style={{ width: "25%" }}>Šarža (batch)</th>
-            <th style={{ width: "15%" }}>Počet balení</th>
-            <th style={{ width: "25%" }}>Kto miešal</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <tr key={i} className="row-tall">
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* 2. EVIDENCIA MATERIÁLU / ŠARŽE — LEN pre zákazky nad 150 m².
+          User 2026-07-11: "pri zakazchach nad 150m nech toto pridava
+          to je super ale asi aj viac riadkov este 2".
+          Pri menších zákazkách sa nechá vynechať — zbytočné papierovanie. */}
+      {showEvidenceSection && (
+        <>
+          <h2>2. Evidencia materiálu / šarže</h2>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: "35%" }}>Produkt</th>
+                <th style={{ width: "25%" }}>Šarža (batch)</th>
+                <th style={{ width: "15%" }}>Počet balení</th>
+                <th style={{ width: "25%" }}>Kto miešal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                <tr key={i} className="row-tall">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
 
-      {/* 4. ROZDELENIE PRÁCE */}
-      <h2>3. Rozdelenie práce medzi realizatorov</h2>
+      {/* Rozdelenie práce — sekcia 2 (bez evidencie) alebo 3 (s evidenciou) */}
+      <h2>{showEvidenceSection ? "3" : "2"}. Rozdelenie práce medzi realizatorov</h2>
       {teamMembers.length > 0 && (
         <div style={{ fontSize: "10px", marginBottom: "4px" }}>
           <strong>Tím:</strong> {teamMembers.map((m) => m.name).join(", ")}{" "}
@@ -778,7 +790,7 @@ function ResponsibilityProtocol({
       </table>
 
       {/* 5. FOTODOKUMENTÁCIA */}
-      <h2>4. Fotodokumentácia</h2>
+      <h2>{showEvidenceSection ? "4" : "3"}. Fotodokumentácia</h2>
       <div style={{ padding: "8px", border: "1px solid #000", fontSize: "11px" }}>
         Zaškrtnite fotky ktoré boli spravené počas realizácie:
         <div style={{ marginTop: "6px", display: "flex", gap: "18px", flexWrap: "wrap" }}>
@@ -801,7 +813,7 @@ function ResponsibilityProtocol({
       </div>
 
       {/* 6. SÚPIS CHÝB / DEFEKTOV */}
-      <h2>5. Súpis chýb / defektov (ak sa niečo nájde)</h2>
+      <h2>{showEvidenceSection ? "5" : "4"}. Súpis chýb / defektov (ak sa niečo nájde)</h2>
       <table>
         <thead>
           <tr>
@@ -828,9 +840,9 @@ function ResponsibilityProtocol({
       </table>
 
       {/* 7. ZODPOVEDNOSTNÁ DOLOŽKA */}
-      <h2>6. Zodpovednostná doložka</h2>
+      <h2>{showEvidenceSection ? "6" : "5"}. Zodpovednostná doložka</h2>
       <div className="doložka">
-        Každý svojím podpisom v tabuľke (bod 3) potvrdzuje, že ním vykonaný
+        Každý svojím podpisom v tabuľke (bod {showEvidenceSection ? 3 : 2}) potvrdzuje, že ním vykonaný
         úkon bol spravený správne a podľa pokynov technológie. Ak sa pri
         záručnej reklamácii preukáže, že chyba na diele vznikla{" "}
         <strong>preukázateľne zlým vykonaním konkrétneho úkonu</strong>, náklady
