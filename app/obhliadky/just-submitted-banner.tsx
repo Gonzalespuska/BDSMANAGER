@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
   Bell,
   Camera,
   Check,
@@ -28,12 +30,14 @@ import {
  *   - Auto po 8 s
  */
 export function JustSubmittedBanner({
+  leadId,
   leadName,
   m2,
   moist,
   adh,
   photos,
 }: {
+  leadId: string;
   leadName: string;
   m2: string;
   moist: string;
@@ -71,72 +75,88 @@ export function JustSubmittedBanner({
       role="status"
       aria-live="polite"
     >
+      {/* X close — samostatné tlačidlo NAD Linkom (z-10 + stopPropagation). */}
       <button
         type="button"
-        onClick={() => setVisible(false)}
-        className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 text-white flex items-center justify-center z-10 transition-colors"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setVisible(false);
+        }}
+        className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 text-white flex items-center justify-center z-20 transition-colors"
         aria-label="Zavrieť"
       >
         <X className="w-4 h-4" />
       </button>
 
-      {/* Header — celebration */}
-      <div className="bg-gradient-to-br from-emerald-500 via-emerald-600 to-emerald-700 px-5 py-5 text-white relative overflow-hidden">
-        <div className="absolute top-2 right-16 opacity-20">
-          <Sparkles className="w-8 h-8" />
-        </div>
-        <div className="absolute bottom-2 left-8 opacity-20">
-          <Sparkles className="w-6 h-6" />
-        </div>
-        <div className="flex items-center gap-4 relative">
-          <div className="shrink-0 w-14 h-14 rounded-full bg-white/25 border-4 border-white flex items-center justify-center animate-pulse">
-            <Check className="w-8 h-8 text-white stroke-[3]" />
+      {/* Celý banner klikateľný → detail obhliadky */}
+      <Link
+        href={`/obhliadky/${leadId}`}
+        className="block hover:brightness-105 transition-all"
+        title={`Otvoriť detail obhliadky "${leadName}"`}
+      >
+        {/* Header — celebration */}
+        <div className="bg-gradient-to-br from-emerald-500 via-emerald-600 to-emerald-700 px-5 py-5 text-white relative overflow-hidden">
+          <div className="absolute top-2 right-16 opacity-20">
+            <Sparkles className="w-8 h-8" />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xl md:text-2xl font-black leading-tight">
-              Obhliadka odoslaná ✓
+          <div className="absolute bottom-2 left-8 opacity-20">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <div className="flex items-center gap-4 relative">
+            <div className="shrink-0 w-14 h-14 rounded-full bg-white/25 border-4 border-white flex items-center justify-center animate-pulse">
+              <Check className="w-8 h-8 text-white stroke-[3]" />
             </div>
-            <div className="text-sm text-emerald-50 font-semibold inline-flex items-center gap-1.5 mt-0.5">
-              <Bell className="w-3.5 h-3.5" />
-              Obchodník už dostal notifikáciu — je to v jeho sekcii
-              „Obhliadnuté"
+            <div className="flex-1 min-w-0">
+              <div className="text-xl md:text-2xl font-black leading-tight">
+                Obhliadka odoslaná ✓
+              </div>
+              <div className="text-sm text-emerald-50 font-semibold inline-flex items-center gap-1.5 mt-0.5">
+                <Bell className="w-3.5 h-3.5" />
+                Obchodník už dostal notifikáciu — je to v jeho sekcii
+                „Obhliadnuté"
+              </div>
             </div>
+            <ArrowRight className="w-6 h-6 shrink-0 text-white/80" aria-hidden />
           </div>
         </div>
-      </div>
 
-      {/* Body — zhrnutie čo bolo odoslané */}
-      <div className="bg-white px-5 py-3">
-        <div className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-1.5">
-          Odoslané dáta pre „{leadName}"
+        {/* Body — zhrnutie čo bolo odoslané */}
+        <div className="bg-white px-5 py-3">
+          <div className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-1.5 inline-flex items-center gap-1">
+            Odoslané dáta pre „{leadName}"
+            <span className="text-slate-400 font-bold">
+              · klik → detail
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            {m2 && (
+              <Chip
+                icon={<Ruler className="w-3 h-3" />}
+                label={`${m2} m²`}
+              />
+            )}
+            {moist && (
+              <Chip
+                icon={<Droplets className="w-3 h-3" />}
+                label={`Vlhkosť ${moist}%`}
+              />
+            )}
+            {adh && (
+              <Chip
+                icon={<Zap className="w-3 h-3" />}
+                label={`Odtrh ${adh} MPa`}
+              />
+            )}
+            {photos !== "0" && (
+              <Chip
+                icon={<Camera className="w-3 h-3" />}
+                label={`${photos} fotiek`}
+              />
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs">
-          {m2 && (
-            <Chip
-              icon={<Ruler className="w-3 h-3" />}
-              label={`${m2} m²`}
-            />
-          )}
-          {moist && (
-            <Chip
-              icon={<Droplets className="w-3 h-3" />}
-              label={`Vlhkosť ${moist}%`}
-            />
-          )}
-          {adh && (
-            <Chip
-              icon={<Zap className="w-3 h-3" />}
-              label={`Odtrh ${adh} MPa`}
-            />
-          )}
-          {photos !== "0" && (
-            <Chip
-              icon={<Camera className="w-3 h-3" />}
-              label={`${photos} fotiek`}
-            />
-          )}
-        </div>
-      </div>
+      </Link>
     </div>
   );
 }

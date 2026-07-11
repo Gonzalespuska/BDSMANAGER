@@ -1,5 +1,7 @@
 import { Beaker, Camera, CheckCircle2, Droplets, Ruler, Zap } from "lucide-react";
 
+import { SafePhoto } from "@/components/safe-photo";
+
 /**
  * InspectionReview — read-only zobrazenie hotovej obhliadky.
  *
@@ -295,9 +297,8 @@ function PhotoGrid({
             rel="noopener noreferrer"
             className="relative aspect-square rounded-lg overflow-hidden border-2 border-slate-200 hover:border-sky-400 transition-colors block"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={p.url}
+            <SafePhoto
+              url={p.url}
               alt="Foto z obhliadky"
               className="w-full h-full object-cover hover:scale-105 transition-transform"
             />

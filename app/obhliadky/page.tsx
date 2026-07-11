@@ -135,6 +135,7 @@ export default async function ObhliadkyDashboard({
     <div className="space-y-6">
       {justSubmitted && (
         <JustSubmittedBanner
+          leadId={justSubmitted}
           leadName={justSubmittedName ?? "Obhliadka"}
           m2={sp.m2 ?? ""}
           moist={sp.moist ?? ""}

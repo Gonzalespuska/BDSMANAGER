@@ -22,7 +22,7 @@ import { loadNotifications } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { formatPhoneSK } from "@/lib/phone-format";
 
-import { SafePhoto } from "./safe-photo";
+import { SafePhoto } from "@/components/safe-photo";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
