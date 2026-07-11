@@ -822,6 +822,15 @@ ${signatureLines.join("\n")}`;
           ? FLOOR_TYPE_ACCUSATIVE[floorType]
           : input.floor_type_label.toLowerCase();
 
+      // Signature — user: "footer udaje obchodaka meno email cislo firma,
+      // web vo footeri nemusi byt". Odstránené www.epoxidovo.sk pre FINÁLNU
+      // CP (orientačná ho stále má, pretože klient nemusí poznať firmu).
+      const signatureLinesFinal = [
+        input.agent_name,
+        input.agent_phone ? formatPhoneIntl(input.agent_phone) : null,
+        input.agent_email,
+        "EPOXIDOVO s. r. o.",
+      ].filter(Boolean);
       const signatureLines = [
         input.agent_name,
         input.agent_phone ? formatPhoneIntl(input.agent_phone) : null,
@@ -830,16 +839,18 @@ ${signatureLines.join("\n")}`;
         "www.epoxidovo.sk",
       ].filter(Boolean);
       const bodyText = isFinal
-        ? `Dobrý deň prajeme,
+        ? // FINÁLNA — user: "text na konci vravi aj za aku podlahu konkretne
+          // ze jednofarebnu to tam nemusi byt a ma to koncit ze v prilohe
+          // vam posielam finalnu cenovu ponuku". Odstranený "na ${accusative}
+          // podlahu" a "Ponuka je vypracovaná..." odsek.
+          `Dobrý deň prajeme,
 
-Ďakujeme za obhliadku. V prílohe Vám posielam FINÁLNU cenovú ponuku na ${accusative} podlahu.
-
-Ponuka je vypracovaná na základe presného zamerania a testov podkladu, ktoré náš technik vykonal priamo na mieste. Uvedené ceny sú konečné — nebudú sa už meniť.
+Ďakujeme za obhliadku. V prílohe Vám posielam finálnu cenovú ponuku.
 
 V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
 
 S pozdravom,
-${signatureLines.join("\n")}`
+${signatureLinesFinal.join("\n")}`
         : `Dobrý deň prajeme,
 
 Na základe nášho telefonátu Vám v prílohe posielam ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu.
