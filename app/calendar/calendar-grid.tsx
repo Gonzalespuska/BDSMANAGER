@@ -771,10 +771,11 @@ function DayModal({
   >([]);
   const [assignLoading, setAssignLoading] = React.useState(false);
   const [pickedUserId, setPickedUserId] = React.useState<string | null>(null);
+  // Prefill zo SuggestDayButton (initialTime prop z URL ?time=HH:MM).
   // Default prázdny — user musí kliknúť a vyplniť (aby si neomylom
   // nepotvrdil "09:00" bez uvedomenia). Fallback na "09:00" iba v
   // submitAssign() ak by predsa len submitol prázdny čas.
-  const [pickedTime, setPickedTime] = React.useState("");
+  const [pickedTime, setPickedTime] = React.useState(initialTime ?? "");
   const [pickedDateTo, setPickedDateTo] = React.useState("");
   const [singleDay, setSingleDay] = React.useState(true);
   const [assignBusy, setAssignBusy] = React.useState(false);
