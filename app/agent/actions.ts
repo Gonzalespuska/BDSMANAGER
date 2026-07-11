@@ -912,8 +912,11 @@ export async function completeInspectionAction(
     return { ok: false, error: "forbidden_wrong_role" };
   }
 
-  const supabase = await createClient();
-  const { data: lead, error: leadErr } = await supabase
+  // POZOR: RLS leads_select povoľuje iba admin+assigned_to. Obhliadkár
+  // (inspection_by) → 0 rows → maybeSingle vráti null → "not_found" toast.
+  // Rovnako aj leads_update. Použijeme admin klienta a auth spravíme manuálne.
+  const admin = createAdminClient();
+  const { data: lead, error: leadErr } = await admin
     .from("leads")
     .select("inspection_by, status")
     .eq("id", leadId)
@@ -931,7 +934,7 @@ export async function completeInspectionAction(
   const nextStatus = feasible ? "inspected" : "lost";
   const nowIso = new Date().toISOString();
 
-  const { error: updErr } = await supabase
+  const { error: updErr } = await admin
     .from("leads")
     .update({
       status: nextStatus,
@@ -939,9 +942,9 @@ export async function completeInspectionAction(
       last_activity_at: nowIso,
     })
     .eq("id", leadId);
-  if (updErr) return { ok: false, error: "db_error" };
+  if (updErr) return { ok: false, error: `db_error: ${updErr.message}` };
 
-  await supabase.from("lead_activities").insert({
+  await admin.from("lead_activities").insert({
     lead_id: leadId,
     user_id: user.id,
     type: "inspection_completed",
