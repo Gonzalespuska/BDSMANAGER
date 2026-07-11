@@ -42,9 +42,18 @@ interface Shape {
 }
 
 interface TestsResult {
+  // Vlhkosť podkladu — 2 CM merania (existujúce).
+  // User 2026-07-11: "moisture_1_pct a moisture_2_pct = CM metóda"
   moisture_1_pct?: number;
   moisture_2_pct?: number;
   adhesion_mpa?: number;
+  // Podmienky prostredia — nové polia (2026-07-11).
+  // User: "no takto pridaj do obhlaidkara tieto testy lebo obhliadkar
+  // bude robit s tym testom, aj cm, to nebudu robit realizatori".
+  air_temp_c?: number; // +10 až +25 °C
+  substrate_temp_c?: number; // +10 až +25 °C
+  rh_pct?: number; // relatívna vlhkosť, max 80 %
+  dew_point_c?: number; // rosný bod, min +3 °C nad substrate_temp_c
 }
 
 interface MeasurementResult {
@@ -63,6 +72,10 @@ interface WizardExistingResult {
   moisture_pct?: number;
   moisture_pct_2?: number;
   adhesion_mpa?: number;
+  air_temp_c?: number;
+  substrate_temp_c?: number;
+  rh_pct?: number;
+  dew_point_c?: number;
   shapes?: Shape[];
   agent_note?: string;
 }
@@ -114,6 +127,10 @@ export function InspectionWizard({
       moisture_1_pct: ex.moisture_pct,
       moisture_2_pct: ex.moisture_pct_2,
       adhesion_mpa: ex.adhesion_mpa,
+      air_temp_c: ex.air_temp_c,
+      substrate_temp_c: ex.substrate_temp_c,
+      rh_pct: ex.rh_pct,
+      dew_point_c: ex.dew_point_c,
     },
   );
   const [measurement, setMeasurement] = React.useState<MeasurementResult>(() => {
@@ -187,6 +204,13 @@ export function InspectionWizard({
       moisture_pct: tests.moisture_1_pct,
       moisture_pct_2: tests.moisture_2_pct,
       adhesion_mpa: tests.adhesion_mpa,
+      // Podmienky prostredia — voliteľné, obhliadkár ich vyplní ak má
+      // termohygrometer. Ak nie, uložia sa ako undefined a v protokole
+      // Zodpovednosti ostanú prázdne polia.
+      air_temp_c: tests.air_temp_c,
+      substrate_temp_c: tests.substrate_temp_c,
+      rh_pct: tests.rh_pct,
+      dew_point_c: tests.dew_point_c,
       agent_note: note.trim() || "OK — pripravené na CP.",
       feasible:
         (tests.adhesion_mpa ?? 0) >= 1.0 &&
@@ -356,6 +380,10 @@ export function InspectionWizard({
               moisture_pct: r.moisture_1_pct,
               moisture_pct_2: r.moisture_2_pct,
               adhesion_mpa: r.adhesion_mpa,
+              air_temp_c: r.air_temp_c,
+              substrate_temp_c: r.substrate_temp_c,
+              rh_pct: r.rh_pct,
+              dew_point_c: r.dew_point_c,
             });
             if (!res.ok) {
               toast.error(`Testy neuložené: ${res.error}`);
@@ -681,7 +709,7 @@ function TestsModal({
   onClose: () => void;
   onSave: (r: TestsResult) => void;
 }) {
-  const [step, setStep] = React.useState<1 | 2>(1);
+  const [step, setStep] = React.useState<1 | 2 | 3>(1);
   const [m1, setM1] = React.useState<string>(
     initial.moisture_1_pct !== undefined ? String(initial.moisture_1_pct) : "",
   );
@@ -691,27 +719,65 @@ function TestsModal({
   const [adhesion, setAdhesion] = React.useState<string>(
     initial.adhesion_mpa !== undefined ? String(initial.adhesion_mpa) : "",
   );
+  // Podmienky prostredia — nový krok 3 (2026-07-11).
+  // User: "no takto pridaj do obhlaidkara tieto testy lebo obhliadkar
+  // bude robit s tym testom, aj cm, to nebudu robit realizatori".
+  const [airTemp, setAirTemp] = React.useState<string>(
+    initial.air_temp_c !== undefined ? String(initial.air_temp_c) : "",
+  );
+  const [substrateTemp, setSubstrateTemp] = React.useState<string>(
+    initial.substrate_temp_c !== undefined ? String(initial.substrate_temp_c) : "",
+  );
+  const [rh, setRh] = React.useState<string>(
+    initial.rh_pct !== undefined ? String(initial.rh_pct) : "",
+  );
+  const [dewPoint, setDewPoint] = React.useState<string>(
+    initial.dew_point_c !== undefined ? String(initial.dew_point_c) : "",
+  );
 
   const m1Num = parseFloat(m1);
   const m2Num = parseFloat(m2);
   const adhesionNum = parseFloat(adhesion);
+  const airTempNum = parseFloat(airTemp);
+  const substrateTempNum = parseFloat(substrateTemp);
+  const rhNum = parseFloat(rh);
+  const dewPointNum = parseFloat(dewPoint);
   const step1Valid = m1Num > 0 && m2Num > 0;
   const step2Valid = adhesionNum > 0;
+  // Step 3 je voliteľný — ak obhliadkár nemá termohygrometer, môže
+  // preskočiť. Ale ak niečo vyplní, musí byť všetko.
+  const step3Any =
+    !isNaN(airTempNum) ||
+    !isNaN(substrateTempNum) ||
+    !isNaN(rhNum) ||
+    !isNaN(dewPointNum);
+  const step3AllValid =
+    !isNaN(airTempNum) &&
+    !isNaN(substrateTempNum) &&
+    !isNaN(rhNum) &&
+    !isNaN(dewPointNum);
+  const step3Valid = !step3Any || step3AllValid;
 
   function next() {
     if (step === 1 && step1Valid) {
       setStep(2);
     } else if (step === 2 && step2Valid) {
+      setStep(3);
+    } else if (step === 3 && step3Valid) {
       onSave({
         moisture_1_pct: m1Num,
         moisture_2_pct: m2Num,
         adhesion_mpa: adhesionNum,
+        air_temp_c: !isNaN(airTempNum) ? airTempNum : undefined,
+        substrate_temp_c: !isNaN(substrateTempNum) ? substrateTempNum : undefined,
+        rh_pct: !isNaN(rhNum) ? rhNum : undefined,
+        dew_point_c: !isNaN(dewPointNum) ? dewPointNum : undefined,
       });
     }
   }
 
   return (
-    <ModalShell onClose={onClose} title="🧪 Testy" step={step} totalSteps={2}>
+    <ModalShell onClose={onClose} title="🧪 Testy" step={step} totalSteps={3}>
       {step === 1 && (
         <div className="space-y-4">
           <div className="text-center">
@@ -793,11 +859,103 @@ function TestsModal({
         </div>
       )}
 
+      {step === 3 && (
+        <div className="space-y-3">
+          <div className="text-center">
+            <span className="inline-block text-4xl mb-1">🌡</span>
+            <h3 className="text-xl font-extrabold">Podmienky prostredia</h3>
+            <p className="text-xs text-muted-foreground mt-1 leading-snug">
+              Ak máš termohygrometer, doplň hodnoty. Ak nie, preskoč — realizator ich vyplní.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <BigInput
+              label="Teplota vzduchu"
+              value={airTemp}
+              onChange={setAirTemp}
+              unit="°C"
+              hint="+10 až +25"
+            />
+            <BigInput
+              label="Teplota podkladu"
+              value={substrateTemp}
+              onChange={setSubstrateTemp}
+              unit="°C"
+              hint="+10 až +25"
+            />
+            <BigInput
+              label="Relatívna vlhkosť RH"
+              value={rh}
+              onChange={setRh}
+              unit="%"
+              hint="max 80 %"
+            />
+            <BigInput
+              label="Rosný bod"
+              value={dewPoint}
+              onChange={setDewPoint}
+              unit="°C"
+              hint="min +3 nad podkladom"
+            />
+          </div>
+
+          {step3AllValid && (
+            <VerdictBanner
+              variant={
+                airTempNum >= 10 &&
+                airTempNum <= 25 &&
+                substrateTempNum >= 10 &&
+                substrateTempNum <= 25 &&
+                rhNum <= 80 &&
+                dewPointNum >= substrateTempNum + 3
+                  ? "ok"
+                  : "warn"
+              }
+              label={
+                airTempNum < 10 || airTempNum > 25
+                  ? "⚠ Teplota vzduchu mimo rozsahu +10 až +25 °C"
+                  : substrateTempNum < 10 || substrateTempNum > 25
+                    ? "⚠ Teplota podkladu mimo rozsahu +10 až +25 °C"
+                    : rhNum > 80
+                      ? "⚠ RH nad 80 % — riziko kondenzácie"
+                      : dewPointNum < substrateTempNum + 3
+                        ? "⚠ Rosný bod nie je aspoň +3 °C nad podkladom — riziko orosenia"
+                        : "✅ Všetko v norme — aplikácia môže prebiehať"
+              }
+            />
+          )}
+          {step3Any && !step3AllValid && (
+            <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠ Vyplň všetky 4 hodnoty alebo prázdny formulár preskoč.
+            </div>
+          )}
+        </div>
+      )}
+
       <ModalFooter
-        onBack={step === 2 ? () => setStep(1) : undefined}
+        onBack={
+          step === 2
+            ? () => setStep(1)
+            : step === 3
+              ? () => setStep(2)
+              : undefined
+        }
         onNext={next}
-        nextLabel={step === 1 ? "Ďalej — Odtrh" : "Potvrdiť testy"}
-        nextDisabled={step === 1 ? !step1Valid : !step2Valid}
+        nextLabel={
+          step === 1
+            ? "Ďalej — Odtrh"
+            : step === 2
+              ? "Ďalej — Prostredie"
+              : "Potvrdiť testy"
+        }
+        nextDisabled={
+          step === 1
+            ? !step1Valid
+            : step === 2
+              ? !step2Valid
+              : !step3Valid
+        }
       />
     </ModalShell>
   );

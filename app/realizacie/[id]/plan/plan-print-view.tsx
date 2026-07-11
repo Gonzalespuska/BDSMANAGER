@@ -79,6 +79,7 @@ export function PlanPrintView({
   teamMembers,
   zakazkaCislo,
   isChipsFloor,
+  inspectionMeasurements,
 }: {
   leadName: string;
   leadPhone?: string | null;
@@ -121,6 +122,15 @@ export function PlanPrintView({
   zakazkaCislo?: string;
   /** Ak je typ podlahy chipsová, pridá sa krok 11 „Aplikácia chipsov". */
   isChipsFloor?: boolean;
+  /** Podmienky prostredia zmerané obhliadkárom — auto-fill do bodu 2. */
+  inspectionMeasurements?: {
+    air_temp_c: number | null;
+    substrate_temp_c: number | null;
+    rh_pct: number | null;
+    dew_point_c: number | null;
+    moisture_cm_avg: number | null;
+    measured_by: string | null;
+  };
 }) {
   // Ak sme dostali kroky z DB (podľa priradeného systému), použij ich.
   // Inak fallback na hardcoded buildSteps(isGarage).
@@ -418,6 +428,7 @@ export function PlanPrintView({
           teamMembers={teamMembers ?? []}
           zakazkaCislo={zakazkaCislo ?? null}
           isChipsFloor={!!isChipsFloor}
+          inspectionMeasurements={inspectionMeasurements ?? null}
         />
       )}
 
@@ -572,6 +583,7 @@ function ResponsibilityProtocol({
   teamMembers,
   zakazkaCislo,
   isChipsFloor,
+  inspectionMeasurements,
 }: {
   leadName: string;
   lokalita: string | null;
@@ -581,6 +593,14 @@ function ResponsibilityProtocol({
   teamMembers: Array<{ id: string; name: string }>;
   zakazkaCislo: string | null;
   isChipsFloor: boolean;
+  inspectionMeasurements: {
+    air_temp_c: number | null;
+    substrate_temp_c: number | null;
+    rh_pct: number | null;
+    dew_point_c: number | null;
+    moisture_cm_avg: number | null;
+    measured_by: string | null;
+  } | null;
 }) {
   // Kroky presne podľa user-spec.
   const baseSteps: WorkStep[] = [
@@ -694,32 +714,54 @@ function ResponsibilityProtocol({
         <tbody>
           <tr className="row-tall">
             <td>Teplota vzduchu</td>
-            <td></td>
+            <td>
+              {inspectionMeasurements?.air_temp_c != null
+                ? `${inspectionMeasurements.air_temp_c} °C`
+                : ""}
+            </td>
             <td>+10 až +25 °C</td>
           </tr>
           <tr className="row-tall">
             <td>Teplota podkladu</td>
-            <td></td>
+            <td>
+              {inspectionMeasurements?.substrate_temp_c != null
+                ? `${inspectionMeasurements.substrate_temp_c} °C`
+                : ""}
+            </td>
             <td>+10 až +25 °C</td>
           </tr>
           <tr className="row-tall">
             <td>Vlhkosť podkladu — CM metóda</td>
-            <td></td>
+            <td>
+              {inspectionMeasurements?.moisture_cm_avg != null
+                ? `${inspectionMeasurements.moisture_cm_avg.toFixed(1)} %`
+                : ""}
+            </td>
             <td>max 4 %</td>
           </tr>
           <tr className="row-tall">
             <td>Relatívna vlhkosť RH</td>
-            <td></td>
+            <td>
+              {inspectionMeasurements?.rh_pct != null
+                ? `${inspectionMeasurements.rh_pct} %`
+                : ""}
+            </td>
             <td>max 80 %</td>
           </tr>
           <tr className="row-tall">
             <td>Rosný bod</td>
-            <td></td>
+            <td>
+              {inspectionMeasurements?.dew_point_c != null
+                ? `${inspectionMeasurements.dew_point_c} °C`
+                : ""}
+            </td>
             <td>min +3 °C nad teplotou podkladu</td>
           </tr>
           <tr className="row-tall">
             <td style={{ fontWeight: 700 }}>Kto meral (meno + podpis)</td>
-            <td colSpan={2}></td>
+            <td colSpan={2}>
+              {inspectionMeasurements?.measured_by ?? ""}
+            </td>
           </tr>
         </tbody>
       </table>

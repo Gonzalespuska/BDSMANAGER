@@ -36,11 +36,16 @@ export default async function RealizationPlanPage({
   const { data: lead } = await sb
     .from("leads")
     .select(
-      "id, name, phone, data, source_campaign, created_at, assigned_to, inspection_by, realization_by, realization_at",
+      "id, name, phone, data, source_campaign, created_at, assigned_to, inspection_by, realization_by, realization_at, inspection_result",
     )
     .eq("id", id)
     .maybeSingle();
   if (!lead) notFound();
+
+  // Podmienky prostredia — obhliadkár ich zmeral pri obhliadke.
+  // User: "no takto pridaj do obhlaidkara tieto testy lebo obhliadkar
+  // bude robit s tym testom, aj cm, to nebudu robit realizatori".
+  const insp = (lead.inspection_result as Record<string, unknown> | null) ?? {};
 
   // Names — obchodák (assigned_to), obhliadkár (inspection_by), realizator
   async function nameOf(userId: string | null | undefined) {
@@ -57,6 +62,20 @@ export default async function RealizationPlanPage({
     nameOf(lead.inspection_by as string | null),
     nameOf(lead.realization_by as string | null),
   ]);
+
+  const inspectionMeasurements = {
+    air_temp_c: typeof insp.air_temp_c === "number" ? (insp.air_temp_c as number) : null,
+    substrate_temp_c:
+      typeof insp.substrate_temp_c === "number" ? (insp.substrate_temp_c as number) : null,
+    rh_pct: typeof insp.rh_pct === "number" ? (insp.rh_pct as number) : null,
+    dew_point_c:
+      typeof insp.dew_point_c === "number" ? (insp.dew_point_c as number) : null,
+    moisture_cm_avg:
+      typeof insp.moisture_pct === "number" && typeof insp.moisture_pct_2 === "number"
+        ? ((insp.moisture_pct as number) + (insp.moisture_pct_2 as number)) / 2
+        : null,
+    measured_by: obhliadkarName,
+  };
 
   const realizationDateIso =
     (lead.realization_at as string | null) ??
@@ -201,6 +220,7 @@ export default async function RealizationPlanPage({
         teamMembers={teamMembers}
         zakazkaCislo={(lead.id as string).slice(0, 8).toUpperCase()}
         isChipsFloor={isChipsova}
+        inspectionMeasurements={inspectionMeasurements}
       />
     </div>
   );
