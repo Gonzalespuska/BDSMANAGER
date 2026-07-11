@@ -22,6 +22,8 @@ import { loadNotifications } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { formatPhoneSK } from "@/lib/phone-format";
 
+import { SafePhoto } from "./safe-photo";
+
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
@@ -361,12 +363,7 @@ export default async function ObhliadnutePage() {
                               rel="noreferrer"
                               className="aspect-square rounded-md overflow-hidden border hover:border-sky-400 transition-colors"
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={p.url}
-                                alt=""
-                                className="w-full h-full object-cover"
-                              />
+                              <SafePhoto url={p.url} />
                             </a>
                           ))}
                         </div>
