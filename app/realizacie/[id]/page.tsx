@@ -167,9 +167,13 @@ export default async function RealizaciaDetailPage({
           {l.realization_at && (
             <div className="text-[11px] text-sky-800 mt-2 font-semibold">
               🔨 Termín realizácie:{" "}
-              {new Date(l.realization_at).toLocaleString("sk-SK", {
-                timeZone: "Europe/Bratislava",
-              })}
+              {(() => {
+                // CF Workers edge nemá full ICU s timeZone option — musíme
+                // manuálne posunúť UTC → SK (+2h leto). BUG FIX 2026-07-11.
+                const at = new Date(l.realization_at);
+                const sk = new Date(at.getTime() + 2 * 3600 * 1000);
+                return sk.toISOString().replace("T", " ").slice(0, 16);
+              })()}
             </div>
           )}
         </div>

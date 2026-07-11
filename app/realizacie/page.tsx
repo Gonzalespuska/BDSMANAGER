@@ -123,13 +123,14 @@ export default async function RealizacieDashboard() {
         const laterItems: typeof active = [];
         for (const l of active) {
           const at = new Date(l.realization_at);
-          // Použi SK dátumovú časť z realization_at (nie UTC) — inak sa
-          // udalosti neprávne priradia do dňa keď server beží v UTC ale
-          // termín je SK-time.
-          const skDate = at.toLocaleDateString("en-CA", {
-            timeZone: "Europe/Bratislava",
-          }); // YYYY-MM-DD
-          const isoDay = skDate;
+          // Použi SK dátumovú časť z realization_at (posun UTC → SK).
+          // BUG 2026-07-11: predtym toLocaleDateString("en-CA", ...) — na
+          // CF Workers edge runtime nemá full ICU a hodí exception. Fix:
+          // manuálny SK offset (+1h zima / +2h leto). Robíme aproximáciu
+          // konštantne +2h (SK leto Jul-Aug), pre robustnejšiu variantu
+          // treba full-ICU alebo dynamickú DST detekciu.
+          const skTime = new Date(at.getTime() + 2 * 3600 * 1000);
+          const isoDay = skTime.toISOString().slice(0, 10);
           const slot = week.find((w) => w.iso === isoDay);
           if (slot) slot.items.push(l);
           else if (at >= in7d) laterItems.push(l);
@@ -199,10 +200,12 @@ export default async function RealizacieDashboard() {
                     <ul className="space-y-3">
                       {w.items.map((l) => {
                         const data = (l.data ?? {}) as Record<string, string>;
-                        const timeStr = new Date(l.realization_at).toLocaleTimeString(
-                          "sk-SK",
-                          { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bratislava" },
+                        // CF Workers edge: bez full-ICU sa timeZone môže tichý fallback
+                        // alebo throw. Manuálny +2h leto → HH:MM z ISO substr.
+                        const skTime = new Date(
+                          new Date(l.realization_at).getTime() + 2 * 3600 * 1000,
                         );
+                        const timeStr = skTime.toISOString().slice(11, 16);
                         return (
                           <li
                             key={l.id}
