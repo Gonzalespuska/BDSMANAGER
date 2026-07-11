@@ -724,6 +724,7 @@ export function CalendarGrid({
           }
           assignMode={assignMode ?? null}
           assignLead={assignLead ?? null}
+          initialTime={searchParams.get("time") ?? undefined}
         />
       )}
 
@@ -748,6 +749,7 @@ function DayModal({
   onDeleted,
   assignMode,
   assignLead,
+  initialTime,
 }: {
   date: string;
   notes: CalendarNote[];
@@ -757,6 +759,8 @@ function DayModal({
   onDeleted: (id: string) => void;
   assignMode?: "inspection" | "realization" | null;
   assignLead?: AssignLead | null;
+  /** Prefill času (HH:MM) — napr. z SuggestDayButton odporúčania. */
+  initialTime?: string;
 }) {
   const isAssign = !!assignMode && !!assignLead;
   const router = useRouter();
@@ -880,23 +884,28 @@ function DayModal({
         setAssignError(res.error);
         return;
       }
-      // Po vytvoreni obhliadky NEBERIEME usera na lead-profile —
-      // ostava na kalendari, kde uz vidi novy zaznam na danom dni.
-      // Prejdeme na cisty /calendar URL (bez assign params) a
-      // refreshneme aby sa nova calendar_note nacitala.
+      // ── SUCCESS ──
+      // User: "musi to byt znanornene stala sa tato akcia hore
+      // upozornenie a vrati ma na caka na cp idealne".
+      // Redirect s query paramami → destination page ukáže banner.
       onClose();
-      const url = new URL(window.location.href);
-      url.searchParams.delete("assign");
-      url.searchParams.delete("lead");
-      url.searchParams.delete("city");
-      url.searchParams.delete("manual");
-      // Zachovaj mesiac (m=YYYY-MM) — ak user prehliadal iny mesiac,
-      // ostane tam. Ak nie je set, defaultne aktualny.
-      router.replace(
-        url.pathname +
-          (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""),
-      );
-      router.refresh();
+      const params = new URLSearchParams({
+        justAssigned: assignLead.id,
+        assignedName: assignLead.name,
+        assignedMode: assignMode,
+        assignedDate: startDate,
+        assignedTime: pickedTime,
+      });
+      // Realizácia → obchodákovho "Čaká na CP" (aby videl banner
+      // + mohol pokračovať batch workflow ďalších leadov)
+      // Obhliadka → /obhliadky (Aktívne tab obhliadkára, aj obchodák uvidí)
+      const dest =
+        assignMode === "realization"
+          ? `/obhliadnute?tab=caka&${params.toString()}`
+          : `/obhliadky?${params.toString()}`;
+      // Hard nav (window.location) — router.push/replace môže zablokovať v
+      // edge runtime kvôli RSC prefetching a stránka zostane na /calendar.
+      window.location.href = dest;
     } catch (err) {
       console.error("[submitAssign] EXCEPTION:", err);
       setAssignBusy(false);
@@ -1398,22 +1407,45 @@ function DayModal({
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                saveNote();
+                if (input.trim()) saveNote();
+                else onClose();
               }
             }}
             rows={2}
-            placeholder="Napíš poznámku… (⌘+Enter pre uloženie)"
+            placeholder="Voliteľne — napíš poznámku k dňu… (⌘+Enter)"
             className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm resize-none"
           />
-          <button
-            type="button"
-            onClick={saveNote}
-            disabled={!input.trim() || saving}
-            className="h-10 px-3 rounded-lg bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-40 transition-colors inline-flex items-center gap-1.5 text-sm font-bold"
-          >
-            <Plus className="w-4 h-4" aria-hidden />
-            {saving ? "…" : "Pridať"}
-          </button>
+          <div className="flex flex-col gap-1.5">
+            {/* Ak je textarea prázdny → button závrie modal (Hotovo).
+                Ak text je vyplnený → uloží ako poznámku (Pridať).
+                User: "poznamka je optional preco mi nedovoli to submitnut"
+                — teraz aj bez textu môže submitnúť (= zavrie modal). */}
+            <button
+              type="button"
+              onClick={() => (input.trim() ? saveNote() : onClose())}
+              disabled={saving}
+              className={cn(
+                "h-10 px-4 rounded-lg text-white transition-colors inline-flex items-center gap-1.5 text-sm font-bold shadow-sm disabled:opacity-40",
+                input.trim()
+                  ? "bg-sky-600 hover:bg-sky-700"
+                  : "bg-emerald-600 hover:bg-emerald-700",
+              )}
+            >
+              {saving ? (
+                "…"
+              ) : input.trim() ? (
+                <>
+                  <Plus className="w-4 h-4" aria-hidden />
+                  Pridať
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" aria-hidden />
+                  Hotovo
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
       )}

@@ -24,6 +24,7 @@ import { formatPhoneSK } from "@/lib/phone-format";
 
 import { SafePhoto } from "@/components/safe-photo";
 import { JustSentBanner } from "./just-sent-banner";
+import { JustAssignedBanner } from "./just-assigned-banner";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -51,7 +52,15 @@ export const dynamic = "force-dynamic";
 export default async function ObhliadnutePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; justSent?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    justSent?: string;
+    justAssigned?: string;
+    assignedName?: string;
+    assignedMode?: string;
+    assignedDate?: string;
+    assignedTime?: string;
+  }>;
 }) {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
@@ -167,6 +176,14 @@ export default async function ObhliadnutePage({
       wide
     >
       <div className="space-y-6">
+        {sp.justAssigned && sp.assignedName && sp.assignedDate && sp.assignedTime && (
+          <JustAssignedBanner
+            leadName={sp.assignedName}
+            mode={sp.assignedMode ?? "realization"}
+            date={sp.assignedDate}
+            time={sp.assignedTime}
+          />
+        )}
         <header>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2 flex-wrap">
             <CheckCheck className="w-6 h-6 text-emerald-600" aria-hidden />
