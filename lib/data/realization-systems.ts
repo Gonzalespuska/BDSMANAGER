@@ -111,7 +111,10 @@ export interface InventoryLine {
   sku: string;
   label: string;
   qty: number;
+  /** Ľudský typ obalu (sud/vedro/vrece) — používame ako fallback. */
   unit: string;
+  /** Veľkosť balenia v kg — zobrazuje sa v "Balenie" stĺpci ako "10 kg". */
+  unit_size_kg?: number;
   note?: string;
 }
 
@@ -127,10 +130,11 @@ export function calcInventory(
   if (systemCode !== "topstopne") {
     push({
       sku: "SIKAFLOOR-151",
-      label: "Sikafloor-151 Primer 10 kg",
+      label: "Sikafloor-151 Primer",
       qty: round(m2 / 33),
       unit: "vedro",
-      note: `spotreba 0.30 kg/m², vedro 10 kg na ~33 m²`,
+      unit_size_kg: 10,
+      note: `spotreba 0.30 kg/m² · vedro 10 kg na ~33 m²`,
     });
   }
 
@@ -138,72 +142,74 @@ export function calcInventory(
     case "264":
       push({
         sku: "SIKAFLOOR-264-30",
-        label: "Sikafloor-264 30 kg (2K epoxid)",
+        label: "Sikafloor-264 (2K epoxid)",
         qty: round(m2 / 20),
         unit: "sud",
-        note: `spotreba 1.5 kg/m², sud 30 kg na 20 m²`,
+        unit_size_kg: 30,
+        note: `spotreba 1.5 kg/m² · sud 30 kg na 20 m²`,
       });
       break;
     case "1590":
       push({
         sku: "SIKAFLOOR-1590-30",
-        label: "Sikafloor-1590 (Fastfloor) 30 kg",
+        label: "Sikafloor-1590 (Fastfloor)",
         qty: round(m2 / 20),
         unit: "sud",
-        note: `spotreba 1.5 kg/m², sud 30 kg na 20 m²`,
+        unit_size_kg: 30,
+        note: `spotreba 1.5 kg/m² · sud 30 kg na 20 m²`,
       });
       break;
     case "3000":
       push({
         sku: "SIKAFLOOR-3000-21",
-        label: "Sikafloor-3000 21 kg (polyuretán)",
+        label: "Sikafloor-3000 (polyuretán)",
         qty: round(m2 / 17),
         unit: "sud",
-        note: `spotreba 1.2 kg/m², sud 21 kg na ~17 m²`,
+        unit_size_kg: 21,
+        note: `spotreba 1.2 kg/m² · sud 21 kg na ~17 m²`,
       });
       break;
     case "3000fx":
       push({
         sku: "SIKAFLOOR-3000FX-21",
-        label: "Sikafloor-3000 FX 21 kg (rýchly)",
+        label: "Sikafloor-3000 FX (rýchly)",
         qty: round(m2 / 17),
         unit: "sud",
-        note: `spotreba 1.2 kg/m², sud 21 kg na ~17 m²`,
+        unit_size_kg: 21,
+        note: `spotreba 1.2 kg/m² · sud 21 kg na ~17 m²`,
       });
       break;
     case "3310":
       push({
         sku: "SIKAFLOOR-3310-21",
-        label: "Sikafloor-3310 21 kg (odolný)",
+        label: "Sikafloor-3310 (odolný)",
         qty: round(m2 / 17),
         unit: "sud",
-        note: `spotreba 1.2 kg/m², sud 21 kg na ~17 m²`,
+        unit_size_kg: 21,
+        note: `spotreba 1.2 kg/m² · sud 21 kg na ~17 m²`,
       });
       break;
     case "topstopne":
       push({
         sku: "TOPSTOPNE-METALIC",
-        label: "TopStopne METALIC pigment 1 kg",
+        label: "TopStopne METALIC pigment",
         qty: round(m2 / 6),
         unit: "vedierko",
-        note: `spotreba 0.15 kg/m², vedierko 1 kg na ~6 m²`,
+        unit_size_kg: 1,
+        note: `spotreba 0.15 kg/m² · vedierko 1 kg na ~6 m²`,
       });
       break;
   }
-
-  // Chipsová má chipsy
-  // (Toto sa musí niekde inde nastaviť podľa selection — flag/type param.
-  //  Pre teraz: ak niekde bude systemCode == "chipsova-264" atď., handled
-  //  vo vyššom volaní. Momentálne pre generic 264/1590 nedávame chipsy.)
 
   // Finálny lak — 304W (transparent) pre všetky systémy okrem topstopne
   if (systemCode !== "topstopne") {
     push({
       sku: "SIKAFLOOR-304W-7.5",
-      label: "Sikafloor-304W Matt 7.5 kg (vrchný lak)",
+      label: "Sikafloor-304W Matt (vrchný lak)",
       qty: round(m2 / 25),
       unit: "sud",
-      note: `spotreba 0.30 kg/m², sud 7.5 kg na 25 m²`,
+      unit_size_kg: 7.5,
+      note: `spotreba 0.30 kg/m² · sud 7.5 kg na 25 m²`,
     });
   }
 

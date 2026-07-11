@@ -116,7 +116,12 @@ export default async function RealizationPlanPage({
         </Link>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-            📋 Plán realizácie — {(lead.name as string) ?? "?"}
+            {activeView === "sklad"
+              ? "📦 Inventúra — "
+              : activeView === "zodpovednost"
+                ? "✍️ Zodpovednosť — "
+                : "🔨 Postup — "}
+            {(lead.name as string) ?? "?"}
           </h1>
           <PrintButton />
         </div>
@@ -126,6 +131,12 @@ export default async function RealizationPlanPage({
           - view=postup → postupový plán s podpismi
           - view=sklad  → zoznam materiálu zo skladu */}
       <PlanPrintView
+        leadId={id}
+        inventoryTakenAt={
+          typeof data.realization_inventory_taken_at === "string"
+            ? (data.realization_inventory_taken_at as string)
+            : null
+        }
         leadName={(lead.name as string) ?? "?"}
         leadPhone={(lead.phone as string) ?? null}
         floorType={floorType}
@@ -145,6 +156,7 @@ export default async function RealizationPlanPage({
                 label: string;
                 qty: number;
                 unit: string;
+                unit_size_kg?: number;
                 note?: string;
               }>)
             : []

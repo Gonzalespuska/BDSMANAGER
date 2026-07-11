@@ -74,6 +74,8 @@ export function PlanPrintView({
   systemCode,
   realizationInventory,
   realizationSystemLabel,
+  leadId,
+  inventoryTakenAt,
 }: {
   leadName: string;
   leadPhone?: string | null;
@@ -104,9 +106,12 @@ export function PlanPrintView({
     label: string;
     qty: number;
     unit: string;
+    unit_size_kg?: number;
     note?: string;
   }>;
   realizationSystemLabel?: string | null;
+  leadId?: string;
+  inventoryTakenAt?: string | null;
 }) {
   // Ak sme dostali kroky z DB (podľa priradeného systému), použij ich.
   // Inak fallback na hardcoded buildSteps(isGarage).
@@ -271,7 +276,8 @@ export function PlanPrintView({
         // ═════════ INVENTÚRA — READ-ONLY, čo obchodák pre-vybral ═════════
         // User 2026-07-11: "ten system vybera obchodak a ma mu to tam
         // vypisat iba ze co ma zobrat podla m2 a podla systemu ktory
-        // vybral obchodak". Realizator NIČ nepicka, len škrtne "Vzal".
+        // vybral obchodak. Balenie je na kg nie ze vedro sud. Vzal preč
+        // → jeden submit button ze zobral to potvrdi".
         <>
           {/* Info banner o systéme */}
           <div className="mb-4 rounded-lg border-2 border-emerald-300 bg-emerald-50/60 p-3">
@@ -287,7 +293,6 @@ export function PlanPrintView({
                 </div>
                 <div className="text-xs text-slate-600 mt-0.5">
                   Zoznam vypočítal obchodák podľa vybraného systému a plochy.
-                  Odškrtávaj čo si vzal.
                 </div>
               </div>
               {areaNum > 0 && (
@@ -314,58 +319,68 @@ export function PlanPrintView({
               </div>
             </div>
           ) : (
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-slate-100 border border-slate-300">
-                  <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-10">
-                    #
-                  </th>
-                  <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700">
-                    Materiál
-                  </th>
-                  <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-20">
-                    Ks
-                  </th>
-                  <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-20">
-                    Balenie
-                  </th>
-                  <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-16">
-                    Vzal
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {realizationInventory.map((p, i) => (
-                  <tr key={p.sku + i} className="border border-slate-300">
-                    <td className="border border-slate-300 px-2 py-3 text-center tabular-nums font-black text-lg">
-                      {i + 1}
-                    </td>
-                    <td className="border border-slate-300 px-3 py-3">
-                      <div className="font-black text-base">{p.label}</div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        SKU {p.sku}
-                      </div>
-                      {p.note && (
-                        <div className="text-[10px] text-slate-600 italic mt-0.5">
-                          {p.note}
-                        </div>
-                      )}
-                    </td>
-                    <td className="border border-slate-300 px-2 py-3 text-center">
-                      <div className="text-3xl font-black tabular-nums text-emerald-700">
-                        {p.qty}×
-                      </div>
-                    </td>
-                    <td className="border border-slate-300 px-2 py-3 text-center text-xs font-bold">
-                      {p.unit}
-                    </td>
-                    <td className="border border-slate-300 px-2 py-3 text-center">
-                      <div className="w-7 h-7 border-2 border-slate-400 rounded mx-auto"></div>
-                    </td>
+            <>
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border border-slate-300">
+                    <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-10">
+                      #
+                    </th>
+                    <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700">
+                      Materiál
+                    </th>
+                    <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-24">
+                      Ks
+                    </th>
+                    <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-24">
+                      Balenie
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {realizationInventory.map((p, i) => (
+                    <tr key={p.sku + i} className="border border-slate-300">
+                      <td className="border border-slate-300 px-2 py-3 text-center tabular-nums font-black text-lg">
+                        {i + 1}
+                      </td>
+                      <td className="border border-slate-300 px-3 py-3">
+                        <div className="font-black text-base">{p.label}</div>
+                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                          SKU {p.sku}
+                        </div>
+                        {p.note && (
+                          <div className="text-[10px] text-slate-600 italic mt-0.5">
+                            {p.note}
+                          </div>
+                        )}
+                      </td>
+                      <td className="border border-slate-300 px-2 py-3 text-center">
+                        <div className="text-3xl font-black tabular-nums text-emerald-700">
+                          {p.qty}×
+                        </div>
+                      </td>
+                      <td className="border border-slate-300 px-2 py-3 text-center">
+                        <div className="text-lg font-black tabular-nums text-slate-800">
+                          {typeof p.unit_size_kg === "number"
+                            ? `${p.unit_size_kg} kg`
+                            : p.unit}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Big submit button — nahradzuje per-row „Vzal" checkbox */}
+              {leadId && (
+                <div className="mt-4 no-print">
+                  <InventoryTakenButton
+                    leadId={leadId}
+                    initialTakenAt={inventoryTakenAt ?? null}
+                  />
+                </div>
+              )}
+            </>
           )}
         </>
       ) : (
@@ -508,6 +523,97 @@ export function PlanPrintView({
         <span>Epoxidovo s.r.o. · najcrm.sk</span>
         <span>{new Date().toLocaleString("sk-SK")}</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Veľký "Zobral som materiál" button — realizator klikne raz keď má
+ * všetko zo skladu. User: "vzal preč, jeden submit ze zobral to potvrdi".
+ */
+function InventoryTakenButton({
+  leadId,
+  initialTakenAt,
+}: {
+  leadId: string;
+  initialTakenAt: string | null;
+}) {
+  const [takenAt, setTakenAt] = React.useState<string | null>(initialTakenAt);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/lead/inventory-taken", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_id: leadId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        setError(j.error ?? `HTTP ${r.status}`);
+        setBusy(false);
+        return;
+      }
+      setTakenAt((j.taken_at as string) ?? new Date().toISOString());
+      setBusy(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "network");
+      setBusy(false);
+    }
+  }
+
+  if (takenAt) {
+    const when = new Date(takenAt).toLocaleString("sk-SK", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return (
+      <div className="rounded-xl bg-emerald-100 border-2 border-emerald-400 p-4 flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center text-2xl shrink-0">
+          ✓
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-black text-lg text-emerald-900 leading-tight">
+            Materiál prevzatý
+          </div>
+          <div className="text-xs text-emerald-800">
+            Zaznamenané: {when}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={submit}
+        disabled={busy}
+        className="w-full inline-flex items-center justify-center gap-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-5 text-lg font-black shadow-lg transition-colors disabled:opacity-50"
+      >
+        {busy ? (
+          <>
+            <span className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin" />
+            Ukladám…
+          </>
+        ) : (
+          <>
+            ✅ Zobral som celý materiál zo skladu
+          </>
+        )}
+      </button>
+      {error && (
+        <div className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          ⚠ {error}
+        </div>
+      )}
     </div>
   );
 }
