@@ -816,7 +816,7 @@ function StepsEditor({
               <input
                 value={s.title}
                 onChange={(e) => update(i, { title: e.target.value })}
-                placeholder="Názov kroku (napr. „Penetrácia — Sikafloor 151")"
+                placeholder={`Názov kroku (napr. „Penetrácia — Sikafloor 151")`}
                 className="w-full h-8 px-2 rounded border border-slate-300 text-sm font-black"
               />
               <textarea

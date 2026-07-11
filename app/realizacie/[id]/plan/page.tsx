@@ -76,6 +76,34 @@ export default async function RealizationPlanPage({
   const isMetalicka = /metal/i.test(floorType ?? "");
   const isMramorova = /mramor/i.test(floorType ?? "");
 
+  // Fetch procedure_steps z realization_systems ak lead má priradený systém.
+  // User: "realizator ma dopredu dany ten system … autoamticky mu to na
+  // dany system upravi aj postup pretoze postup je iny pre ine systemy".
+  let procedureSteps: Array<{ step: number; title: string; note: string }> = [];
+  const rs = data.realization_system as
+    | { system?: string; type?: string; binder?: string | null }
+    | undefined;
+  const systemCode = rs?.system ?? null;
+  if (systemCode) {
+    try {
+      const { data: sysRow } = await sb
+        .from("realization_systems")
+        .select("procedure_steps")
+        .eq("code", systemCode)
+        .maybeSingle();
+      const raw = (sysRow?.procedure_steps ?? []) as unknown;
+      if (Array.isArray(raw)) {
+        procedureSteps = raw as Array<{
+          step: number;
+          title: string;
+          note: string;
+        }>;
+      }
+    } catch {
+      /* DB migrácia možno nebola spustená — ostaneme s prázdnym → hardcoded fallback v komponente. */
+    }
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-6">
       <header className="print:hidden">
@@ -115,6 +143,8 @@ export default async function RealizationPlanPage({
         isMetalicka={isMetalicka}
         isMramorova={isMramorova}
         systemId={(data.system_id as string | null) ?? null}
+        procedureSteps={procedureSteps}
+        systemCode={systemCode}
       />
     </div>
   );

@@ -109,6 +109,46 @@ export default async function SkoleniePage() {
         </div>
       )}
 
+      {/* Rola-scoped banner — vysvetlí userovi kde je jeho hlavná
+          sekcia. User 2026-07-11: "chapes ze kazda rola ma v podkladoch
+          nieco ine". */}
+      {user.role !== "admin" && user.role !== "skolenie" && (
+        <div
+          className={
+            "rounded-2xl border-2 p-3 flex items-center gap-3 " +
+            (user.role === "obchod"
+              ? "border-sky-300 bg-sky-50/60"
+              : user.role === "obhliadky"
+                ? "border-violet-300 bg-violet-50/60"
+                : user.role === "realizacie"
+                  ? "border-emerald-300 bg-emerald-50/60"
+                  : "border-slate-300 bg-slate-50/60")
+          }
+        >
+          <div className="text-2xl">
+            {user.role === "obchod"
+              ? "📞"
+              : user.role === "obhliadky"
+                ? "🔍"
+                : user.role === "realizacie"
+                  ? "🔨"
+                  : "📦"}
+          </div>
+          <div className="text-sm">
+            <div className="font-black">Tvoja hlavná sekcia je nižšie</div>
+            <div className="text-xs text-muted-foreground">
+              {user.role === "obchod"
+                ? "Call scripty + argumenty proti námietkam"
+                : user.role === "obhliadky"
+                  ? "Checklist obhliadky + meranie vlhkosti"
+                  : user.role === "realizacie"
+                    ? "Bezpečnosť + technológia + postupy"
+                    : "Materiálové podklady"}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 📞 CALL SCRIPTY — interaktívny picker pre obchodákov.
           Priestor + typ podlahy → šitý script s otváracou vetou,
           kvalifikačnými otázkami, argumentami, námietkami s odpoveďami,

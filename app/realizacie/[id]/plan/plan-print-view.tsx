@@ -70,6 +70,8 @@ export function PlanPrintView({
   isGarage,
   plocha,
   systemId: initialSystemId,
+  procedureSteps,
+  systemCode,
 }: {
   leadName: string;
   leadPhone?: string | null;
@@ -88,8 +90,22 @@ export function PlanPrintView({
   isMetalicka?: boolean;
   isMramorova?: boolean;
   systemId?: string | null;
+  procedureSteps?: Array<{ step: number; title: string; note: string }>;
+  systemCode?: string | null;
 }) {
-  const steps = buildSteps(isGarage);
+  // Ak sme dostali kroky z DB (podľa priradeného systému), použij ich.
+  // Inak fallback na hardcoded buildSteps(isGarage).
+  // User: "autoamticky mu to na dany system upravi aj postup pretoze
+  // postup je iny pre ine systemy".
+  const steps: Step[] =
+    procedureSteps && procedureSteps.length > 0
+      ? procedureSteps.map((s) => ({
+          n: s.step,
+          label: s.title,
+          note: s.note,
+        }))
+      : buildSteps(isGarage);
+  void systemCode;
   const areaNum = parseFloat((plocha ?? "").replace(",", ".")) || 0;
   const [systemId, setSystemId] = React.useState<string>(initialSystemId ?? "");
   const selectedSystem = React.useMemo(

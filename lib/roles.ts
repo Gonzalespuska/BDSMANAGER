@@ -22,7 +22,8 @@ export type AppUserRole =
   | "obchod"
   | "obhliadky"
   | "realizacie"
-  | "office";
+  | "office"
+  | "skolenie";
 
 /** Labely rolí pre UI — Slovak labels. */
 export const ROLE_LABELS: Record<AppUserRole, string> = {
@@ -31,6 +32,7 @@ export const ROLE_LABELS: Record<AppUserRole, string> = {
   obhliadky: "Obhliadky",
   realizacie: "Realizácie",
   office: "Office",
+  skolenie: "Školenie",
 };
 
 /** Tailwind farby pre role badge — pastel pozadie + tmavý text. */
@@ -39,7 +41,8 @@ export const ROLE_BADGE_CLASSES: Record<AppUserRole, string> = {
   obchod: "bg-sky-100 text-sky-800 border-sky-200",
   obhliadky: "bg-violet-100 text-violet-800 border-violet-200",
   realizacie: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  office: "bg-amber-100 text-amber-800 border-amber-200",
+  office: "bg-slate-100 text-slate-800 border-slate-200",
+  skolenie: "bg-rose-100 text-rose-800 border-rose-200",
 };
 
 /** Lucide ikona pre rolu (názov, importnúť cez @/components dynamicky). */
@@ -49,6 +52,7 @@ export const ROLE_ICON_NAME: Record<AppUserRole, string> = {
   obhliadky: "ClipboardList",
   realizacie: "Hammer",
   office: "Headphones",
+  skolenie: "GraduationCap",
 };
 
 /** Allowed roles array pre runtime validáciu (server actions, dev routes). */
@@ -58,6 +62,7 @@ export const ALLOWED_ROLES: readonly AppUserRole[] = [
   "obhliadky",
   "realizacie",
   "office",
+  "skolenie",
 ];
 
 /**
@@ -80,6 +85,8 @@ export function dashboardPathForRole(role: AppUserRole): string {
       return "/realizacie";
     case "office":
       return "/office";
+    case "skolenie":
+      return "/skolenie";
   }
 }
 
@@ -133,6 +140,9 @@ export function navTabsForRole(role: AppUserRole): NavTabId[] {
       return ["realizacie", "calendar", "podklady", "spravy"];
     case "office":
       return ["office", "calendar", "podklady", "spravy", "notifikacie"];
+    case "skolenie":
+      // Nováčik — vidí iba onboarding/Podklady a tímové správy.
+      return ["podklady", "spravy"];
   }
 }
 

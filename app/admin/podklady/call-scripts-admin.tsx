@@ -388,7 +388,7 @@ function NewScriptModal({
           <div className="font-black text-lg">Nový call skript</div>
         </div>
         <div className="p-5 space-y-3 overflow-y-auto flex-1">
-          <Field label="Label (napr. „Mramorová — interiér dom")">
+          <Field label={`Label (napr. „Mramorová — interiér dom")`}>
             <input
               value={label}
               onChange={(e) => setLabel(e.target.value)}

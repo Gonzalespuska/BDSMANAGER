@@ -141,7 +141,13 @@ export async function updateAgentAction(
   id: string,
   patch: {
     name?: string;
-    role?: "admin" | "obchod" | "obhliadky" | "realizacie" | "skolenie";
+    role?:
+      | "admin"
+      | "obchod"
+      | "obhliadky"
+      | "realizacie"
+      | "office"
+      | "skolenie";
     capacity?: number;
     active?: boolean;
     phone?: string | null;

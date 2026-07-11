@@ -85,12 +85,39 @@ export function InspectionWizard({
   // Existujúce dáta hydrátujeme, aby obhliadkár videl že už niečo vyplnil
   const ex = (existingResult ?? {}) as WizardExistingResult;
 
-  const [tests, setTests] = React.useState<TestsResult>({
-    moisture_1_pct: ex.moisture_pct,
-    moisture_2_pct: ex.moisture_pct_2,
-    adhesion_mpa: ex.adhesion_mpa,
-  });
+  // BUG FIX 2026-07-11: obhliadkár vyplní testy/zameranie, náhodou refreshne
+  // stránku, a dáta sa stratia (server-side draft save nespáda každý field).
+  // User: "confirm button na obhliadku (testy/zameranie sa strácajú po refreshi)".
+  // Fix: localStorage draft s kľúčom `obhliadka-draft:${leadId}` — pri každej
+  // zmene sa uloží, pri mount sa načíta ak je novší než server draft.
+  const DRAFT_KEY = `obhliadka-draft:${leadId}`;
+  type LocalDraft = {
+    tests?: TestsResult;
+    measurement?: MeasurementResult;
+    note?: string;
+    savedAt?: number;
+  };
+  function loadLocal(): LocalDraft | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as LocalDraft;
+    } catch {
+      return null;
+    }
+  }
+  const local = React.useMemo(() => loadLocal(), [DRAFT_KEY]);
+
+  const [tests, setTests] = React.useState<TestsResult>(() =>
+    local?.tests ?? {
+      moisture_1_pct: ex.moisture_pct,
+      moisture_2_pct: ex.moisture_pct_2,
+      adhesion_mpa: ex.adhesion_mpa,
+    },
+  );
   const [measurement, setMeasurement] = React.useState<MeasurementResult>(() => {
+    if (local?.measurement) return local.measurement;
     if (Array.isArray(ex.shapes) && ex.shapes.length > 0) {
       const total = ex.shapes.reduce(
         (s, sh) => s + sh.length_m * sh.width_m,
@@ -107,7 +134,25 @@ export function InspectionWizard({
     return { shapes: [], total_m2: 0 };
   });
   const [photos, setPhotos] = React.useState<PhotoItem[]>(existingPhotos);
-  const [note, setNote] = React.useState(ex.agent_note ?? "");
+  const [note, setNote] = React.useState(local?.note ?? ex.agent_note ?? "");
+
+  // Auto-save draft do localStorage pri každej zmene relevantných polí.
+  // Photos nie sú v drafte (uploadované na Supabase Storage), tie prežijú refresh cez server.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const payload: LocalDraft = {
+        tests,
+        measurement,
+        note,
+        savedAt: Date.now(),
+      };
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+    } catch {
+      /* quota exceeded — ignoruj */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tests, measurement, note]);
   const [submitting, setSubmitting] = React.useState(false);
   // 3-fázový overlay: null = skrytý, "sending" = spinner, "done" = zelený ✓.
   // Prežije transition medzi wizard page a destination /obhliadky.
@@ -180,6 +225,14 @@ export function InspectionWizard({
       return;
     }
     // ── SUCCESS ──
+    // Zmaz localStorage draft — obhliadka je uzavretá.
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(DRAFT_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
     setOverlayPhase("done");
     try {
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
