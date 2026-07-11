@@ -847,6 +847,52 @@ export async function markRealizationDoneAction(
 }
 
 /**
+ * Server Action — DRAFT save. Obhliadkár si v jednotlivých modaloch
+ * (Testy, Zameranie) uloží čiastkový výsledok. Bez zmeny statusu, bez
+ * notifikácií. Merge do existujúceho inspection_result JSONB — hodnoty
+ * ktoré nepošleš zostávajú.
+ *
+ * Používa sa v app/obhliadky/[id]/inspection-wizard.tsx — TestsModal a
+ * MeasurementModal na onSave pošlú draft, aby refresh nezmazal to čo
+ * obhliadkár už vyplnil.
+ */
+export async function saveInspectionDraftAction(
+  leadId: string,
+  partial: Record<string, unknown>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentAppUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+  if (user.role !== "obhliadky" && user.role !== "admin") {
+    return { ok: false, error: "forbidden_wrong_role" };
+  }
+
+  const supabase = await createClient();
+  const { data: lead, error: leadErr } = await supabase
+    .from("leads")
+    .select("inspection_by, inspection_result")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (leadErr || !lead) return { ok: false, error: "not_found" };
+  if (lead.inspection_by !== user.id && user.role !== "admin") {
+    return { ok: false, error: "forbidden_not_your_inspection" };
+  }
+
+  const merged = {
+    ...((lead.inspection_result as Record<string, unknown> | null) ?? {}),
+    ...partial,
+    _draft_saved_at: new Date().toISOString(),
+  };
+
+  const { error: updErr } = await supabase
+    .from("leads")
+    .update({ inspection_result: merged })
+    .eq("id", leadId);
+  if (updErr) return { ok: false, error: "db_error" };
+
+  return { ok: true };
+}
+
+/**
  * Server Action — obhliadkar dokončí obhliadku, uloží výsledok (JSONB)
  * a lead ide na status 'interested' (pripravené na cenovú ponuku).
  * Iba priradený obhliadkar alebo admin.
