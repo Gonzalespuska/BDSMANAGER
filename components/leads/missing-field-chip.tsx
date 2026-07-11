@@ -30,10 +30,44 @@ interface Props {
   /** Options pre dropdown (kind = typ_podlahy / priestor). */
   options?: string[];
   /** Autocomplete zoznam pre text input (napr. slovenské mestá).
-   *  Renderuje sa ako <datalist> — native browser suggest.
-   *  Napíšeš „Tr" a browser ponúkne Trnava, Trenčín, Trebišov, ... */
+   *  Renderuje sa ako custom dropdown s **diacritics-insensitive** fuzzy
+   *  matchom — napíšeš „ruz" (bez ž) a nájde „Ružomberok". Klik na
+   *  položku alebo Enter uloží. */
   autocomplete?: string[];
   onSaved?: (newValue: string) => void;
+}
+
+/** Odstráni diakritiku pre fuzzy match (Ružomberok → ruzomberok). */
+function stripDiacritics(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
+/**
+ * Filtruje autocomplete suggestions podľa toho čo user píše.
+ * Diacritics-insensitive: „ruz" nájde „Ružomberok".
+ * Radí: najprv prefix-match, potom substring-match, max 8 výsledkov.
+ */
+function getFilteredSuggestions(
+  input: string,
+  options: string[] | undefined,
+): string[] {
+  if (!options || options.length === 0) return [];
+  const needle = stripDiacritics(input.trim());
+  if (needle.length === 0) {
+    // Prázdny input — ukáž prvých 8 z listu (najpopulárnejšie mestá)
+    return options.slice(0, 8);
+  }
+  const prefixMatches: string[] = [];
+  const substringMatches: string[] = [];
+  for (const opt of options) {
+    const stripped = stripDiacritics(opt);
+    if (stripped.startsWith(needle)) prefixMatches.push(opt);
+    else if (stripped.includes(needle)) substringMatches.push(opt);
+  }
+  return [...prefixMatches, ...substringMatches].slice(0, 8);
 }
 
 const TYP_PODLAHY_OPTIONS = [
@@ -168,12 +202,23 @@ export function MissingFieldChip({
               ref={inputRef}
               type={kind === "number" ? "number" : "text"}
               inputMode={kind === "number" ? "decimal" : "text"}
-              list={autocomplete && autocomplete.length > 0 ? datalistId : undefined}
               autoComplete="off"
               value={displayValue}
               onChange={(e) => setLocalValue(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") save(localValue);
+                if (e.key === "Enter") {
+                  // Ak sú suggestions a je prvá zvýraznená, uložíme ju.
+                  // Inak uložíme presne to čo user napísal.
+                  const filtered = getFilteredSuggestions(
+                    localValue,
+                    autocomplete,
+                  );
+                  if (filtered.length > 0 && localValue.trim() !== "") {
+                    save(filtered[0]);
+                  } else {
+                    save(localValue);
+                  }
+                }
                 if (e.key === "Escape") {
                   setEditing(false);
                   setLocalValue(value ?? "");
@@ -187,13 +232,6 @@ export function MissingFieldChip({
                 kind === "number" ? "w-16 text-center" : "w-32",
               )}
             />
-            {autocomplete && autocomplete.length > 0 && (
-              <datalist id={datalistId}>
-                {autocomplete.map((opt) => (
-                  <option key={opt} value={opt} />
-                ))}
-              </datalist>
-            )}
             {suffix && (
               <span className="px-1 py-1 text-xs font-bold text-muted-foreground bg-white">
                 {suffix}
@@ -230,6 +268,38 @@ export function MissingFieldChip({
             </button>
           </div>
         )}
+        {/* Custom autocomplete dropdown — diacritics-insensitive fuzzy match.
+            Ukazuje sa iba pri text kind + máme autocomplete list. Klik na
+            položku alebo Enter uloží prvú (top). */}
+        {kind === "text" &&
+          autocomplete &&
+          autocomplete.length > 0 &&
+          (() => {
+            const filtered = getFilteredSuggestions(localValue, autocomplete);
+            if (filtered.length === 0) return null;
+            return (
+              <div className="absolute top-full left-0 mt-1 w-56 max-h-56 overflow-y-auto rounded-lg border-2 border-slate-200 bg-white shadow-lg z-50">
+                {filtered.map((opt, i) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    // mousedown lebo click stratí input focus predtým
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      save(opt);
+                    }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 text-sm hover:bg-sky-50 hover:text-sky-800 transition-colors",
+                      i === 0 && "bg-sky-50/50 font-bold",
+                    )}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
       </div>
     );
   }
