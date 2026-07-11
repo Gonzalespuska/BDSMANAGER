@@ -205,6 +205,28 @@ export default async function RealizaciaDetailPage({
         />
       )}
 
+      {/* Kontent button — realizator ako field reporter pre marketing */}
+      <Link
+        href={`/realizacie/${id}/kontent`}
+        className="block rounded-xl border-2 border-fuchsia-300 bg-gradient-to-br from-fuchsia-50 to-pink-50 hover:from-fuchsia-100 hover:to-pink-100 p-4 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-fuchsia-500 text-white flex items-center justify-center text-2xl shadow-md">
+            📱
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-black text-lg text-fuchsia-900">
+              Kontent — foto/video pre marketing
+            </div>
+            <div className="text-xs text-fuchsia-800">
+              Fotky a videa pred / počas / po práci pre stories a reels.
+              Marketing to zostrihá.
+            </div>
+          </div>
+          <div className="text-fuchsia-600 font-black">→</div>
+        </div>
+      </Link>
+
       {/* Statické tlačiteľné PDF plány — druhotné, sekundárny prístup */}
       <details className="rounded-xl border-2 border-slate-200 bg-white overflow-hidden">
         <summary className="px-4 py-2.5 cursor-pointer text-xs font-bold text-slate-600 hover:bg-slate-50 uppercase tracking-wider">

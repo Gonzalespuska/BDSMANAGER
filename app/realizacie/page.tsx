@@ -250,27 +250,35 @@ export default async function RealizacieDashboard() {
                                 </div>
                               </div>
                             </Link>
-                            <div className="border-t-2 border-emerald-100 bg-emerald-50/50 px-4 py-3 flex flex-wrap gap-2">
+                            <div className="border-t-2 border-emerald-100 bg-emerald-50/50 px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-2">
                               <Link
                                 href={`/realizacie/${l.id}/plan?view=zodpovednost`}
-                                className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm"
                               >
                                 <span>✍️</span>
                                 Zodpovednosť
                               </Link>
                               <Link
                                 href={`/realizacie/${l.id}/plan?view=sklad`}
-                                className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm"
                               >
                                 <span>📦</span>
                                 Inventúra
                               </Link>
                               <Link
                                 href={`/realizacie/${l.id}/plan?view=postup`}
-                                className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 text-base font-black transition-colors shadow-sm"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm"
                               >
                                 <span>🔨</span>
                                 Postup
+                              </Link>
+                              <Link
+                                href={`/realizacie/${l.id}/kontent`}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm"
+                                title="Foto/video zo stavby pre marketing"
+                              >
+                                <span>📱</span>
+                                Kontent
                               </Link>
                             </div>
                           </li>
