@@ -428,6 +428,8 @@ export function PlanPrintView({
           teamMembers={teamMembers ?? []}
           zakazkaCislo={zakazkaCislo ?? null}
           isChipsFloor={!!isChipsFloor}
+          isMarbleFloor={!!isMramorova}
+          isMetallicFloor={!!isMetalicka}
           inspectionMeasurements={inspectionMeasurements ?? null}
         />
       )}
@@ -541,6 +543,8 @@ interface WorkStep {
   label: string;
   isControl?: boolean;
   chipsOnly?: boolean;
+  marbleOnly?: boolean;
+  metallicOnly?: boolean;
 }
 
 /**
@@ -583,6 +587,8 @@ function ResponsibilityProtocol({
   teamMembers,
   zakazkaCislo,
   isChipsFloor,
+  isMarbleFloor,
+  isMetallicFloor,
   inspectionMeasurements,
 }: {
   leadName: string;
@@ -593,6 +599,8 @@ function ResponsibilityProtocol({
   teamMembers: Array<{ id: string; name: string }>;
   zakazkaCislo: string | null;
   isChipsFloor: boolean;
+  isMarbleFloor: boolean;
+  isMetallicFloor: boolean;
   inspectionMeasurements: {
     air_temp_c: number | null;
     substrate_temp_c: number | null;
@@ -603,6 +611,9 @@ function ResponsibilityProtocol({
   } | null;
 }) {
   // Kroky presne podľa user-spec.
+  // User 2026-07-11: "ak bude mramorova pridaj tam vytvaranie
+  // mramorovych vzorov, ak metalicka metalickych vzorov, ak chipsova
+  // tak pridanie chipsov je krok, ak jednofarebna staci takto".
   const baseSteps: WorkStep[] = [
     { n: 1, label: "Vybrúsenie podkladu" },
     { n: 2, label: "Vysávanie" },
@@ -614,9 +625,17 @@ function ResponsibilityProtocol({
     { n: 8, label: "Skontrolovanie 2. povysávania", isControl: true },
     { n: 9, label: "Miešanie finálnej vrstvy (pomer + pot-life)" },
     { n: 10, label: "Aplikácia finálnej vrstvy" },
+    // Typ-specific kroky — vždy max jeden aktívny:
     { n: 11, label: "Aplikácia chipsov", chipsOnly: true },
+    { n: 11, label: "Vytváranie mramorových vzorov (žilkovanie / oblaky)", marbleOnly: true },
+    { n: 11, label: "Vytváranie metalických vzorov (troelovanie efektu)", metallicOnly: true },
   ];
-  const steps = baseSteps.filter((s) => !s.chipsOnly || isChipsFloor);
+  const steps = baseSteps.filter((s) => {
+    if (s.chipsOnly) return isChipsFloor;
+    if (s.marbleOnly) return isMarbleFloor;
+    if (s.metallicOnly) return isMetallicFloor;
+    return true; // spoločné kroky
+  });
   const withAssignees = assignResponsibilities(steps, teamMembers);
 
   // Evidencia materiálu / šarže — LEN pri väčších zákazkách (150+ m²)
