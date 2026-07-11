@@ -702,72 +702,12 @@ function ResponsibilityProtocol({
       </table>
 
       {/* 2. PODMIENKY PROSTREDIA */}
-      <h2>2. Podmienky prostredia (vyplniť pred aplikáciou)</h2>
-      <table>
-        <thead>
-          <tr>
-            <th style={{ width: "45%" }}>Parameter</th>
-            <th style={{ width: "25%" }}>Nameraná hodnota</th>
-            <th style={{ width: "30%" }}>Limit</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr className="row-tall">
-            <td>Teplota vzduchu</td>
-            <td>
-              {inspectionMeasurements?.air_temp_c != null
-                ? `${inspectionMeasurements.air_temp_c} °C`
-                : ""}
-            </td>
-            <td>+10 až +25 °C</td>
-          </tr>
-          <tr className="row-tall">
-            <td>Teplota podkladu</td>
-            <td>
-              {inspectionMeasurements?.substrate_temp_c != null
-                ? `${inspectionMeasurements.substrate_temp_c} °C`
-                : ""}
-            </td>
-            <td>+10 až +25 °C</td>
-          </tr>
-          <tr className="row-tall">
-            <td>Vlhkosť podkladu — CM metóda</td>
-            <td>
-              {inspectionMeasurements?.moisture_cm_avg != null
-                ? `${inspectionMeasurements.moisture_cm_avg.toFixed(1)} %`
-                : ""}
-            </td>
-            <td>max 4 %</td>
-          </tr>
-          <tr className="row-tall">
-            <td>Relatívna vlhkosť RH</td>
-            <td>
-              {inspectionMeasurements?.rh_pct != null
-                ? `${inspectionMeasurements.rh_pct} %`
-                : ""}
-            </td>
-            <td>max 80 %</td>
-          </tr>
-          <tr className="row-tall">
-            <td>Rosný bod</td>
-            <td>
-              {inspectionMeasurements?.dew_point_c != null
-                ? `${inspectionMeasurements.dew_point_c} °C`
-                : ""}
-            </td>
-            <td>min +3 °C nad teplotou podkladu</td>
-          </tr>
-          <tr className="row-tall">
-            <td style={{ fontWeight: 700 }}>Kto meral (meno + podpis)</td>
-            <td colSpan={2}>
-              {inspectionMeasurements?.measured_by ?? ""}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 3. EVIDENCIA MATERIÁLU / ŠARŽE */}
-      <h2>3. Evidencia materiálu / šarže</h2>
+      {/* 2. EVIDENCIA MATERIÁLU / ŠARŽE
+          (Podmienky prostredia — teplota, RH, rosný bod, CM — robí
+          obhliadkár na obhliadke. Realizator to nerobí, takže na tomto
+          protokole nepotrebuje. Prípadné hodnoty sú v inspection_result
+          a obchodák/admin ich vidí na /obhliadnute karte.) */}
+      <h2>2. Evidencia materiálu / šarže</h2>
       <table>
         <thead>
           <tr>
@@ -790,7 +730,7 @@ function ResponsibilityProtocol({
       </table>
 
       {/* 4. ROZDELENIE PRÁCE */}
-      <h2>4. Rozdelenie práce medzi realizatorov</h2>
+      <h2>3. Rozdelenie práce medzi realizatorov</h2>
       {teamMembers.length > 0 && (
         <div style={{ fontSize: "10px", marginBottom: "4px" }}>
           <strong>Tím:</strong> {teamMembers.map((m) => m.name).join(", ")}{" "}
@@ -838,7 +778,7 @@ function ResponsibilityProtocol({
       </table>
 
       {/* 5. FOTODOKUMENTÁCIA */}
-      <h2>5. Fotodokumentácia</h2>
+      <h2>4. Fotodokumentácia</h2>
       <div style={{ padding: "8px", border: "1px solid #000", fontSize: "11px" }}>
         Zaškrtnite fotky ktoré boli spravené počas realizácie:
         <div style={{ marginTop: "6px", display: "flex", gap: "18px", flexWrap: "wrap" }}>
@@ -861,7 +801,7 @@ function ResponsibilityProtocol({
       </div>
 
       {/* 6. SÚPIS CHÝB / DEFEKTOV */}
-      <h2>6. Súpis chýb / defektov (ak sa niečo nájde)</h2>
+      <h2>5. Súpis chýb / defektov (ak sa niečo nájde)</h2>
       <table>
         <thead>
           <tr>
@@ -888,9 +828,9 @@ function ResponsibilityProtocol({
       </table>
 
       {/* 7. ZODPOVEDNOSTNÁ DOLOŽKA */}
-      <h2>7. Zodpovednostná doložka</h2>
+      <h2>6. Zodpovednostná doložka</h2>
       <div className="doložka">
-        Každý svojím podpisom v tabuľke (bod 4) potvrdzuje, že ním vykonaný
+        Každý svojím podpisom v tabuľke (bod 3) potvrdzuje, že ním vykonaný
         úkon bol spravený správne a podľa pokynov technológie. Ak sa pri
         záručnej reklamácii preukáže, že chyba na diele vznikla{" "}
         <strong>preukázateľne zlým vykonaním konkrétneho úkonu</strong>, náklady
