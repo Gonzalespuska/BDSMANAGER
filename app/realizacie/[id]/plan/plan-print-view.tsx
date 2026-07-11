@@ -643,9 +643,6 @@ function ResponsibilityProtocol({
         .responsibility-protocol .doložka { font-size: 10.5px; line-height: 1.5; margin-top: 12px; padding: 8px; border: 1px solid #000; }
       `}</style>
 
-      {/* Logo slot — 40px prázdne miesto na neskoršie doplnenie */}
-      <div className="logo-slot no-print">EPOXIDOVO s.r.o. — logo (bude doplnené)</div>
-
       <div style={{ textAlign: "center", marginBottom: "10px" }}>
         <h1 style={{ fontSize: "18px", fontWeight: 800, margin: 0, letterSpacing: "0.5px" }}>
           PROTOKOL ZODPOVEDNOSTI
