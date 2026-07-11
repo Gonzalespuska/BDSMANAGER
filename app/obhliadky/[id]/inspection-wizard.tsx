@@ -2,17 +2,22 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
+  ArrowRight,
   Beaker,
+  Bell,
   Camera,
   Check,
   ChevronRight,
+  ClipboardList,
   Droplets,
   Loader2,
   Pencil,
   Plus,
   Ruler,
   Send,
+  Sparkles,
   Trash2,
   Zap,
   X,
@@ -104,6 +109,9 @@ export function InspectionWizard({
   const [photos, setPhotos] = React.useState<PhotoItem[]>(existingPhotos);
   const [note, setNote] = React.useState(ex.agent_note ?? "");
   const [submitting, setSubmitting] = React.useState(false);
+  // Success overlay — po úspešnom odoslaní zobrazíme full-screen celebration
+  // aby obhliadkár VIDEL že to prešlo (predtým iba toast na 800 ms).
+  const [submittedAt, setSubmittedAt] = React.useState<Date | null>(null);
 
   // ─── Modaly (open state) ───
   const [testsOpen, setTestsOpen] = React.useState(false);
@@ -145,8 +153,15 @@ export function InspectionWizard({
       toast.error(`Chyba: ${res.error}`);
       return;
     }
-    toast.success("Obhliadka odoslaná — obchodník dostal notifikáciu.");
-    setTimeout(() => router.push("/obhliadky"), 800);
+    // Success overlay + haptic (mobile). Redirect až po ~4 s alebo klik na CTA.
+    setSubmittedAt(new Date());
+    try {
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate?.([80, 40, 120]);
+      }
+    } catch {
+      /* not supported */
+    }
   }
 
   return (
@@ -290,7 +305,148 @@ export function InspectionWizard({
           }}
         />
       )}
+      {submittedAt && (
+        <SubmissionSuccess
+          summary={{
+            m2: measurement.total_m2,
+            moisture: `${tests.moisture_1_pct}%/${tests.moisture_2_pct}%`,
+            adhesion: `${tests.adhesion_mpa} MPa`,
+            photos: photos.length,
+          }}
+          onClose={() => router.push("/obhliadky?tab=hotove")}
+        />
+      )}
     </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SubmissionSuccess — full-screen celebration overlay po odoslaní
+// obhliadky. Ukáže: veľký ✓ animation, zhrnutie čo bolo odoslané,
+// info že obchodák dostal notifikáciu, 2 CTA (Obhliadky / Späť).
+// Zámerne NIE JE toast — obhliadkár potrebuje jasnú "hotovo" spätnú
+// väzbu (predtým sa strácal toast a nevedel či to prešlo).
+// ═══════════════════════════════════════════════════════════════════════
+function SubmissionSuccess({
+  summary,
+  onClose,
+}: {
+  summary: {
+    m2: number;
+    moisture: string;
+    adhesion: string;
+    photos: number;
+  };
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      role="dialog"
+      aria-live="polite"
+      aria-label="Obhliadka odoslaná"
+    >
+      <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        {/* Header — veľký zelený checkmark */}
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 px-6 pt-8 pb-6 text-center text-white relative overflow-hidden">
+          <div className="absolute top-2 right-4 opacity-20">
+            <Sparkles className="w-12 h-12" />
+          </div>
+          <div className="absolute bottom-2 left-4 opacity-20">
+            <Sparkles className="w-8 h-8" />
+          </div>
+          <div className="relative">
+            <div className="w-20 h-20 mx-auto rounded-full bg-white/20 border-4 border-white flex items-center justify-center mb-3 animate-pulse">
+              <Check className="w-12 h-12 text-white stroke-[3]" />
+            </div>
+            <h2 className="text-2xl font-black tracking-tight">
+              Obhliadka odoslaná!
+            </h2>
+            <p className="text-emerald-50 text-sm font-semibold mt-1">
+              Obchodník už dostal notifikáciu 🔔
+            </p>
+          </div>
+        </div>
+
+        {/* Body — zhrnutie */}
+        <div className="px-6 py-5 space-y-3">
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">
+            Odoslané dáta
+          </div>
+          <ul className="space-y-2">
+            <SummaryRow
+              icon={<Ruler className="w-4 h-4 text-sky-500" />}
+              label="Plocha"
+              value={`${summary.m2.toFixed(2)} m²`}
+            />
+            <SummaryRow
+              icon={<Droplets className="w-4 h-4 text-sky-500" />}
+              label="Vlhkosť"
+              value={summary.moisture}
+            />
+            <SummaryRow
+              icon={<Zap className="w-4 h-4 text-amber-500" />}
+              label="Odtrh"
+              value={summary.adhesion}
+            />
+            <SummaryRow
+              icon={<Camera className="w-4 h-4 text-emerald-500" />}
+              label="Fotky"
+              value={`${summary.photos} ${summary.photos === 1 ? "kus" : summary.photos < 5 ? "kusy" : "kusov"}`}
+            />
+          </ul>
+          <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900 leading-snug inline-flex items-start gap-2">
+            <Bell className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+            <div>
+              Obchodák má obhliadku v sekcii <strong>„Obhliadnuté"</strong>{" "}
+              a notifikačný zvonček mu bliká. Ide poslať klientovi
+              cenovú ponuku.
+            </div>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="border-t bg-slate-50 px-4 py-3 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 text-sm font-black transition-colors shadow-md"
+          >
+            <ClipboardList className="w-4 h-4" />
+            Späť na moje obhliadky
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          <Link
+            href="/calendar"
+            className="w-full text-center text-[11px] font-bold text-muted-foreground hover:text-sky-700 py-1"
+          >
+            Alebo pozri kalendár →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <li className="flex items-center gap-2 text-sm">
+      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0 text-slate-500 font-semibold text-xs">
+        {label}
+      </div>
+      <div className="font-black text-slate-900 tabular-nums">{value}</div>
+    </li>
   );
 }
 
