@@ -11,18 +11,21 @@ import { DmView } from "./dm-view";
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
+const DM_PREFIX = "🔒 DM:";
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
 /**
  * /dm/[roomId] — samostatná Messenger-style stránka pre 1-na-1 chat.
  *
- * Prečo samostatná route:
- *   Tím chat (/agent/team) mixuje všeobecné roomky (Všeobecná diskusia,
- *   projektové témy) s osobnými správami. Obchodák/obhliadkár keď chce
- *   napísať kolegom (napr. otázka k obhliadke), potreboval ísť do
- *   Tím chat, nájsť správnu DM roomku v sidebar-i, klik ...
+ * DM konvencia (viď /api/chat/dm/route.ts): team_rooms.title je
+ *   `🔒 DM:<uuid_min>:<uuid_max>` — pár účastníkov zakódovaný v titule,
+ *   pretože team_rooms schéma nemá is_dm/member_1_id/member_2_id.
  *
- *   Teraz: klik na 💬 Napísať → priamo sa otvorí čistá messenger stránka
- *   s peer avatarom hore, telefónom, správami dole, input na spodku.
- *   Ako by si otvoril Messenger konverzáciu.
+ * Prečo samostatná route (nie /agent/team?room=X):
+ *   Tím chat sídli v /agent/team a mixuje všeobecné roomky (Všeobecná
+ *   diskusia, projektové témy) s DM správami v sidebar-i. Obchodák keď
+ *   klikne 💬 Napísať → chce priamo Messenger-style konverzáciu, nie
+ *   preklopiť sa do Team chatu.
  */
 export default async function DmPage({
   params,
@@ -35,29 +38,36 @@ export default async function DmPage({
 
   const sb = createAdminClient();
 
-  // Načítaj info o roomke — musí byť DM a musí ma zahŕňať
   const { data: room } = await sb
     .from("team_rooms")
-    .select("id, title, created_by, is_dm, member_1_id, member_2_id")
+    .select("id, title, created_by")
     .eq("id", roomId)
     .maybeSingle();
 
   if (!room) notFound();
-  if (!room.is_dm) {
-    // Nie je to DM — pošleme do Tím chat
+
+  const title = (room.title as string) ?? "";
+  if (!title.startsWith(DM_PREFIX)) {
+    // Nie je to DM — pošleme do Tím chat (všeobecná/projekt roomka)
     redirect(`/agent/team?room=${roomId}`);
   }
 
-  // Overiť že som member
-  const isMember = room.member_1_id === me.id || room.member_2_id === me.id;
+  const [uidMin, uidMax] = title.slice(DM_PREFIX.length).split(":");
+  if (!UUID_RE.test(uidMin ?? "") || !UUID_RE.test(uidMax ?? "")) {
+    // Nevalidný DM title — fallback do Tím chatu
+    redirect(`/agent/team?room=${roomId}`);
+  }
+
+  // Overiť že som member (jeden z dvoch UUID)
+  const isMember = me.id === uidMin || me.id === uidMax;
   if (!isMember && me.role !== "admin") {
     redirect("/agent/team");
   }
 
-  const peerId = room.member_1_id === me.id ? room.member_2_id : room.member_1_id;
+  const peerId = me.id === uidMin ? uidMax : uidMin;
   const { data: peer } = await sb
     .from("users")
-    .select("id, name, email, phone, role, avatar_url")
+    .select("id, name, email, role, avatar_url")
     .eq("id", peerId)
     .maybeSingle();
 
@@ -76,10 +86,10 @@ export default async function DmPage({
         meName={me.name}
         peer={{
           id: peer.id as string,
-          name: peer.name as string,
-          email: peer.email as string,
-          phone: (peer.phone as string | null) ?? null,
-          role: peer.role as string,
+          name: (peer.name as string) ?? "Kolega",
+          email: (peer.email as string) ?? "",
+          phone: null, // users tabuľka nemá phone column (viď supabase/schema.sql)
+          role: (peer.role as string) ?? "user",
           avatar_url: (peer.avatar_url as string | null) ?? null,
         }}
         initialMessages={messages}

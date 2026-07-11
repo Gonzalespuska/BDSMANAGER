@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentAppUser } from "@/lib/auth";
 
 /**
@@ -866,8 +867,12 @@ export async function saveInspectionDraftAction(
     return { ok: false, error: "forbidden_wrong_role" };
   }
 
-  const supabase = await createClient();
-  const { data: lead, error: leadErr } = await supabase
+  // POZOR: RLS policy leads_update povoľuje UPDATE iba admin+assigned_to.
+  // Obhliadkár (inspection_by) je BLOKOVANÝ → tichá 0-rows update (bez
+  // errora ale nič sa neuloží → refresh vymaže "uložené" veci).
+  // Preto použijeme admin klienta a auth check spravíme manuálne.
+  const admin = createAdminClient();
+  const { data: lead, error: leadErr } = await admin
     .from("leads")
     .select("inspection_by, inspection_result")
     .eq("id", leadId)
@@ -883,11 +888,11 @@ export async function saveInspectionDraftAction(
     _draft_saved_at: new Date().toISOString(),
   };
 
-  const { error: updErr } = await supabase
+  const { error: updErr } = await admin
     .from("leads")
     .update({ inspection_result: merged })
     .eq("id", leadId);
-  if (updErr) return { ok: false, error: "db_error" };
+  if (updErr) return { ok: false, error: `db_error: ${updErr.message}` };
 
   return { ok: true };
 }
