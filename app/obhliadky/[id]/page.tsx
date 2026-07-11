@@ -112,17 +112,48 @@ export default async function ObhliadkaDetailPage({
         </div>
       </header>
 
-      {/* Info karty */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <InfoCard icon={<MapPin className="w-4 h-4" />} label="Lokalita" value={data.lokalita ?? "—"} />
-        <InfoCard icon={<Ruler className="w-4 h-4" />} label="Odhad plochy" value={data.plocha ? `${data.plocha} m²` : "—"} />
-        <InfoCard
-          icon={<Phone className="w-4 h-4" />}
-          label="Telefón zákazníka"
-          value={l.phone ? formatPhoneSK(l.phone) : "—"}
-          link={l.phone ? `tel:${l.phone}` : undefined}
-        />
-      </div>
+      {/* Info karty — plocha:
+          • ak obhliadkár dokončil obhliadku (inspection_result.measured_m2)
+            → "OVERENÁ PLOCHA" (jeho presné laserové zameranie), emerald
+          • inak "ODHAD PLOCHY" (z klientovho formulára / lead.data.plocha)
+          User: "az ked to obhliadkar potvrdi az vtedy to bude overena
+          plocha ber to do uvahy nech uz potom to vidi obchodak ako
+          realnu plochu co mu tam submitol obhliadkar". */}
+      {(() => {
+        const insp = (l.inspection_result ?? {}) as Record<string, unknown>;
+        const measured =
+          typeof insp.measured_m2 === "number" && insp.measured_m2 > 0
+            ? insp.measured_m2
+            : null;
+        const isMeasured = measured !== null;
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <InfoCard
+              icon={<MapPin className="w-4 h-4" />}
+              label="Lokalita"
+              value={data.lokalita ?? "—"}
+            />
+            <InfoCard
+              icon={<Ruler className="w-4 h-4" />}
+              label={isMeasured ? "Overená plocha ✓" : "Odhad plochy"}
+              value={
+                isMeasured
+                  ? `${measured!.toFixed(2)} m²`
+                  : data.plocha
+                    ? `${data.plocha} m²`
+                    : "—"
+              }
+              tint={isMeasured ? "emerald" : undefined}
+            />
+            <InfoCard
+              icon={<Phone className="w-4 h-4" />}
+              label="Telefón zákazníka"
+              value={l.phone ? formatPhoneSK(l.phone) : "—"}
+              link={l.phone ? `tel:${l.phone}` : undefined}
+            />
+          </div>
+        );
+      })()}
 
       {/* Poznámka zákazníka */}
       {data.message && (
@@ -188,26 +219,47 @@ function InfoCard({
   label,
   value,
   link,
+  tint,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   link?: string;
+  /** Ak set, karta má farebný rám (napr. emerald pre overenú plochu). */
+  tint?: "emerald";
 }) {
   const inner = (
     <>
-      <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground inline-flex items-center gap-1.5">
+      <div
+        className={
+          tint === "emerald"
+            ? "text-[10px] uppercase tracking-wider font-black text-emerald-700 inline-flex items-center gap-1.5"
+            : "text-[10px] uppercase tracking-wider font-bold text-muted-foreground inline-flex items-center gap-1.5"
+        }
+      >
         {icon}
         {label}
       </div>
-      <div className="font-bold text-sm mt-0.5">{value}</div>
+      <div
+        className={
+          tint === "emerald"
+            ? "font-black text-base mt-0.5 text-emerald-900 tabular-nums"
+            : "font-bold text-sm mt-0.5"
+        }
+      >
+        {value}
+      </div>
     </>
   );
+  const outerCls =
+    tint === "emerald"
+      ? "rounded-xl border-2 border-emerald-300 bg-emerald-50/40 p-3 shadow-sm"
+      : "rounded-xl border bg-background p-3";
   return link ? (
-    <a href={link} className="rounded-xl border bg-background p-3 hover:bg-muted/60 transition-colors block">
+    <a href={link} className={`${outerCls} hover:bg-muted/60 transition-colors block`}>
       {inner}
     </a>
   ) : (
-    <div className="rounded-xl border bg-background p-3">{inner}</div>
+    <div className={outerCls}>{inner}</div>
   );
 }
