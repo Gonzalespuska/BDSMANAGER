@@ -405,7 +405,7 @@ function AddAgentModal({
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [role, setRole] = React.useState<
-    "admin" | "obchod" | "obhliadky" | "realizacie"
+    "admin" | "obchod" | "obhliadky" | "realizacie" | "office" | "skolenie"
   >("obchod");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -496,6 +496,8 @@ function AddAgentModal({
                     { id: "obhliadky", label: "🔍 Obhliadky", color: "violet" },
                     { id: "realizacie", label: "🔨 Realizácie", color: "emerald" },
                     { id: "admin", label: "🛡 Admin", color: "amber" },
+                    { id: "office", label: "📦 Office", color: "slate" },
+                    { id: "skolenie", label: "🎓 Školenie", color: "rose" },
                   ] as const
                 ).map((r) => {
                   const active = role === r.id;
@@ -515,7 +517,9 @@ function AddAgentModal({
                                 ? "border-emerald-500 bg-emerald-50 text-emerald-900"
                                 : r.color === "rose"
                                   ? "border-rose-500 bg-rose-50 text-rose-900"
-                                  : "border-amber-500 bg-amber-50 text-amber-900"
+                                  : r.color === "slate"
+                                    ? "border-slate-500 bg-slate-50 text-slate-900"
+                                    : "border-amber-500 bg-amber-50 text-amber-900"
                           : "border-zinc-200 bg-background hover:bg-muted/40 text-muted-foreground")
                       }
                     >

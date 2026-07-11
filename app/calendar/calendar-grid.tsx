@@ -979,13 +979,9 @@ export function CalendarGrid({
                 <div className="w-px h-6 bg-border mx-1" />
               </>
             )}
-            {/* Filter dropdown — obchod/admin toggle "kto má voľno" */}
-            {canAssign && filterableUsers.length > 0 && (
-              <CalendarFilterDropdown
-                users={filterableUsers}
-                activeUserId={activeFilterUserId}
-              />
-            )}
+            {/* User 2026-07-11: "kto má voľno filter preč" — dropdown
+                bol tu odstránený. Ak sa v budúcnosti bude hodit, treba
+                ho vrátiť z gitu. */}
             {/* Dnes / Mesiac toggle — VŠETKY role (obchod, admin,
                 obhliadkár, realizátor). User: "realizator ma viac veci
                 na dnes tak nech kukne cas". Obhliadkár tiež — vidí

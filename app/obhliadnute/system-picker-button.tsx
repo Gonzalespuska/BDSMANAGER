@@ -1,16 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { ArrowRight, Loader2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import {
   systemsFor,
-  calcInventory,
   type Binder,
   type FloorType,
   type SystemCode,
-  type InventoryLine,
 } from "@/lib/data/realization-systems";
 
 /**
@@ -65,10 +64,10 @@ export function SystemPickerButton({
     }
   }, [availableSystems, system]);
 
-  const inventory: InventoryLine[] = React.useMemo(
-    () => (system && m2 ? calcInventory(system, m2) : []),
-    [system, m2],
-  );
+  // User (2026-07-11): "to auto inventura obchodak nemusi vidiet to si
+  //   potvrdime my ci to dobre pocita" → inventúru vypočítame na
+  //   backende (POST /api/lead/set-system), ale v UI ju neukazujeme
+  //   obchodákovi.
 
   async function confirm() {
     if (!system) return;
@@ -104,27 +103,34 @@ export function SystemPickerButton({
     }
   }
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black transition-colors shadow-sm"
-      >
-        <span>🔨</span>
-        Poslať na realizáciu
-        <ArrowRight className="w-3.5 h-3.5" />
-      </button>
+  // Portal support — bez portalu môže mať modal zlú pozíciu ak niekde
+  // vyššie v DOM je `transform` alebo `overflow:hidden` (Next.js layout
+  // wrapper). User 2026-07-11: "toto ked som klikol poslat na realizaciu
+  // tak sa mi takto divne loadlo". createPortal ho vypichne na body.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
 
-      {open && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden my-8"
-            onClick={(e) => e.stopPropagation()}
-          >
+  const trigger = (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black transition-colors shadow-sm"
+    >
+      <span>🔨</span>
+      Poslať na realizáciu
+      <ArrowRight className="w-3.5 h-3.5" />
+    </button>
+  );
+
+  const modal = open ? (
+    <div
+      className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      onClick={() => setOpen(false)}
+    >
+      <div
+        className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden my-8 max-h-[calc(100vh-4rem)] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
             <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 text-white px-5 py-4 flex items-start gap-3">
               <div className="text-2xl">🔨</div>
               <div className="flex-1 min-w-0">
@@ -241,31 +247,13 @@ export function SystemPickerButton({
                 </div>
               </div>
 
-              {/* INVENTORY PREVIEW */}
-              {inventory.length > 0 && m2 && (
-                <div className="rounded-xl border-2 border-amber-200 bg-amber-50/60 p-3">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-amber-800 mb-2">
-                    📦 Auto-inventúra pre {m2.toFixed(0)} m²
-                  </div>
-                  <ul className="space-y-1.5">
-                    {inventory.map((i) => (
-                      <li key={i.sku} className="flex items-baseline gap-2">
-                        <span className="w-8 shrink-0 text-right font-black tabular-nums text-amber-900">
-                          {i.qty}×
-                        </span>
-                        <span className="flex-1 text-sm font-bold text-slate-900">
-                          {i.label}
-                        </span>
-                        <span className="text-[10px] text-slate-500">
-                          {i.unit}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="text-[10px] text-amber-800 italic mt-2">
-                    + fixný zoznam náradia (stierka, valčeky, brúska…)
-                    sa doplní automaticky.
-                  </div>
+              {/* Info riadok — obchodák nevidí inventúru, len info že
+                  sa vypočíta automaticky. User 2026-07-11:
+                  "to auto inventura obchodak nemusi vidiet". */}
+              {system && m2 && (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-900">
+                  ✓ Systém uložený — realizator dostane pripravenú inventúru
+                  pre {m2.toFixed(0)} m² podľa systému.
                 </div>
               )}
 
@@ -311,7 +299,12 @@ export function SystemPickerButton({
             </div>
           </div>
         </div>
-      )}
+  ) : null;
+
+  return (
+    <>
+      {trigger}
+      {mounted && modal ? createPortal(modal, document.body) : null}
     </>
   );
 }
@@ -320,7 +313,8 @@ function normalizeType(raw: string | null): FloorType | null {
   if (!raw) return null;
   const n = raw
     .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
+    // eslint-disable-next-line no-misleading-character-class
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim();
   if (n.includes("chips")) return "chipsova";

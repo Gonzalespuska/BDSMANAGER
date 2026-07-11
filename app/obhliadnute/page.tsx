@@ -26,6 +26,7 @@ import { SafePhoto } from "@/components/safe-photo";
 import { JustSentBanner } from "./just-sent-banner";
 import { JustAssignedBanner } from "./just-assigned-banner";
 import { SystemPickerButton } from "./system-picker-button";
+import { DeleteRealizationButton } from "./delete-realization-button";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -447,6 +448,27 @@ export default async function ObhliadnutePage({
                       <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                         Testy podkladu
                       </div>
+                      {/* Vysoká vlhkosť = red alert (prominentný, nie
+                          len malý badge). User 2026-07-11:
+                          "vysoka vlhkost cervena bublina upozornenie". */}
+                      {typeof moist1 === "number" &&
+                        typeof moist2 === "number" &&
+                        Math.max(moist1, moist2) > 5 && (
+                          <div className="rounded-lg border-2 border-rose-400 bg-rose-100 px-3 py-2 flex items-start gap-2 shadow-sm animate-pulse-slow">
+                            <span className="text-lg leading-none shrink-0">
+                              ⚠
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-black uppercase tracking-wider text-rose-900">
+                                Vysoká vlhkosť — {Math.max(moist1, moist2)}%
+                              </div>
+                              <div className="text-[11px] text-rose-800 leading-snug mt-0.5">
+                                Nad 5% — potrebný špeciálny primer (Sikafloor
+                                161) alebo vysušenie povrchu pred realizáciou.
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       <TestRow
                         icon={<Droplets className="w-4 h-4 text-sky-500" />}
                         label="Vlhkosť"
@@ -554,13 +576,22 @@ export default async function ObhliadnutePage({
                     {/* Poslať na realizáciu — obchodák najprv vyberie
                         SYSTEM (typ + živica + konkrétny kód), auto sa
                         vypočíta inventúra, potom redirect na kalendár. */}
-                    {!isNew && (
+                    {!isNew && l.status !== "in_realization" && (
                       <SystemPickerButton
                         leadId={l.id as string}
                         leadName={(l.name as string) ?? ""}
                         initialType={typ}
                         m2={typeof m2 === "number" ? m2 : null}
                         city={lokalita !== "—" ? lokalita : null}
+                      />
+                    )}
+                    {/* Zrušiť realizáciu — iba v tabe „V realizácii".
+                        User: "obchodak moze mazat realizacie ale nech to
+                        chodi adminovi ako osobitne upozornenie". */}
+                    {l.status === "in_realization" && (
+                      <DeleteRealizationButton
+                        leadId={l.id as string}
+                        leadName={(l.name as string) ?? ""}
                       />
                     )}
                     <Link

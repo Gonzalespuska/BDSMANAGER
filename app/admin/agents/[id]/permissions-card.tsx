@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   AlertTriangle,
-  ArrowUpCircle,
   Check,
-  ShieldAlert,
+  ClipboardList,
+  GraduationCap,
+  Hammer,
+  Loader2,
+  Package,
   ShieldCheck,
+  Store,
   Trash2,
-  UserMinus,
-  UserPlus,
 } from "lucide-react";
 
 import {
@@ -22,13 +24,72 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * Permissions karta v detail obchodníka.
- * Akcie:
- *   - Povýšiť na admina (role: obchod/obhliadky/realizacie → admin) — 2× confirm
- *   - Degradovať na obchodníka (admin → obchod)                    — 2× confirm
- *   - Odobrať access (DELETE z DB + auth)                          — 1× confirm
+ * Permissions karta v detail obchodníka — v2 (2026-07-11).
+ *
+ * User: "rolu pridelujes ked vytvaras agenta popripade ked si rozkliknes
+ *  existujuceho agenta a chces mi pridat rolu".
+ *
+ * Zmena oproti v1: namiesto len promote/demote toggle-u je tu plný role
+ * picker so všetkými 6 rolami. Jeden klik zmení rolu (s confirm-om).
  */
-type ActionType = "promote" | "demote" | "delete";
+export type UserRole =
+  | "admin"
+  | "obchod"
+  | "obhliadky"
+  | "realizacie"
+  | "office"
+  | "skolenie";
+
+const ROLE_DEFS: Array<{
+  role: UserRole;
+  label: string;
+  desc: string;
+  icon: React.ReactNode;
+  tint: string;
+}> = [
+  {
+    role: "admin",
+    label: "Admin",
+    desc: "Plný prístup — správa userov, systémov, podkladov, všetkých leadov.",
+    icon: <ShieldCheck className="w-4 h-4" />,
+    tint: "amber",
+  },
+  {
+    role: "obchod",
+    label: "Obchodník",
+    desc: "Volá leadom, posiela CP, priraďuje obhliadky + realizácie.",
+    icon: <Store className="w-4 h-4" />,
+    tint: "sky",
+  },
+  {
+    role: "obhliadky",
+    label: "Obhliadkár",
+    desc: "Chodí na obhliadky, meria plochu, robí testy podkladu + foto.",
+    icon: <ClipboardList className="w-4 h-4" />,
+    tint: "violet",
+  },
+  {
+    role: "realizacie",
+    label: "Realizátor",
+    desc: "Robí samotnú realizáciu podľa systému + inventúry.",
+    icon: <Hammer className="w-4 h-4" />,
+    tint: "emerald",
+  },
+  {
+    role: "office",
+    label: "Office",
+    desc: "Admin support — objednávky, sklad, kontakty.",
+    icon: <Package className="w-4 h-4" />,
+    tint: "slate",
+  },
+  {
+    role: "skolenie",
+    label: "Školenie",
+    desc: "Iba prístup do Podkladov (call scripty, postupy, tréning).",
+    icon: <GraduationCap className="w-4 h-4" />,
+    tint: "rose",
+  },
+];
 
 export function PermissionsCard({
   agentId,
@@ -37,50 +98,39 @@ export function PermissionsCard({
   name,
 }: {
   agentId: string;
-  role: "admin" | "obchod" | "obhliadky" | "realizacie" | "office" | "skolenie";
+  role: UserRole;
   active: boolean;
   name: string;
 }) {
-  void active; // soft-deactivate sa už nepoužíva — len úplný delete
+  void active;
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = React.useState<ActionType | null>(
-    null,
-  );
-  const [confirmStep, setConfirmStep] = React.useState<1 | 2>(1);
+  const [pendingRole, setPendingRole] = React.useState<UserRole | null>(null);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
 
-  function startConfirm(a: ActionType) {
-    setConfirmAction(a);
-    setConfirmStep(1);
-    setError(null);
-  }
-
-  function closeConfirm() {
-    setConfirmAction(null);
-    setConfirmStep(1);
-  }
-
-  async function execute() {
-    if (!confirmAction) return;
+  async function applyRole(next: UserRole) {
     setBusy(true);
     setError(null);
-    let res;
-    if (confirmAction === "promote") {
-      res = await updateAgentAction(agentId, { role: "admin" });
-    } else if (confirmAction === "demote") {
-      res = await updateAgentAction(agentId, { role: "obchod" });
-    } else {
-      res = await deleteAgentAction(agentId);
-    }
+    const res = await updateAgentAction(agentId, { role: next });
     setBusy(false);
-    closeConfirm();
+    setPendingRole(null);
     if (!res.ok) {
       setError(res.error);
-    } else if (confirmAction === "delete") {
-      router.push("/admin/agents");
     } else {
       router.refresh();
+    }
+  }
+
+  async function doDelete() {
+    setBusy(true);
+    const res = await deleteAgentAction(agentId);
+    setBusy(false);
+    setConfirmDelete(false);
+    if (!res.ok) {
+      setError(res.error);
+    } else {
+      router.push("/admin/agents");
     }
   }
 
@@ -88,70 +138,84 @@ export function PermissionsCard({
     <section>
       <h2 className="text-sm font-bold uppercase tracking-wider mb-2 inline-flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-amber-600" aria-hidden />
-        Permissions
+        Rola a permissions
       </h2>
 
-      <div className="rounded-xl border bg-background divide-y">
-        {/* Povýšiť / Degradovať */}
-        <Row
-          icon={
-            role === "admin" ? (
-              <ShieldAlert className="w-4 h-4 text-amber-600" aria-hidden />
-            ) : (
-              <ArrowUpCircle className="w-4 h-4 text-amber-600" aria-hidden />
-            )
-          }
-          title={role === "admin" ? "Degradovať na obchodníka" : "Povýšiť na admina"}
-          desc={
-            role === "admin"
-              ? "Stratí prístup do admin sekcie, vráti sa medzi bežných obchodníkov."
-              : "Získa plný prístup do admin sekcie (správa obchodníkov, leady, permissions)."
-          }
-          action={
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => startConfirm(role === "admin" ? "demote" : "promote")}
-              className={cn(
-                role === "admin"
-                  ? "border-zinc-300 hover:bg-zinc-100"
-                  : "border-amber-300 text-amber-800 hover:bg-amber-50",
-              )}
-            >
-              {role === "admin" ? (
-                <>
-                  <UserMinus className="w-4 h-4 mr-1.5" aria-hidden />
-                  Degradovať
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4 mr-1.5" aria-hidden />
-                  Povýšiť
-                </>
-              )}
-            </Button>
-          }
-        />
+      <div className="rounded-xl border bg-background p-3 space-y-2">
+        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+          Priraď rolu
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {ROLE_DEFS.map((def) => {
+            const isCurrent = def.role === role;
+            return (
+              <button
+                key={def.role}
+                type="button"
+                disabled={busy || isCurrent}
+                onClick={() => setPendingRole(def.role)}
+                className={cn(
+                  "text-left rounded-lg border-2 px-3 py-2.5 transition-colors flex items-start gap-2.5",
+                  isCurrent
+                    ? "border-emerald-500 bg-emerald-50"
+                    : "border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300",
+                  busy && "opacity-50 cursor-not-allowed",
+                )}
+              >
+                <div
+                  className={cn(
+                    "shrink-0 w-8 h-8 rounded-lg flex items-center justify-center",
+                    def.tint === "amber" && "bg-amber-100 text-amber-700",
+                    def.tint === "sky" && "bg-sky-100 text-sky-700",
+                    def.tint === "violet" && "bg-violet-100 text-violet-700",
+                    def.tint === "emerald" && "bg-emerald-100 text-emerald-700",
+                    def.tint === "slate" && "bg-slate-100 text-slate-700",
+                    def.tint === "rose" && "bg-rose-100 text-rose-700",
+                  )}
+                >
+                  {def.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="font-black text-sm">{def.label}</div>
+                    {isCurrent && (
+                      <span className="text-[9px] font-black uppercase tracking-widest bg-emerald-600 text-white rounded-full px-1.5 py-0.5">
+                        ✓ aktuálna
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-600 leading-snug mt-0.5">
+                    {def.desc}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-        {/* Úplne odobrať access — DELETE */}
-        <Row
-          icon={<Trash2 className="w-4 h-4 text-rose-600" aria-hidden />}
-          title="Odobrať access"
-          desc="Trvalo odstráni účet (DB + auth). Leady ostanú v systéme bez priradenia, môžeš ich potom pridať inému obchodníkovi."
-          action={
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => startConfirm("delete")}
-              className="border-rose-300 text-rose-800 hover:bg-rose-50"
-            >
-              <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
-              Odobrať
-            </Button>
-          }
-        />
+      <div className="mt-3 rounded-xl border bg-background p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <Trash2 className="w-4 h-4 text-rose-600 mt-0.5" aria-hidden />
+            <div>
+              <div className="font-bold text-sm">Odobrať access</div>
+              <div className="text-xs text-muted-foreground leading-snug mt-0.5">
+                Trvalo odstráni účet (DB + auth). Leady ostanú bez priradenia.
+              </div>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => setConfirmDelete(true)}
+            className="border-rose-300 text-rose-800 hover:bg-rose-50 shrink-0"
+          >
+            <Trash2 className="w-4 h-4 mr-1.5" aria-hidden />
+            Odobrať
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -161,84 +225,66 @@ export function PermissionsCard({
         </div>
       )}
 
-      {/* Confirm modal */}
-      {confirmAction && (
+      {/* Confirm role change */}
+      {pendingRole && (
         <ConfirmModal
-          action={confirmAction}
-          step={confirmStep}
-          name={name}
+          title={`Zmeniť rolu na ${labelOf(pendingRole)}?`}
+          body={`${name} bude mať odteraz rolu „${labelOf(pendingRole)}" — ${descOf(
+            pendingRole,
+          )}`}
+          cta="Áno, zmeniť"
+          tone="emerald"
           busy={busy}
-          onCancel={closeConfirm}
-          onNext={() => setConfirmStep(2)}
-          onExecute={execute}
+          onCancel={() => setPendingRole(null)}
+          onConfirm={() => applyRole(pendingRole)}
+        />
+      )}
+
+      {/* Confirm delete */}
+      {confirmDelete && (
+        <ConfirmModal
+          title="Odobrať access?"
+          body={`Účet ${name} bude TRVALO odstránený. Leady ostanú v systéme bez priradenia. Túto akciu nemožno vrátiť.`}
+          cta="Áno, odobrať"
+          tone="rose"
+          busy={busy}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={doDelete}
         />
       )}
     </section>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────
+function labelOf(r: UserRole): string {
+  return ROLE_DEFS.find((d) => d.role === r)?.label ?? r;
+}
+function descOf(r: UserRole): string {
+  return ROLE_DEFS.find((d) => d.role === r)?.desc ?? "";
+}
+
 function ConfirmModal({
-  action,
-  step,
-  name,
+  title,
+  body,
+  cta,
+  tone,
   busy,
   onCancel,
-  onNext,
-  onExecute,
+  onConfirm,
 }: {
-  action: ActionType;
-  step: 1 | 2;
-  name: string;
+  title: string;
+  body: string;
+  cta: string;
+  tone: "emerald" | "rose";
   busy: boolean;
   onCancel: () => void;
-  onNext: () => void;
-  onExecute: () => void;
+  onConfirm: () => void;
 }) {
-  // Promote/demote majú 2-step confirm. Delete má len 1-step.
-  const needsTwoSteps = action === "promote" || action === "demote";
-  const isLastStep = !needsTwoSteps || step === 2;
-
-  const cfg = {
-    promote: {
-      title:
-        step === 1
-          ? "Povýšiť na admina?"
-          : "Si si naozaj istý?",
-      body:
-        step === 1
-          ? `${name} získa plný admin prístup — môže pridávať/odoberať obchodníkov, meniť permissions, vidieť všetky leady.`
-          : `Posledná otázka — naozaj povýšiť ${name} na admina? Túto akciu môže následne odvolať len iný admin.`,
-      cta: step === 1 ? "Pokračovať" : "Áno, povýšiť",
-      tone: "emerald",
-    },
-    demote: {
-      title:
-        step === 1
-          ? "Degradovať na obchodníka?"
-          : "Si si naozaj istý?",
-      body:
-        step === 1
-          ? `${name} stratí prístup do admin sekcie. Vráti sa medzi bežných obchodníkov.`
-          : `Posledná otázka — naozaj degradovať ${name}? Stratí všetky admin permissions.`,
-      cta: step === 1 ? "Pokračovať" : "Áno, degradovať",
-      tone: "rose",
-    },
-    delete: {
-      title: "Odobrať access?",
-      body: `Účet ${name} bude TRVALO odstránený. Jeho leady ostanú v systéme, ale bez priradenia (môžeš ich potom pridať inému). Túto akciu nemožno vrátiť.`,
-      cta: "Áno, odobrať access",
-      tone: "rose" as const,
-    },
-  }[action];
-
-  const toneColor = cfg.tone === "rose" ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700";
-
   return (
     <div
       role="dialog"
       aria-modal
-      className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onCancel}
     >
       <div
@@ -246,28 +292,30 @@ function ConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="inline-flex items-center gap-2 mb-2">
-          {action === "delete" || step === 2 ? (
+          {tone === "rose" && (
             <AlertTriangle className="w-5 h-5 text-rose-600" aria-hidden />
-          ) : null}
-          <h3 className="text-base font-bold">{cfg.title}</h3>
+          )}
+          <h3 className="text-base font-bold">{title}</h3>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">{cfg.body}</p>
-
-        {needsTwoSteps && (
-          <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-3">
-            Krok {step} / 2
-          </div>
-        )}
-
+        <p className="text-sm text-muted-foreground mb-4">{body}</p>
         <div className="flex gap-2">
           <Button
             type="button"
-            onClick={isLastStep ? onExecute : onNext}
+            onClick={onConfirm}
             disabled={busy}
-            className={cn("flex-1", toneColor)}
+            className={cn(
+              "flex-1",
+              tone === "rose"
+                ? "bg-rose-600 hover:bg-rose-700"
+                : "bg-emerald-600 hover:bg-emerald-700",
+            )}
           >
-            <Check className="w-4 h-4 mr-1.5" aria-hidden />
-            {busy ? "Vykonávam…" : cfg.cta}
+            {busy ? (
+              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" aria-hidden />
+            ) : (
+              <Check className="w-4 h-4 mr-1.5" aria-hidden />
+            )}
+            {busy ? "Vykonávam…" : cta}
           </Button>
           <Button
             type="button"
@@ -279,33 +327,6 @@ function ConfirmModal({
           </Button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Row({
-  icon,
-  title,
-  desc,
-  action,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="px-4 py-3 flex items-start justify-between gap-4 flex-wrap">
-      <div className="flex items-start gap-3 flex-1 min-w-0">
-        <div className="shrink-0 mt-0.5">{icon}</div>
-        <div className="min-w-0">
-          <div className="font-bold text-sm">{title}</div>
-          <div className="text-xs text-muted-foreground leading-snug mt-0.5">
-            {desc}
-          </div>
-        </div>
-      </div>
-      <div className="shrink-0">{action}</div>
     </div>
   );
 }

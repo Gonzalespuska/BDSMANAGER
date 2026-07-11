@@ -3,6 +3,8 @@ import {
   ArrowRight,
   Bell,
   Eye,
+  GraduationCap,
+  Hammer,
   Package,
   Share2,
   Settings,
@@ -96,6 +98,18 @@ export default async function AdminDashboard() {
       title: "Tím",
       desc: "Pridať obchodníkov / obhliadkárov / realizačný tím, sledovať aktivitu. Klik na meno → detail + permissions.",
       icon: UserPlus,
+    },
+    {
+      href: "/admin/systems",
+      title: "Realizačné systémy",
+      desc: "Definuj systémy (264, 3000, TopStopne…), ich komponenty (primer, živica, lak) so spotrebou v kg/m² a veľkosťou balenia. Uprav postupy krokov pre realizatora.",
+      icon: Hammer,
+    },
+    {
+      href: "/admin/podklady",
+      title: "Podklady — Call skripty",
+      desc: "Edituj call scripty pre obchodákov podľa typu podlahy + priestoru (mramor-dom, chipsová-firma…). Obchodáci ich otvoria priamo na leade.",
+      icon: GraduationCap,
     },
     {
       href: "/admin/objednavky",

@@ -68,10 +68,38 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
+    // Aj auto-win pre realizácie s prešlým dátumom.
+    // User: "realizacia po prechode datumu auto won".
+    let realizationsWon = 0;
+    try {
+      const { data: wonData, error: wonErr } = await sb.rpc(
+        "auto_transition_realizations_to_won",
+      );
+      if (wonErr && /function .*auto_transition_realizations_to_won.* does not exist/i.test(wonErr.message)) {
+        // Fallback ak SQL migrácia 32 nebola spustená
+        const { data: updated } = await sb
+          .from("leads")
+          .update({
+            status: "won",
+            realization_completed_at: new Date().toISOString(),
+            last_activity_at: new Date().toISOString(),
+          })
+          .eq("status", "in_realization")
+          .lt("realization_at", new Date().toISOString())
+          .select("id");
+        realizationsWon = updated?.length ?? 0;
+      } else if (!wonErr) {
+        realizationsWon = (wonData as number | null) ?? 0;
+      }
+    } catch {
+      /* ignore — hlavný response nezhavarujeme */
+    }
+
     return NextResponse.json({
       ok: true,
       mode: "rpc",
       affected: data ?? 0,
+      realizations_won: realizationsWon,
     });
   } catch (err) {
     return NextResponse.json(

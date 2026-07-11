@@ -26,7 +26,13 @@ export async function createAgentAction(input: {
   name: string;
   email: string;
   phone: string;
-  role: "admin" | "obchod" | "obhliadky" | "realizacie";
+  role:
+    | "admin"
+    | "obchod"
+    | "obhliadky"
+    | "realizacie"
+    | "office"
+    | "skolenie";
   capacity: number;
 }): Promise<ActionResult<{ id: string; magic_link?: string }>> {
   const me = await requireAdmin();
@@ -35,7 +41,14 @@ export async function createAgentAction(input: {
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
   const phone = input.phone.trim();
-  const ALLOWED_ROLES = ["admin", "obchod", "obhliadky", "realizacie"] as const;
+  const ALLOWED_ROLES = [
+    "admin",
+    "obchod",
+    "obhliadky",
+    "realizacie",
+    "office",
+    "skolenie",
+  ] as const;
   const role = (ALLOWED_ROLES as readonly string[]).includes(input.role)
     ? input.role
     : "obchod";
@@ -146,7 +159,17 @@ export async function updateAgentAction(
     update.name = n;
   }
   if (patch.role !== undefined) {
-    const ALLOWED_ROLES = ["admin", "obchod", "obhliadky", "realizacie"];
+    // User 2026-07-11: "rolu pridelujes ked vytvaras agenta popripade
+    // ked si rozkliknes existujuceho agenta a chces mi pridat rolu".
+    // Rozšírené o office + skolenie roly (kompletná sada).
+    const ALLOWED_ROLES = [
+      "admin",
+      "obchod",
+      "obhliadky",
+      "realizacie",
+      "office",
+      "skolenie",
+    ];
     if (!ALLOWED_ROLES.includes(patch.role)) {
       return { ok: false, error: "Neplatná rola" };
     }

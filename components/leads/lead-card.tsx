@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { CallbackReminder } from "./callback-reminder";
+import { CallscriptButton } from "./callscript-button";
 import { HandoffActions } from "./handoff-actions";
 import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
@@ -448,6 +449,13 @@ export function LeadCard({
               kind="text"
               placeholder="Mesto"
               autocomplete={SK_CITIES}
+            />
+            {/* Callscript — matchne najlepší podľa typ_podlahy + priestor.
+                User: "to tlacidlo na otvorenie call scriptu nemusi byt
+                velke". */}
+            <CallscriptButton
+              floorType={coerceString(dataFields.typ_podlahy)}
+              space={coerceString(dataFields.priestor)}
             />
           </div>
 
