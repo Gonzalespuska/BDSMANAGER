@@ -7,6 +7,7 @@ import {
   CheckCheck,
   ClipboardList,
   Droplets,
+  Hammer,
   MapPin,
   Phone,
   Ruler,
@@ -102,12 +103,22 @@ export default async function ObhliadnutePage({
   // AUTO-TRANSITION in_realization → won ak realization_at prešiel.
   // User: "ked prejde ten datum realizacie nech sa autoamticky daju do
   // won v leadoch". Won nedá sa manuálne — iba touto cestou.
+  //
+  // BUG FIX 2026-07-11: predtym sme nastavovali len status+last_activity_at.
+  // /realizacie história ale filtruje `not("realization_completed_at","is",null)`,
+  // takže lead by tam zmizol keď sa prehodil na won. Teraz zapisujeme aj
+  // realization_completed_at (ak nie je už nastavený).
   const nowIso = new Date().toISOString();
   try {
     await sb
       .from("leads")
-      .update({ status: "won", last_activity_at: nowIso })
+      .update({
+        status: "won",
+        realization_completed_at: nowIso,
+        last_activity_at: nowIso,
+      })
       .eq("status", "in_realization")
+      .is("realization_completed_at", null)
       .lt("realization_at", nowIso);
   } catch (e) {
     console.warn("[obhliadnute] auto-transition to won failed:", e);
@@ -125,24 +136,32 @@ export default async function ObhliadnutePage({
       : activeTab === "realizacii"
         ? "in_realization"
         : "inspected";
-  const baseQuery = sb
+  // Base query — filter inspection_result IS NOT NULL platí iba pre
+  // "čaká na CP" a "finálna CP" (tam MUSÍ byť obhliadka za nimi).
+  // Pre "V realizácii" NIE — lebo manuálne pridaná realizácia (bez
+  // obhliadky) tiež musí byť viditeľná, aby ju obchodák vedel zrušiť.
+  let baseQuery = sb
     .from("leads")
     .select("*")
     .eq("status", targetStatus)
-    .not("inspection_result", "is", null)
     .order("last_activity_at", { ascending: false })
     .limit(100);
+  if (activeTab !== "realizacii") {
+    baseQuery = baseQuery.not("inspection_result", "is", null);
+  }
   const q =
     user.role === "admin" ? baseQuery : baseQuery.eq("assigned_to", user.id);
   const { data: leadsRaw } = await q;
   const leads = leadsRaw ?? [];
 
-  const countQ = (status: string) => {
-    const b = sb
+  const countQ = (status: string, requireInspection: boolean) => {
+    let b = sb
       .from("leads")
       .select("id", { count: "exact", head: true })
-      .eq("status", status)
-      .not("inspection_result", "is", null);
+      .eq("status", status);
+    if (requireInspection) {
+      b = b.not("inspection_result", "is", null);
+    }
     return user.role === "admin" ? b : b.eq("assigned_to", user.id);
   };
   const [
@@ -150,9 +169,9 @@ export default async function ObhliadnutePage({
     { count: countFinalna },
     { count: countRealiz },
   ] = await Promise.all([
-    countQ("inspected"),
-    countQ("quote_sent"),
-    countQ("in_realization"),
+    countQ("inspected", true),
+    countQ("quote_sent", true),
+    countQ("in_realization", false),
   ]);
 
   // Fotky pre všetky leady batch — public URL (bucket je public od 2026-07-11)
@@ -227,8 +246,13 @@ export default async function ObhliadnutePage({
           </p>
         </header>
 
-        {/* Tabs — Čaká na CP / Finálna CP */}
-        <div className="inline-flex rounded-xl border-2 bg-background p-1 gap-1">
+        {/* Tabs — Čaká na CP / Finálna CP / V realizácii
+            BUG FIX 2026-07-11: predtym chýbal tretí tab „V realizácii".
+            Kód pre neho bol (activeTab type, countRealiz, filter,
+            DeleteRealizationButton), ale žiadny Link naň neviedol —
+            takže obchodák sa tam nikdy nedostal a nemohol zrušiť
+            realizáciu z UI. */}
+        <div className="inline-flex flex-wrap rounded-xl border-2 bg-background p-1 gap-1">
           <Link
             href="/obhliadnute"
             className={cn(
@@ -273,6 +297,28 @@ export default async function ObhliadnutePage({
               {countFinalna ?? 0}
             </span>
           </Link>
+          <Link
+            href="/obhliadnute?tab=realizacii"
+            className={cn(
+              "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors",
+              activeTab === "realizacii"
+                ? "bg-amber-500 text-white shadow-sm"
+                : "text-muted-foreground hover:bg-amber-50 hover:text-amber-700",
+            )}
+          >
+            <Hammer className="w-4 h-4" aria-hidden />
+            V realizácii
+            <span
+              className={cn(
+                "text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded",
+                activeTab === "realizacii"
+                  ? "bg-white/20"
+                  : "bg-amber-100 text-amber-700",
+              )}
+            >
+              {countRealiz ?? 0}
+            </span>
+          </Link>
         </div>
 
         {leads.length === 0 ? (
@@ -281,12 +327,16 @@ export default async function ObhliadnutePage({
             <h3 className="text-lg font-bold">
               {activeTab === "caka"
                 ? "Žiadne obhliadnuté nečakajú na CP"
-                : "Zatiaľ žiadna finálna CP"}
+                : activeTab === "finalna"
+                  ? "Zatiaľ žiadna finálna CP"
+                  : "Žiadne bežiace realizácie"}
             </h3>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
               {activeTab === "caka"
                 ? `Až obhliadkár klikne „Odoslať obhliadku" na priradenej obhliadke, lead sa zjaví tu s kompletnými dátami (testy, zameranie, fotky).`
-                : "Ak pošleš klientovi cenovú ponuku, lead sa presunie sem ako archív."}
+                : activeTab === "finalna"
+                  ? "Ak pošleš klientovi cenovú ponuku, lead sa presunie sem ako archív."
+                  : "Zákazky ktoré si poslal na realizáciu (klient súhlasil s cenou) sa objavia tu, kým realizator dokončí prácu. Odtiaľto ich vieš aj zrušiť (dôvod pôjde adminovi)."}
             </p>
           </div>
         ) : (
