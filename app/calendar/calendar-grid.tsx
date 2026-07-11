@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Check,
@@ -33,6 +33,7 @@ import {
   updateCalendarNoteAction,
 } from "./actions";
 import { ManualAssignModal } from "./manual-assign-modal";
+import { SuggestDayButton } from "./suggest-day-button";
 
 /**
  * Format Date → "YYYY-MM-DD" v LOKÁLNOM timezone.
@@ -338,10 +339,20 @@ export function CalendarGrid({
   const [selected, setSelected] = React.useState<string | null>(null);
   const [localNotes, setLocalNotes] = React.useState<CalendarNote[]>(notes);
   const [addEventOpen, setAddEventOpen] = React.useState(false);
+  const searchParams = useSearchParams();
 
   React.useEffect(() => {
     setLocalNotes(notes);
   }, [notes]);
+
+  // Ak URL má ?day=YYYY-MM-DD (napr. z SuggestDayButton "Prejsť na
+  // tento deň"), auto-otvor day modal na ten dátum.
+  React.useEffect(() => {
+    const dayParam = searchParams.get("day");
+    if (dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam)) {
+      setSelected(dayParam);
+    }
+  }, [searchParams]);
 
   const [year, monthIdx] = monthStr.split("-").map(Number);
   // monthIdx je 1-12, JS Date používa 0-11
@@ -521,16 +532,24 @@ export function CalendarGrid({
             </div>
           )}
 
+          {/* AUTO-SUGGEST — nájdi optimálny deň podľa mesta klienta.
+              Batchuje cesty (ak tím má v ten deň iné zákazky v tom istom
+              meste, jedna cesta = viac roboty). */}
+          <SuggestDayButton
+            city={assignLead.city ?? null}
+            mode={assignMode}
+          />
+
           {/* HINT — dole */}
           <div
             className={cn(
-              "mt-4 text-xs font-semibold inline-flex items-center gap-1.5 px-3 py-2 rounded-lg",
+              "mt-3 text-xs font-semibold inline-flex items-center gap-1.5 px-3 py-2 rounded-lg",
               assignMode === "inspection"
                 ? "bg-violet-100/60 text-violet-800"
                 : "bg-emerald-100/60 text-emerald-800",
             )}
           >
-            💡 Klikni na voľný deň v kalendári — otvorí sa formulár na
+            💡 Alebo klikni na voľný deň v kalendári — otvorí sa formulár na
             priradenie.
           </div>
         </div>
