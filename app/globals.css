@@ -99,3 +99,16 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Bugfix 2026-07-12: user reported that clicking + dragging on button
+   Links (Zodpovednosť / Inventúra / Postup / Kontent) showed URL preview
+   they could move around. Solution: forbid HTML5 drag on ALL Next Link
+   elements used as buttons (whitelisted via .no-drag class). */
+.no-drag,
+a.no-drag {
+  -webkit-user-drag: none;
+  user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}

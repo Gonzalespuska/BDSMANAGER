@@ -386,7 +386,8 @@ export default async function RealizacieDashboard() {
                                   {showZodpovednost && (
                                     <Link
                                       href={`/realizacie/${l.id}/plan?view=zodpovednost`}
-                                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm"
+                                      draggable={false}
+                                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm no-drag"
                                     >
                                       <span>✍️</span>
                                       Zodpovednosť
@@ -394,22 +395,25 @@ export default async function RealizacieDashboard() {
                                   )}
                                   <Link
                                     href={`/realizacie/${l.id}/plan?view=sklad`}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm"
+                                    draggable={false}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm no-drag"
                                   >
                                     <span>📦</span>
                                     Inventúra
                                   </Link>
                                   <Link
                                     href={`/realizacie/${l.id}/plan?view=postup`}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm"
+                                    draggable={false}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm no-drag"
                                   >
                                     <span>🔨</span>
                                     Postup
                                   </Link>
                                   <Link
                                     href={`/realizacie/${l.id}/kontent`}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm"
+                                    draggable={false}
                                     title="Foto/video zo stavby pre marketing"
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm no-drag"
                                   >
                                     <span>📱</span>
                                     Kontent
