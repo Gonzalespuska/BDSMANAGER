@@ -82,6 +82,7 @@ export function PlanPrintView({
   zakazkaCislo,
   isChipsFloor,
   inspectionMeasurements,
+  responsibilitySteps,
 }: {
   leadName: string;
   leadPhone?: string | null;
@@ -124,6 +125,13 @@ export function PlanPrintView({
   zakazkaCislo?: string;
   /** Ak je typ podlahy chipsová, pridá sa krok 11 „Aplikácia chipsov". */
   isChipsFloor?: boolean;
+  /** Zodpovednosť kroky z DB — override hardcoded baseSteps. Admin ich
+   *  edituje cez /admin/systems > Zodpovednosť. */
+  responsibilitySteps?: Array<{
+    step: number;
+    title: string;
+    isControl?: boolean;
+  }>;
   /** Podmienky prostredia zmerané obhliadkárom — auto-fill do bodu 2. */
   inspectionMeasurements?: {
     air_temp_c: number | null;
@@ -437,6 +445,7 @@ export function PlanPrintView({
           isMarbleFloor={!!isMramorova}
           isMetallicFloor={!!isMetalicka}
           inspectionMeasurements={inspectionMeasurements ?? null}
+          responsibilitySteps={responsibilitySteps ?? []}
         />
       )}
 
@@ -608,6 +617,7 @@ function ResponsibilityProtocol({
   isMarbleFloor,
   isMetallicFloor,
   inspectionMeasurements,
+  responsibilitySteps,
 }: {
   leadName: string;
   lokalita: string | null;
@@ -627,11 +637,18 @@ function ResponsibilityProtocol({
     moisture_cm_avg: number | null;
     measured_by: string | null;
   } | null;
+  /** Kroky z DB (admin/systems > Zodpovednosť). Ak neprázdne, použijú sa
+   *  namiesto hardcoded baseSteps. */
+  responsibilitySteps?: Array<{
+    step: number;
+    title: string;
+    isControl?: boolean;
+  }>;
 }) {
-  // Kroky presne podľa user-spec.
-  // User 2026-07-11: "ak bude mramorova pridaj tam vytvaranie
-  // mramorovych vzorov, ak metalicka metalickych vzorov, ak chipsova
-  // tak pridanie chipsov je krok, ak jednofarebna staci takto".
+  // User 2026-07-12: "v admine ked pridam system to musi implikovat
+  // ostatne veci (postup + zodpovednost + inventura)".
+  // Preferujeme responsibility_steps z DB — admin ich edituje v /admin/systems.
+  // Ak DB neposkytla → fallback na hardcoded baseSteps podľa typ podlahy.
   const baseSteps: WorkStep[] = [
     { n: 1, label: "Vybrúsenie podkladu" },
     { n: 2, label: "Vysávanie" },
@@ -648,7 +665,15 @@ function ResponsibilityProtocol({
     { n: 11, label: "Vytváranie mramorových vzorov (žilkovanie / oblaky)", marbleOnly: true },
     { n: 11, label: "Vytváranie metalických vzorov (troelovanie efektu)", metallicOnly: true },
   ];
-  const steps = baseSteps.filter((s) => {
+  const dbSteps: WorkStep[] | null =
+    responsibilitySteps && responsibilitySteps.length > 0
+      ? responsibilitySteps.map((s) => ({
+          n: s.step,
+          label: s.title,
+          isControl: !!s.isControl,
+        }))
+      : null;
+  const steps = dbSteps ?? baseSteps.filter((s) => {
     if (s.chipsOnly) return isChipsFloor;
     if (s.marbleOnly) return isMarbleFloor;
     if (s.metallicOnly) return isMetallicFloor;

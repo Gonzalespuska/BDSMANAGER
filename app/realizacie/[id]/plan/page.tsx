@@ -126,6 +126,15 @@ export default async function RealizationPlanPage({
   // User: "realizator ma dopredu dany ten system … autoamticky mu to na
   // dany system upravi aj postup pretoze postup je iny pre ine systemy".
   let procedureSteps: Array<{ step: number; title: string; note: string }> = [];
+  // User 2026-07-12: "v admine ked pridam system to musi implikovat
+  // ostatne veci (postup + zodpovednost + inventura)". Načítame BOTH
+  // procedure_steps (postup) + responsibility_steps (zodpovednosť)
+  // z realization_systems tabuľky podľa lead's assigned system code.
+  let responsibilitySteps: Array<{
+    step: number;
+    title: string;
+    isControl?: boolean;
+  }> = [];
   const rs = data.realization_system as
     | { system?: string; type?: string; binder?: string | null }
     | undefined;
@@ -134,19 +143,27 @@ export default async function RealizationPlanPage({
     try {
       const { data: sysRow } = await sb
         .from("realization_systems")
-        .select("procedure_steps")
+        .select("procedure_steps, responsibility_steps")
         .eq("code", systemCode)
         .maybeSingle();
-      const raw = (sysRow?.procedure_steps ?? []) as unknown;
-      if (Array.isArray(raw)) {
-        procedureSteps = raw as Array<{
+      const rawProc = (sysRow?.procedure_steps ?? []) as unknown;
+      if (Array.isArray(rawProc)) {
+        procedureSteps = rawProc as Array<{
           step: number;
           title: string;
           note: string;
         }>;
       }
+      const rawResp = (sysRow?.responsibility_steps ?? []) as unknown;
+      if (Array.isArray(rawResp)) {
+        responsibilitySteps = rawResp as Array<{
+          step: number;
+          title: string;
+          isControl?: boolean;
+        }>;
+      }
     } catch {
-      /* DB migrácia možno nebola spustená — ostaneme s prázdnym → hardcoded fallback v komponente. */
+      /* DB migrácia možno nebola spustená — hardcoded fallback v komponente. */
     }
   }
 
@@ -216,6 +233,7 @@ export default async function RealizationPlanPage({
         isMramorova={isMramorova}
         systemId={(data.system_id as string | null) ?? null}
         procedureSteps={procedureSteps}
+        responsibilitySteps={responsibilitySteps}
         systemCode={systemCode}
         teamMembers={teamMembers}
         zakazkaCislo={(lead.id as string).slice(0, 8).toUpperCase()}

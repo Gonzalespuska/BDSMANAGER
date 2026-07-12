@@ -33,6 +33,7 @@ type Product = {
 };
 
 type ProcedureStep = { step: number; title: string; note: string };
+type ResponsibilityStep = { step: number; title: string; isControl?: boolean };
 
 type System = {
   id: string;
@@ -44,6 +45,7 @@ type System = {
   sort_order: number;
   active: boolean;
   procedure_steps: unknown;
+  responsibility_steps?: unknown;
   products: Product[];
 };
 
@@ -191,6 +193,7 @@ function SystemCard({
           <SystemEditor system={system} onChanged={onChanged} />
           <ProductsEditor system={system} onChanged={onChanged} />
           <StepsEditor system={system} onChanged={onChanged} />
+          <ResponsibilityStepsEditor system={system} onChanged={onChanged} />
         </div>
       )}
     </li>
@@ -1029,3 +1032,182 @@ function Trash({ ...props }: React.SVGProps<SVGSVGElement>) {
   return <Trash2 {...props} />;
 }
 void Trash;
+
+// ──────────────────────────────────────────────────────────────────────
+// Responsibility Steps Editor — kroky pre Protokol Zodpovednosti
+// User 2026-07-12: "ak pridam system co to ma zmenit na postupe a
+// zodpovednosti a taktiez inventure … v admine ked pridam system to musi
+// implikovat ostatne veci"
+function ResponsibilityStepsEditor({
+  system,
+  onChanged,
+}: {
+  system: System;
+  onChanged: () => void;
+}) {
+  const initial: ResponsibilityStep[] = Array.isArray(system.responsibility_steps)
+    ? (system.responsibility_steps as ResponsibilityStep[])
+    : [];
+  const [steps, setSteps] = React.useState<ResponsibilityStep[]>(initial);
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
+
+  function add() {
+    setSteps((prev) => [
+      ...prev,
+      { step: prev.length + 1, title: "", isControl: false },
+    ]);
+  }
+  function update(i: number, patch: Partial<ResponsibilityStep>) {
+    setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  }
+  function remove(i: number) {
+    setSteps((prev) =>
+      prev
+        .filter((_, idx) => idx !== i)
+        .map((s, idx) => ({ ...s, step: idx + 1 })),
+    );
+  }
+  function moveUp(i: number) {
+    if (i === 0) return;
+    setSteps((prev) => {
+      const next = [...prev];
+      [next[i - 1], next[i]] = [next[i], next[i - 1]];
+      return next.map((s, idx) => ({ ...s, step: idx + 1 }));
+    });
+  }
+  function moveDown(i: number) {
+    setSteps((prev) => {
+      if (i === prev.length - 1) return prev;
+      const next = [...prev];
+      [next[i + 1], next[i]] = [next[i], next[i + 1]];
+      return next.map((s, idx) => ({ ...s, step: idx + 1 }));
+    });
+  }
+
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/admin/systems", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: system.id, responsibility_steps: steps }),
+    });
+    const j = await r.json();
+    setBusy(false);
+    if (!j.ok) {
+      setMsg(`⚠ ${j.error}`);
+      return;
+    }
+    setMsg("✓ Zodpovednosť uložená");
+    setTimeout(() => setMsg(null), 1500);
+    onChanged();
+  }
+
+  return (
+    <section className="rounded-xl bg-white border border-slate-200 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+          ✍️ Zodpovednosť — kroky (uvidí realizator na Zodpovednosť papieri)
+        </div>
+        <button
+          type="button"
+          onClick={add}
+          className="inline-flex items-center gap-1 rounded bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 text-xs font-black"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Krok
+        </button>
+      </div>
+      <div className="text-[10px] text-slate-600 leading-snug bg-amber-50 border border-amber-200 rounded p-2">
+        Tieto kroky sa auto-priradia členom tímu round-robin. Ak označíš{" "}
+        <strong>Kontrolný</strong>, na papieri má sivé pozadie a poznámku
+        „podpisuje INÁ osoba". Príklad chipsová: pridaj 11. krok „Sypanie
+        chipsov".
+      </div>
+      {steps.length === 0 && (
+        <div className="text-xs text-slate-500 italic">
+          Zatiaľ žiadne kroky. Pridaj — inak Zodpovednosť papier bude prázdny.
+        </div>
+      )}
+      <ol className="space-y-2">
+        {steps.map((s, i) => (
+          <li
+            key={i}
+            className={cn(
+              "rounded-lg border p-2 flex gap-2",
+              s.isControl
+                ? "border-amber-300 bg-amber-50/60"
+                : "border-slate-200 bg-slate-50",
+            )}
+          >
+            <div className="shrink-0 flex flex-col items-center gap-1">
+              <div className="w-7 h-7 rounded-full bg-amber-600 text-white font-black flex items-center justify-center text-xs">
+                {s.step}
+              </div>
+              <button
+                type="button"
+                onClick={() => moveUp(i)}
+                disabled={i === 0}
+                className="text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                title="Nahor"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => moveDown(i)}
+                disabled={i === steps.length - 1}
+                className="text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                title="Nadol"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 space-y-1.5">
+              <input
+                value={s.title}
+                onChange={(e) => update(i, { title: e.target.value })}
+                placeholder="Názov kroku (napr. „Sypanie chipsov")"
+                className="w-full h-8 px-2 rounded border border-slate-300 text-sm font-black"
+              />
+              <label className="inline-flex items-center gap-1.5 text-[11px] font-bold">
+                <input
+                  type="checkbox"
+                  checked={!!s.isControl}
+                  onChange={(e) => update(i, { isControl: e.target.checked })}
+                  className="w-3.5 h-3.5"
+                />
+                ⚠ Kontrolný krok (INÁ osoba podpisuje)
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="shrink-0 text-rose-500 hover:text-rose-700"
+              title="Zmazať krok"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 text-sm font-black disabled:opacity-50"
+        >
+          {busy ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          Uložiť Zodpovednosť
+        </button>
+        {msg && <span className="text-xs font-bold text-slate-600">{msg}</span>}
+      </div>
+    </section>
+  );
+}

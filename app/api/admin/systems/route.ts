@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
       sort_order: (body.sort_order as number) ?? 100,
       active: body.active === false ? false : true,
       procedure_steps: (body.procedure_steps as unknown) ?? [],
+      responsibility_steps: (body.responsibility_steps as unknown) ?? [],
       created_by: user!.id,
     })
     .select("*")
@@ -118,6 +119,7 @@ export async function PATCH(request: NextRequest) {
     "sort_order",
     "active",
     "procedure_steps",
+    "responsibility_steps",
   ]) {
     if (k in body) patch[k] = body[k];
   }

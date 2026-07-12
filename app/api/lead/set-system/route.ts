@@ -73,7 +73,58 @@ export async function POST(request: NextRequest) {
           ? (existingData.plocha as number)
           : 0;
 
-  const inventory = m2 > 0 ? calcInventory(system, m2) : [];
+  // User 2026-07-12: "v admine ked pridam system to musi implikovat
+  // ostatne veci (postup + zodpovednost + inventura)". Prefer DB products
+  // ak systém existuje v realization_systems tabuľke — inak fallback na
+  // hardcoded calcInventory zo lib/data.
+  let inventory: Array<{
+    sku: string;
+    label: string;
+    qty: number;
+    unit: string;
+    unit_size_kg?: number;
+    note?: string;
+  }> = [];
+  if (m2 > 0) {
+    try {
+      // 1) Nájdi systém v DB podľa code
+      const { data: dbSystem } = await admin
+        .from("realization_systems")
+        .select("id")
+        .eq("code", system)
+        .maybeSingle();
+      if (dbSystem) {
+        // 2) Načítaj jeho products a vypočítaj inventúru z DB
+        const { data: prods } = await admin
+          .from("realization_system_products")
+          .select("*")
+          .eq("system_id", dbSystem.id as string)
+          .order("sort_order", { ascending: true });
+        if (prods && prods.length > 0) {
+          inventory = (prods as Array<Record<string, unknown>>).map((p) => {
+            const consumption = Number(p.consumption_per_m2) || 0;
+            const unitSize = Number(p.unit_size_kg) || 1;
+            const totalKg = m2 * consumption;
+            const qty = Math.ceil(totalKg / unitSize);
+            return {
+              sku: p.sku as string,
+              label: p.label as string,
+              qty,
+              unit: (p.unit_label as string) ?? "sud",
+              unit_size_kg: unitSize,
+              note: `spotreba ${consumption} kg/m² · ${unitSize} kg/${p.unit_label ?? "sud"}`,
+            };
+          });
+        }
+      }
+    } catch {
+      /* DB migrácia možno nebola spustená → fallback nižšie */
+    }
+    // Fallback na hardcoded ak DB nedala nič
+    if (inventory.length === 0) {
+      inventory = calcInventory(system, m2);
+    }
+  }
 
   const nextData = {
     ...existingData,
