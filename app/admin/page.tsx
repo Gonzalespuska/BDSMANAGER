@@ -124,6 +124,12 @@ export default async function AdminDashboard() {
       icon: UserPlus,
     },
     {
+      href: "/admin/nastavenia",
+      title: "Nastavenia CRM",
+      desc: "Mega dashboard: firemné údaje (IČO/DIČ/PDF), doprava (sadzby km, HQ), mestá + km, Sika katalóg, vlastné materiály, zľavy, školenie. Všetko čo je hardcoded → tu editovateľné.",
+      icon: Settings,
+    },
+    {
       href: "/admin/objednavky",
       title: "Objednávky materiálu",
       desc: "Generuj objednávkové tabuľky pre Siku / Topstone (SAP # + názov + balenie + ks → PDF).",
