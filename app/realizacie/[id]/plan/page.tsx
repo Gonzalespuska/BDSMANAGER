@@ -199,11 +199,15 @@ export default async function RealizationPlanPage({
                   ? "✍️ Zodpovednosť —"
                   : "🔨 Postup —"}
             </span>
-            {/* User 2026-07-12: „nech sa da cez to peter mudry linknut na
-                ten lead ze sa da na to kliknut a rollne ti detail". */}
+            {/* User 2026-07-12: „nech sa da cez peter mudry linknut na
+                ten lead … kludne nech to je nejake modre alebo tak proste
+                nejako farebne odlisene ze to je link".
+                Realizator nemá prístup na /agent/leads/[id] cez RLS,
+                používame /realizacie/[id] ktorý má lead info a je
+                accessible pre realizator + admin + obchod. */}
             <Link
-              href={`/agent/leads/${id}`}
-              className="text-slate-900 hover:text-sky-700 hover:underline decoration-dotted decoration-2 underline-offset-4 transition-colors"
+              href={`/realizacie/${id}`}
+              className="text-sky-600 hover:text-sky-800 underline decoration-2 underline-offset-4 transition-colors"
               title="Otvoriť detail leadu"
             >
               {(lead.name as string) ?? "?"}
