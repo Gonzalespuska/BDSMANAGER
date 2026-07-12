@@ -859,35 +859,11 @@ function ResponsibilityProtocol({
           samostatnej sekcie (možno Kontent / Reklamačný záznam) neskôr.
           Zatiaľ nechávam v kóde ale nezobrazujem. */}
 
-      {/* Súpis chýb / defektov — teraz sekcia „4/3" (bez Fotodokumentácie) */}
-      <h2>{showEvidenceSection ? "4" : "3"}. Súpis chýb / defektov (ak sa niečo nájde)</h2>
-      <table>
-        <thead>
-          <tr>
-            <th style={{ width: "12%" }}>Dátum</th>
-            <th style={{ width: "25%" }}>Popis chyby</th>
-            <th style={{ width: "18%" }}>Ktorý krok ju spôsobil</th>
-            <th style={{ width: "18%" }}>Zodpovedná osoba</th>
-            <th style={{ width: "17%" }}>Náprava</th>
-            <th style={{ width: "10%" }}>Náklad (€)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[0, 1, 2].map((i) => (
-            <tr key={i} className="row-tall">
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Súpis chýb / defektov — TEMPORARILY OFF. User 2026-07-12:
+          „toto tiez prec". Preneseme do samostatnej reklamačnej sekcie. */}
 
-      {/* 7. ZODPOVEDNOSTNÁ DOLOŽKA */}
-      <h2>{showEvidenceSection ? "5" : "4"}. Zodpovednostná doložka</h2>
+      {/* Zodpovednostná doložka — teraz „4/3" */}
+      <h2>{showEvidenceSection ? "4" : "3"}. Zodpovednostná doložka</h2>
       <div className="doložka">
         Každý svojím podpisom v tabuľke (bod {showEvidenceSection ? 3 : 2}) potvrdzuje, že ním vykonaný
         úkon bol spravený správne a podľa pokynov technológie. Ak sa pri
