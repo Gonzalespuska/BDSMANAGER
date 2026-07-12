@@ -32,6 +32,7 @@ type Team = {
   id: string;
   name: string;
   description: string | null;
+  home_city?: string | null;
   members: Realizator[];
 };
 
@@ -118,6 +119,7 @@ function TeamCard({
 }) {
   const [name, setName] = React.useState(team.name);
   const [description, setDescription] = React.useState(team.description ?? "");
+  const [homeCity, setHomeCity] = React.useState(team.home_city ?? "");
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
 
@@ -134,6 +136,7 @@ function TeamCard({
         id: team.id,
         name,
         description: description || null,
+        home_city: homeCity.trim() || null,
       }),
     });
     const j = await r.json();
@@ -217,12 +220,20 @@ function TeamCard({
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
               Základné info
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <Field label="Názov tímu">
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full h-9 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold"
+                />
+              </Field>
+              <Field label="Sídlo tímu (mesto, odkial vyrážajú)">
+                <input
+                  value={homeCity}
+                  onChange={(e) => setHomeCity(e.target.value)}
+                  placeholder="napr. Žilina"
+                  className="w-full h-9 px-2 rounded-lg border-2 border-emerald-200 text-sm font-bold"
                 />
               </Field>
               <Field label="Popis (voliteľné)">
@@ -328,6 +339,7 @@ function NewTeamModal({
 }) {
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
+  const [homeCity, setHomeCity] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -344,6 +356,7 @@ function NewTeamModal({
       body: JSON.stringify({
         name: name.trim(),
         description: description || null,
+        home_city: homeCity.trim() || null,
       }),
     });
     const j = await r.json();
@@ -385,6 +398,14 @@ function NewTeamModal({
               autoFocus
               placeholder="napr. Tím Jano + Peťo"
               className="w-full h-10 px-2 rounded-lg border-2 border-slate-200 text-sm font-black"
+            />
+          </Field>
+          <Field label="Sídlo tímu (mesto, odkial vyrážajú)">
+            <input
+              value={homeCity}
+              onChange={(e) => setHomeCity(e.target.value)}
+              placeholder="napr. Žilina"
+              className="w-full h-10 px-2 rounded-lg border-2 border-emerald-200 text-sm font-bold"
             />
           </Field>
           <Field label="Popis (voliteľné)">

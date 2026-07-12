@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
     .insert({
       name,
       description: (body.description as string) ?? null,
+      home_city: (body.home_city as string) ?? null,
       created_by: user!.id,
     })
     .select("*")
@@ -103,7 +104,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
   }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const k of ["name", "description", "active"]) {
+  for (const k of ["name", "description", "active", "home_city"]) {
     if (k in body) patch[k] = body[k];
   }
   const admin = createAdminClient();

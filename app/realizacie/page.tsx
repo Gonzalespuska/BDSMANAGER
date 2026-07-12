@@ -10,6 +10,7 @@ import {
   getZodpovednostMinEur,
   isEligibleForResponsibility,
 } from "@/lib/data/app-settings";
+import { getCityDistanceKm } from "@/lib/data/transport";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -65,6 +66,25 @@ export default async function RealizacieDashboard() {
 
   // Zodpovednosť threshold — admin ho môže zmeniť v /admin/settings.
   const zodpovednostMinEur = await getZodpovednostMinEur();
+
+  // Načítaj tímy pre výpočet času odchodu (departure time).
+  // User 2026-07-12: „vedla toho casu 8:00 by mohlo byt ze je zakazka
+  // v trencine a idu zo ziliny priklad tak to vypocita kedy musia
+  // vyrazit aby tam boli na cas + 20m rezerva".
+  const teamHomeCityMap = new Map<string, string | null>();
+  try {
+    const { data: teams } = await sb
+      .from("realization_teams")
+      .select("id, home_city");
+    for (const t of teams ?? []) {
+      teamHomeCityMap.set(
+        (t as { id: string }).id,
+        (t as { home_city: string | null }).home_city ?? null,
+      );
+    }
+  } catch {
+    /* SQL 33/37 nebežala */
+  }
 
   // Fallback: ak DB migration ešte nebola spustená, in_realization vôbec neexistuje.
   // Ukážeme dovtedy legacy 'won'+'quote_sent' leady (proxy).
@@ -230,13 +250,69 @@ export default async function RealizacieDashboard() {
                   ) : (
                     <ul className="space-y-3">
                       {w.items.map((l) => {
-                        const data = (l.data ?? {}) as Record<string, string>;
+                        const data = (l.data ?? {}) as Record<string, unknown>;
                         // CF Workers edge: bez full-ICU sa timeZone môže tichý fallback
                         // alebo throw. Manuálny +2h leto → HH:MM z ISO substr.
                         const skTime = new Date(
                           new Date(l.realization_at).getTime() + 2 * 3600 * 1000,
                         );
                         const timeStr = skTime.toISOString().slice(11, 16);
+
+                        // User 2026-07-12: „vedla toho casu vypocitaj
+                        // kedy musia vyrazit + 20m rezerva".
+                        // Team home city — z realization_team.team_id
+                        // priradeného obchodákom. Ak nie je nastavené,
+                        // fallback na HQ Ružomberok.
+                        const realizationTeamRaw = data.realization_team as
+                          | { team_id?: string; home_city?: string | null }
+                          | undefined;
+                        const leadCity =
+                          typeof data.lokalita === "string"
+                            ? (data.lokalita as string)
+                            : null;
+                        let teamHomeCity: string | null = null;
+                        if (realizationTeamRaw?.team_id) {
+                          teamHomeCity =
+                            teamHomeCityMap.get(realizationTeamRaw.team_id) ??
+                            null;
+                        }
+                        // fallback na explicit home_city v lead.data alebo HQ
+                        if (!teamHomeCity && realizationTeamRaw?.home_city) {
+                          teamHomeCity = realizationTeamRaw.home_city;
+                        }
+                        // Vypočítaj vzdialenosť: |kmFromRK(team) - kmFromRK(lead)|
+                        // + fallback lower bound. Ak team_home je HQ, distance
+                        // = kmFromRK(lead).
+                        let departureStr: string | null = null;
+                        let travelMin = 0;
+                        if (leadCity) {
+                          const homeKm = teamHomeCity
+                            ? (getCityDistanceKm(teamHomeCity) ?? 0)
+                            : 0;
+                          const leadKm = getCityDistanceKm(leadCity) ?? null;
+                          if (leadKm != null) {
+                            const km = Math.max(
+                              Math.abs(homeKm - leadKm),
+                              15, // aspoň 15 km ak nevieme
+                            );
+                            // priemerná rýchlosť 70 km/h → min = km / 70 * 60
+                            travelMin = Math.round((km / 70) * 60) + 20; // + 20 min rezerva
+                            const depMs =
+                              new Date(l.realization_at).getTime() -
+                              travelMin * 60 * 1000 +
+                              2 * 3600 * 1000; // SK +2h posun
+                            const depSk = new Date(depMs);
+                            const dh = String(depSk.getUTCHours()).padStart(
+                              2,
+                              "0",
+                            );
+                            const dm = String(depSk.getUTCMinutes()).padStart(
+                              2,
+                              "0",
+                            );
+                            departureStr = `${dh}:${dm}`;
+                          }
+                        }
                         return (
                           <li
                             key={l.id}
@@ -248,11 +324,19 @@ export default async function RealizacieDashboard() {
                             >
                               <div className="flex items-start justify-between gap-3 flex-wrap">
                                 <div className="min-w-0 flex-1">
-                                  {/* ČAS — big pill */}
-                                  <div className="inline-flex items-center gap-2 mb-2">
+                                  {/* ČAS — big pill + departure info */}
+                                  <div className="inline-flex items-center gap-2 mb-2 flex-wrap">
                                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500 text-white text-lg font-black tabular-nums shadow-sm">
                                       ⏰ {timeStr}
                                     </span>
+                                    {departureStr && (
+                                      <span
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-amber-100 border-2 border-amber-300 text-amber-900 text-sm font-black tabular-nums"
+                                        title={`Cesta ${teamHomeCity ?? "HQ"} → ${leadCity} · ${travelMin} min (vrátane 20 min rezervy)`}
+                                      >
+                                        🚗 Vyraziť: {departureStr}
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="font-black text-xl md:text-2xl leading-tight">
                                     {l.name}
