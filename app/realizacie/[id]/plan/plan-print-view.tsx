@@ -70,6 +70,7 @@ export function PlanPrintView({
   isGarage,
   isMramorova,
   isMetalicka,
+  floorType,
   plocha,
   systemId: initialSystemId,
   procedureSteps,

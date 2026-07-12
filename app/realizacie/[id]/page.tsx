@@ -20,6 +20,10 @@ import { MediaGallery } from "./media-gallery";
 import { MarkDoneButton } from "./mark-done-button";
 import { ExecutionWizard } from "./execution-wizard";
 import { DmButton } from "@/components/dm-button";
+import {
+  getZodpovednostMinEur,
+  isEligibleForResponsibility,
+} from "@/lib/data/app-settings";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -78,6 +82,13 @@ export default async function RealizaciaDetailPage({
 
   const data = (l.data ?? {}) as Record<string, string | undefined>;
   const isCompleted = l.status === "won" && !!l.realization_completed_at;
+
+  // Zodpovednosť papier len ak hodnota zákazky prekročí admin threshold.
+  const zodpovednostMinEur = await getZodpovednostMinEur();
+  const showZodpovednost = isEligibleForResponsibility(
+    l.value_estimate,
+    zodpovednostMinEur,
+  );
   const isRealizator = user.role === "realizacie" && l.realization_by === user.id;
 
   return (
@@ -249,12 +260,14 @@ export default async function RealizaciaDetailPage({
           >
             📦 Zoznam (PDF)
           </Link>
-          <Link
-            href={`/realizacie/${id}/plan?view=zodpovednost`}
-            className="rounded-lg border hover:bg-amber-50 hover:border-amber-300 px-3 py-2 font-semibold"
-          >
-            ✍️ Zodpovednosť (PDF)
-          </Link>
+          {showZodpovednost && (
+            <Link
+              href={`/realizacie/${id}/plan?view=zodpovednost`}
+              className="rounded-lg border hover:bg-amber-50 hover:border-amber-300 px-3 py-2 font-semibold"
+            >
+              ✍️ Zodpovednosť (PDF)
+            </Link>
+          )}
         </div>
       </details>
 

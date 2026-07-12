@@ -36,11 +36,24 @@ export default async function RealizationPlanPage({
   const { data: lead } = await sb
     .from("leads")
     .select(
-      "id, name, phone, data, source_campaign, created_at, assigned_to, inspection_by, realization_by, realization_at, inspection_result",
+      "id, name, phone, data, source_campaign, created_at, assigned_to, inspection_by, realization_by, realization_at, inspection_result, value_estimate",
     )
     .eq("id", id)
     .maybeSingle();
   if (!lead) notFound();
+
+  // Zodpovednosť view: guard — ak zákazka je pod admin threshold,
+  // presmeruj na Postup (default). User 2026-07-12: „ak zakazka je pod
+  // 2500 tak realizatorovi nevyhodi ten button".
+  if (activeView === "zodpovednost") {
+    const { getZodpovednostMinEur, isEligibleForResponsibility } = await import(
+      "@/lib/data/app-settings"
+    );
+    const minEur = await getZodpovednostMinEur();
+    if (!isEligibleForResponsibility(lead.value_estimate as number | null, minEur)) {
+      redirect(`/realizacie/${id}/plan?view=postup`);
+    }
+  }
 
   // Podmienky prostredia — obhliadkár ich zmeral pri obhliadke.
   // User: "no takto pridaj do obhlaidkara tieto testy lebo obhliadkar
