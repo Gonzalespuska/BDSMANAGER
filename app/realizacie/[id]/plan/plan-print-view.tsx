@@ -268,58 +268,13 @@ export function PlanPrintView({
       )}
 
       {activeView === "postup" ? (
-        // ═════════ POSTUPOVÝ PLÁN ═════════
-        <>
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-slate-100 border border-slate-300">
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-10">
-                  #
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700">
-                  Krok
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-16">
-                  Hotovo
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-left text-[10px] uppercase tracking-wider font-bold text-slate-700 w-48">
-                  Meno + Podpis
-                </th>
-                <th className="border border-slate-300 px-2 py-2 text-center text-[10px] uppercase tracking-wider font-bold text-slate-700 w-24">
-                  Dátum
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {steps.map((s) => (
-                <tr key={s.n} className="border border-slate-300">
-                  <td className="border border-slate-300 px-2 py-3 text-center tabular-nums font-black text-lg">
-                    {s.n}
-                  </td>
-                  <td className="border border-slate-300 px-3 py-3">
-                    <div className="font-bold">{s.label}</div>
-                    {s.note && (
-                      <div className="text-[10px] text-slate-600 italic mt-0.5">
-                        {s.note}
-                      </div>
-                    )}
-                  </td>
-                  <td className="border border-slate-300 px-2 py-3 text-center">
-                    <div className="w-6 h-6 border-2 border-slate-400 rounded mx-auto"></div>
-                  </td>
-                  <td className="border border-slate-300 px-2 py-3">
-                    {/* Prázdny riadok pre meno + podpis */}
-                    <div className="h-8 border-b border-dashed border-slate-300"></div>
-                  </td>
-                  <td className="border border-slate-300 px-2 py-3">
-                    <div className="h-8 border-b border-dashed border-slate-300"></div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-        </>
+        // ═════════ POSTUPOVÝ PLÁN — INTERAKTÍVNY ACCORDION ═════════
+        // User 2026-07-12: „bude to vyzeraz tak ze tam budu dane body ale
+        // ked ich kliknes sa dropdownnu a bude tam presny popis, potom
+        // na to kliknes tak sa to zavre a pozres si druhy krok".
+        //
+        // V print móde všetky kroky expandované (papier musí vidieť všetko).
+        <PostupAccordion steps={steps} />
       ) : activeView === "sklad" ? (
         // ═════════ INVENTÚRA — READ-ONLY, čo obchodák pre-vybral ═════════
         // User 2026-07-11: "ten system vybera obchodak a ma mu to tam
@@ -890,6 +845,102 @@ function ResponsibilityProtocol({
             Dátum
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PostupAccordion — realizator vidí kroky ako collapsible cards.
+// Klik na krok → dropdownne detail (note/description).
+// V print móde: všetky expandované + pridané polia „Hotovo / Meno + Podpis / Dátum".
+function PostupAccordion({ steps }: { steps: Step[] }) {
+  const [openStep, setOpenStep] = React.useState<number | null>(null);
+
+  return (
+    <div className="space-y-2">
+      {steps.map((s) => {
+        const isOpen = openStep === s.n;
+        return (
+          <div
+            key={s.n}
+            className="rounded-xl border-2 border-slate-200 bg-white overflow-hidden print:border print:rounded-none print:break-inside-avoid"
+          >
+            {/* Header — klikateľný */}
+            <button
+              type="button"
+              onClick={() => setOpenStep(isOpen ? null : s.n)}
+              className="w-full flex items-center gap-3 p-3 print:p-2 text-left transition-colors hover:bg-slate-50 print:hover:bg-transparent"
+            >
+              <div className="shrink-0 w-10 h-10 print:w-8 print:h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-lg print:text-base">
+                {s.n}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-black text-base print:text-sm text-slate-900">
+                  {s.label}
+                </div>
+                {!isOpen && !s.note && (
+                  <div className="text-[10px] text-slate-400 mt-0.5 print:hidden">
+                    Klikni pre detail
+                  </div>
+                )}
+              </div>
+              {s.note && (
+                <div
+                  className={cn(
+                    "shrink-0 text-slate-400 transition-transform print:hidden",
+                    isOpen ? "rotate-180" : "",
+                  )}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </div>
+              )}
+            </button>
+
+            {/* Body — detail popis (client dropdown; print: vždy) */}
+            {s.note && (
+              <div
+                className={cn(
+                  "border-t border-slate-200 bg-slate-50/60 px-4 py-3 print:block print:border-t print:bg-transparent",
+                  isOpen ? "block" : "hidden",
+                )}
+              >
+                <div className="text-sm print:text-xs text-slate-700 leading-relaxed">
+                  {s.note}
+                </div>
+              </div>
+            )}
+
+            {/* Podpisové polia — vidno len v print móde (na stavbe podpisujú
+                perom na papier). */}
+            <div className="hidden print:block border-t border-slate-200 px-3 py-2 grid grid-cols-3 gap-2 text-[9px] font-bold text-slate-600 uppercase tracking-wider">
+              <div className="border border-slate-400 rounded h-5 flex items-center px-1">
+                <span className="mr-1">Hotovo:</span>
+                <span className="w-3 h-3 border border-slate-500 inline-block" />
+              </div>
+              <div className="border-b border-dashed border-slate-400 h-5">
+                <span className="text-slate-500">Podpis</span>
+              </div>
+              <div className="border-b border-dashed border-slate-400 h-5">
+                <span className="text-slate-500">Dátum</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Nápoveda pod postupom */}
+      <div className="mt-3 rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 text-xs text-sky-900 print:hidden">
+        💡 Klikni na krok pre zobrazenie podrobného popisu. Ak chceš celý
+        postup vytlačiť, klikni „Tlačiť / PDF" hore — na papieri budú
+        všetky kroky rozbalené aj s poľami na podpis.
       </div>
     </div>
   );
