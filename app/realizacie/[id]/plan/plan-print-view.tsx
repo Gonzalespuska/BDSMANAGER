@@ -221,12 +221,16 @@ export function PlanPrintView({
             <div>
               <strong>Dátum:</strong>{" "}
               {realizationDate
-                ? new Date(realizationDate).toLocaleDateString("sk-SK", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    timeZone: "Europe/Bratislava",
-                  })
+                ? (() => {
+                    // Manual DD.MM.YYYY v SK time. Locale/timeZone
+                    // spôsobujú hydration mismatch na CF Workers edge.
+                    const d = new Date(realizationDate);
+                    const sk = new Date(d.getTime() + 2 * 3600 * 1000);
+                    const dd = String(sk.getUTCDate()).padStart(2, "0");
+                    const mm = String(sk.getUTCMonth() + 1).padStart(2, "0");
+                    const yy = sk.getUTCFullYear();
+                    return `${dd}.${mm}.${yy}`;
+                  })()
                 : "—"}
             </div>
             {lokalita && (
@@ -437,7 +441,18 @@ export function PlanPrintView({
       {/* Print footer */}
       <div className="mt-8 pt-4 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
         <span>Epoxidovo s.r.o. · najcrm.sk</span>
-        <span>{new Date().toLocaleString("sk-SK")}</span>
+        <span>
+          {(() => {
+            const d = new Date();
+            const sk = new Date(d.getTime() + 2 * 3600 * 1000);
+            const dd = String(sk.getUTCDate()).padStart(2, "0");
+            const mm = String(sk.getUTCMonth() + 1).padStart(2, "0");
+            const yy = sk.getUTCFullYear();
+            const hh = String(sk.getUTCHours()).padStart(2, "0");
+            const mi = String(sk.getUTCMinutes()).padStart(2, "0");
+            return `${dd}.${mm}.${yy} ${hh}:${mi}`;
+          })()}
+        </span>
       </div>
     </div>
   );
@@ -482,13 +497,14 @@ function InventoryTakenButton({
   }
 
   if (takenAt) {
-    const when = new Date(takenAt).toLocaleString("sk-SK", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const _d = new Date(takenAt);
+    const _sk = new Date(_d.getTime() + 2 * 3600 * 1000);
+    const _dd = String(_sk.getUTCDate()).padStart(2, "0");
+    const _mm = String(_sk.getUTCMonth() + 1).padStart(2, "0");
+    const _yy = _sk.getUTCFullYear();
+    const _hh = String(_sk.getUTCHours()).padStart(2, "0");
+    const _mi = String(_sk.getUTCMinutes()).padStart(2, "0");
+    const when = `${_dd}.${_mm}.${_yy} ${_hh}:${_mi}`;
     return (
       <div className="rounded-xl bg-emerald-100 border-2 border-emerald-400 p-4 flex items-center gap-3">
         <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center text-2xl shrink-0">
@@ -653,13 +669,18 @@ function ResponsibilityProtocol({
   // dopredu bude tam o den menej". Použi realization_at z DB s timeZone
   // Europe/Bratislava aby sa nedostal off-by-one deň keď je server v UTC
   // ale user testuje v SK timezone. Nikdy NIE dnešný dátum tlače.
+  // Manual DD.MM.YYYY v SK time. CF Workers edge nemá full ICU pre sk-SK
+  // + timeZone → server render fallback na en-US, browser client použije
+  // sk-SK → hydration mismatch → client-side exception. Preto manuálny format.
   const dateStr = realizationDate
-    ? new Date(realizationDate).toLocaleDateString("sk-SK", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        timeZone: "Europe/Bratislava",
-      })
+    ? (() => {
+        const d = new Date(realizationDate);
+        const sk = new Date(d.getTime() + 2 * 3600 * 1000);
+        const dd = String(sk.getUTCDate()).padStart(2, "0");
+        const mm = String(sk.getUTCMonth() + 1).padStart(2, "0");
+        const yy = sk.getUTCFullYear();
+        return `${dd}.${mm}.${yy}`;
+      })()
     : "";
 
   return (
