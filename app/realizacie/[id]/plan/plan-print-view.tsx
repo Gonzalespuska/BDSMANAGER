@@ -854,31 +854,13 @@ function ResponsibilityProtocol({
         </tbody>
       </table>
 
-      {/* 5. FOTODOKUMENTÁCIA */}
-      <h2>{showEvidenceSection ? "4" : "3"}. Fotodokumentácia</h2>
-      <div style={{ padding: "8px", border: "1px solid #000", fontSize: "11px" }}>
-        Zaškrtnite fotky ktoré boli spravené počas realizácie:
-        <div style={{ marginTop: "6px", display: "flex", gap: "18px", flexWrap: "wrap" }}>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-            <span className="checkbox"></span> pred brúsením
-          </label>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-            <span className="checkbox"></span> po brúsení
-          </label>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-            <span className="checkbox"></span> po povysávaní
-          </label>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-            <span className="checkbox"></span> po penetrácii
-          </label>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-            <span className="checkbox"></span> finál
-          </label>
-        </div>
-      </div>
+      {/* Fotodokumentácia — TEMPORARILY OFF. User 2026-07-12:
+          „toto daj prec dame to potom do inej sekcie". Presunieme do
+          samostatnej sekcie (možno Kontent / Reklamačný záznam) neskôr.
+          Zatiaľ nechávam v kóde ale nezobrazujem. */}
 
-      {/* 6. SÚPIS CHÝB / DEFEKTOV */}
-      <h2>{showEvidenceSection ? "5" : "4"}. Súpis chýb / defektov (ak sa niečo nájde)</h2>
+      {/* Súpis chýb / defektov — teraz sekcia „4/3" (bez Fotodokumentácie) */}
+      <h2>{showEvidenceSection ? "4" : "3"}. Súpis chýb / defektov (ak sa niečo nájde)</h2>
       <table>
         <thead>
           <tr>
@@ -905,7 +887,7 @@ function ResponsibilityProtocol({
       </table>
 
       {/* 7. ZODPOVEDNOSTNÁ DOLOŽKA */}
-      <h2>{showEvidenceSection ? "6" : "5"}. Zodpovednostná doložka</h2>
+      <h2>{showEvidenceSection ? "5" : "4"}. Zodpovednostná doložka</h2>
       <div className="doložka">
         Každý svojím podpisom v tabuľke (bod {showEvidenceSection ? 3 : 2}) potvrdzuje, že ním vykonaný
         úkon bol spravený správne a podľa pokynov technológie. Ak sa pri
