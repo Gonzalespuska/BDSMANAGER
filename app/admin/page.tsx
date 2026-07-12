@@ -112,6 +112,18 @@ export default async function AdminDashboard() {
       icon: GraduationCap,
     },
     {
+      href: "/admin/kontent",
+      title: "Kontent shotlist",
+      desc: "Definuj čo majú realizatori fotiť/nakrúcať pred / počas / po realizácii. Ich uploady dostane marketing tím pre stories a reels.",
+      icon: Share2,
+    },
+    {
+      href: "/admin/teams",
+      title: "Realizačné tímy",
+      desc: "Definuj tímy realizatorov + ich sídlo (mesto odkial vyrážajú). Používa sa na výpočet času odchodu.",
+      icon: UserPlus,
+    },
+    {
       href: "/admin/objednavky",
       title: "Objednávky materiálu",
       desc: "Generuj objednávkové tabuľky pre Siku / Topstone (SAP # + názov + balenie + ks → PDF).",

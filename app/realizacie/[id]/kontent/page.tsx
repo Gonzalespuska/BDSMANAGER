@@ -50,7 +50,44 @@ export default async function ContentPage({
     else if (n.includes("jedno")) floorType = "jednofarebna";
   }
 
-  const shots = getShotsForFloorType(floorType);
+  // Preferujeme DB shotlist (admin editovateľný /admin/kontent),
+  // fallback na hardcoded ak SQL 38 nebežala.
+  let shots = getShotsForFloorType(floorType);
+  try {
+    const { data: dbShots } = await sb
+      .from("content_shotlist_templates")
+      .select("*")
+      .eq("active", true)
+      .order("phase", { ascending: true })
+      .order("sort_order", { ascending: true });
+    if (dbShots && dbShots.length > 0) {
+      shots = (dbShots as Array<Record<string, unknown>>)
+        .filter((r) => {
+          const ft = r.floor_types as string[] | null;
+          if (!ft || ft.length === 0) return true;
+          if (!floorType) return false;
+          return ft.includes(floorType);
+        })
+        .map((r) => ({
+          id: r.shot_key as string,
+          phase: r.phase as "pred" | "pocas" | "po",
+          title: r.title as string,
+          description: (r.description as string) ?? "",
+          tips: Array.isArray(r.tips) ? (r.tips as string[]) : [],
+          orientation: (r.orientation as "portrait" | "landscape" | "any") ?? "any",
+          kind: (r.kind as "photo" | "video") ?? "video",
+          duration_sec: (r.duration_sec as number | null) ?? undefined,
+          required: !!r.required,
+          floor_types:
+            (r.floor_types as Array<
+              "jednofarebna" | "chipsova" | "mramorova" | "metalicka"
+            > | null) ?? undefined,
+          icon: (r.icon as string) ?? "📷",
+        }));
+    }
+  } catch {
+    /* SQL 38 nebežala → fallback */
+  }
 
   // Existujúce uploads pre tento lead
   const { data: captures } = await sb
