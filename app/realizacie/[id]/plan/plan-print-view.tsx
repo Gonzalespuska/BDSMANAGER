@@ -200,21 +200,31 @@ export function PlanPrintView({
   }
 
   return (
-    <div className="print-page bg-white border-2 border-slate-200 rounded-2xl p-8 mb-6 print:border-0 print:p-4 print:rounded-none print:mb-0 print:break-after-page">
+    <div className="print-page bg-white border-2 border-slate-200 rounded-2xl p-8 mb-6 print:border-0 print:p-0 print:rounded-none print:mb-0">
       <style>{`
         @media print {
-          @page { size: A4; margin: 15mm; }
+          @page { size: A4; margin: 10mm; }
+          html, body { margin: 0; padding: 0; }
           body * { visibility: hidden; }
           .print-page, .print-page * { visibility: visible; }
-          .print-page { position: static; }
+          .print-page { position: static; font-size: 11px; line-height: 1.3; }
+          .print-page table { font-size: 10.5px; }
+          .print-page h2 { margin: 6px 0 3px; }
+          .print-page .no-print { display: none !important; }
           .no-print { display: none !important; }
+          /* User 2026-07-12: „chcem to na 1 stranu" — jeden print súbor
+             = jedna A4 strana, žiadny break-after. Ak by prípadne kontent
+             pretiekol pre veľa položiek, prehľadá radšej menšie fonty
+             než ďalšiu stranu. */
+          .print-page .avoid-break { page-break-inside: avoid; }
+          .print-page table { page-break-inside: avoid; }
         }
       `}</style>
 
       {/* Header — minimálny: iba dátum, mesto, tím.
           Skryté pre zodpovednost view — ten má vlastný A4 hlavičku. */}
       {activeView !== "zodpovednost" && (
-      <div className="mb-6 pb-4 border-b-2 border-slate-300">
+      <div className="mb-6 pb-4 border-b-2 border-slate-300 print:mb-2 print:pb-2 print:border-b">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-1">
@@ -317,28 +327,22 @@ export function PlanPrintView({
         // vybral obchodak. Balenie je na kg nie ze vedro sud. Vzal preč
         // → jeden submit button ze zobral to potvrdi".
         <>
-          {/* Info banner o systéme */}
-          <div className="mb-4 rounded-lg border-2 border-emerald-300 bg-emerald-50/60 p-3">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
+          {/* Info banner o systéme (kompaktný pre print — 1 A4 strana). */}
+          <div className="mb-3 rounded-lg border-2 border-emerald-300 bg-emerald-50/60 p-2 print:p-1.5 print:mb-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-800">
-                  📦 Inventúra — priprav zo skladu
-                </div>
-                <div className="mt-1 font-black text-lg text-slate-900">
+                <div className="font-black text-base print:text-sm text-slate-900">
                   {realizationSystemLabel
                     ? `Systém: ${realizationSystemLabel}`
                     : "Systém: —"}
                 </div>
-                <div className="text-xs text-slate-600 mt-0.5">
+                <div className="text-[10px] text-slate-600 print:hidden">
                   Zoznam vypočítal obchodák podľa vybraného systému a plochy.
                 </div>
               </div>
               {areaNum > 0 && (
                 <div className="text-right shrink-0">
-                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
-                    Plocha
-                  </div>
-                  <div className="text-2xl font-black text-emerald-700 tabular-nums">
+                  <div className="text-xl print:text-base font-black text-emerald-700 tabular-nums">
                     {areaNum} m²
                   </div>
                 </div>
@@ -377,28 +381,28 @@ export function PlanPrintView({
                 </thead>
                 <tbody>
                   {realizationInventory.map((p, i) => (
-                    <tr key={p.sku + i} className="border border-slate-300">
-                      <td className="border border-slate-300 px-2 py-3 text-center tabular-nums font-black text-lg">
+                    <tr key={p.sku + i} className="border border-slate-300 avoid-break">
+                      <td className="border border-slate-300 px-2 py-2 print:py-1 text-center tabular-nums font-black text-lg print:text-base">
                         {i + 1}
                       </td>
-                      <td className="border border-slate-300 px-3 py-3">
-                        <div className="font-black text-base">{p.label}</div>
-                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      <td className="border border-slate-300 px-3 py-2 print:py-1">
+                        <div className="font-black text-base print:text-sm">{p.label}</div>
+                        <div className="text-[10px] text-slate-500 font-mono print:hidden">
                           SKU {p.sku}
                         </div>
                         {p.note && (
-                          <div className="text-[10px] text-slate-600 italic mt-0.5">
+                          <div className="text-[10px] text-slate-600 italic mt-0.5 print:hidden">
                             {p.note}
                           </div>
                         )}
                       </td>
-                      <td className="border border-slate-300 px-2 py-3 text-center">
-                        <div className="text-3xl font-black tabular-nums text-emerald-700">
+                      <td className="border border-slate-300 px-2 py-2 print:py-1 text-center">
+                        <div className="text-3xl print:text-xl font-black tabular-nums text-emerald-700">
                           {p.qty}×
                         </div>
                       </td>
-                      <td className="border border-slate-300 px-2 py-3 text-center">
-                        <div className="text-lg font-black tabular-nums text-slate-800">
+                      <td className="border border-slate-300 px-2 py-2 print:py-1 text-center">
+                        <div className="text-lg print:text-base font-black tabular-nums text-slate-800">
                           {typeof p.unit_size_kg === "number"
                             ? `${p.unit_size_kg} kg`
                             : p.unit}

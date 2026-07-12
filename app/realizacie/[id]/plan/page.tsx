@@ -184,20 +184,30 @@ export default async function RealizationPlanPage({
     <div className="max-w-4xl mx-auto p-4 space-y-6">
       <header className="print:hidden">
         <Link
-          href={`/realizacie/${id}`}
+          href={`/realizacie`}
           className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-sky-700 mb-3 px-2 py-1 rounded-md hover:bg-sky-50/60 transition-colors w-fit"
         >
           <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
-          Späť na realizáciu
+          Späť na realizácie
         </Link>
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-            {activeView === "sklad"
-              ? "📦 Inventúra — "
-              : activeView === "zodpovednost"
-                ? "✍️ Zodpovednosť — "
-                : "🔨 Postup — "}
-            {(lead.name as string) ?? "?"}
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2 flex-wrap">
+            <span>
+              {activeView === "sklad"
+                ? "📦 Inventúra —"
+                : activeView === "zodpovednost"
+                  ? "✍️ Zodpovednosť —"
+                  : "🔨 Postup —"}
+            </span>
+            {/* User 2026-07-12: „nech sa da cez to peter mudry linknut na
+                ten lead ze sa da na to kliknut a rollne ti detail". */}
+            <Link
+              href={`/agent/leads/${id}`}
+              className="text-slate-900 hover:text-sky-700 hover:underline decoration-dotted decoration-2 underline-offset-4 transition-colors"
+              title="Otvoriť detail leadu"
+            >
+              {(lead.name as string) ?? "?"}
+            </Link>
           </h1>
           <PrintButton />
         </div>

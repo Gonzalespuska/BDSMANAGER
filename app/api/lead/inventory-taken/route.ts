@@ -57,10 +57,127 @@ export async function POST(request: NextRequest) {
 
   const nowIso = new Date().toISOString();
   const existing = (lead.data as Record<string, unknown> | null) ?? {};
+
+  // Idempotencia — ak už bolo raz vzaté, nedávaj sklad druhýkrát preč.
+  // Vrátíme existujúci timestamp a hotovo.
+  if (typeof existing.realization_inventory_taken_at === "string") {
+    return NextResponse.json({
+      ok: true,
+      taken_at: existing.realization_inventory_taken_at,
+      already_taken: true,
+    });
+  }
+
+  // ─── ODVOD ZO SKLADU ───────────────────────────────────────────────
+  // User 2026-07-12: „ked potvrdim ze som zobral material musi to
+  // automaticky zo skladu dat prec inventura".
+  // Prejdeme kazdy item z lead.data.realization_inventory a zdec-nutíme
+  // inventory_stock (match by sap_number alebo product_name).
+  const inventory = Array.isArray(existing.realization_inventory)
+    ? (existing.realization_inventory as Array<{
+        sku?: string;
+        label?: string;
+        qty?: number;
+        unit_size_kg?: number;
+      }>)
+    : [];
+
+  const stockChanges: Array<{
+    sku: string;
+    label: string;
+    qty: number;
+    stock_before: number | null;
+    stock_after: number | null;
+    matched: boolean;
+  }> = [];
+
+  for (const item of inventory) {
+    if (!item?.qty || item.qty <= 0) continue;
+    const sku = item.sku ?? "";
+    const label = item.label ?? "";
+    let stockRow: {
+      id: string;
+      quantity_packages: number;
+      product_name: string;
+      brand: string | null;
+      package_size_kg: number | null;
+      package_unit: string;
+    } | null = null;
+
+    // 1. Match cez sap_number (najspoľahlivejšie)
+    if (sku) {
+      const { data } = await admin
+        .from("inventory_stock")
+        .select("id, quantity_packages, product_name, brand, package_size_kg, package_unit")
+        .eq("sap_number", sku)
+        .maybeSingle();
+      if (data) stockRow = data;
+    }
+    // 2. Fallback — hľadaj podľa product_name (partial match ilike)
+    if (!stockRow && label) {
+      const { data } = await admin
+        .from("inventory_stock")
+        .select("id, quantity_packages, product_name, brand, package_size_kg, package_unit")
+        .ilike("product_name", `%${label.split(" ")[0]}%`)
+        .limit(1)
+        .maybeSingle();
+      if (data) stockRow = data;
+    }
+
+    if (!stockRow) {
+      stockChanges.push({
+        sku,
+        label,
+        qty: item.qty,
+        stock_before: null,
+        stock_after: null,
+        matched: false,
+      });
+      continue;
+    }
+
+    const before = stockRow.quantity_packages;
+    const after = Math.max(0, before - item.qty);
+    const delta = -Math.min(before, item.qty); // záporne
+
+    await admin
+      .from("inventory_stock")
+      .update({ quantity_packages: after })
+      .eq("id", stockRow.id);
+
+    // Audit movement (best-effort)
+    admin
+      .from("inventory_movements")
+      .insert({
+        stock_id: stockRow.id,
+        product_name: stockRow.product_name,
+        brand: stockRow.brand,
+        package_size_kg: stockRow.package_size_kg,
+        package_unit: stockRow.package_unit,
+        delta,
+        reason: "realizacia_vyber",
+        lead_id: leadId,
+        user_id: user.id,
+        note: `Realizator vzal z Inventúra papiera`,
+      })
+      .then(() => {});
+
+    stockChanges.push({
+      sku,
+      label,
+      qty: item.qty,
+      stock_before: before,
+      stock_after: after,
+      matched: true,
+    });
+  }
+
+  // ─── ULOŽ TIMESTAMP DO LEAD ────────────────────────────────────────
   const nextData = {
     ...existing,
     realization_inventory_taken_at: nowIso,
     realization_inventory_taken_by: user.id,
+    realization_inventory_stock_changes: stockChanges,
   };
   const { error } = await admin
     .from("leads")
@@ -80,9 +197,15 @@ export async function POST(request: NextRequest) {
       lead_id: leadId,
       user_id: user.id,
       type: "inventory_taken",
-      data: { taken_at: nowIso },
+      data: { taken_at: nowIso, stock_changes: stockChanges },
     })
     .then(() => {});
 
-  return NextResponse.json({ ok: true, taken_at: nowIso });
+  return NextResponse.json({
+    ok: true,
+    taken_at: nowIso,
+    stock_changes: stockChanges,
+    matched_count: stockChanges.filter((c) => c.matched).length,
+    unmatched_count: stockChanges.filter((c) => !c.matched).length,
+  });
 }
