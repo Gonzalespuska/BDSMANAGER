@@ -138,6 +138,33 @@ export default async function RealizacieDashboard() {
           else week[0].items.push(l);
         }
 
+        // Manual weekday/month labels — CF Workers edge nemá full ICU
+        // pre sk-SK, čo spôsobovalo hydration mismatch (server render
+        // fallbackuje na en-US → client browser dá sk-SK → mismatch →
+        // client-side exception).
+        const WEEKDAYS = [
+          "nedeľa",
+          "pondelok",
+          "utorok",
+          "streda",
+          "štvrtok",
+          "piatok",
+          "sobota",
+        ];
+        const MONTHS = [
+          "januára",
+          "februára",
+          "marca",
+          "apríla",
+          "mája",
+          "júna",
+          "júla",
+          "augusta",
+          "septembra",
+          "októbra",
+          "novembra",
+          "decembra",
+        ];
         function weekdayLabel(d: Date): string {
           const now2 = new Date();
           const isToday =
@@ -147,14 +174,11 @@ export default async function RealizacieDashboard() {
           const isTomorrow = d.toDateString() === tomorrow.toDateString();
           if (isToday) return "Dnes";
           if (isTomorrow) return "Zajtra";
-          return d.toLocaleDateString("sk-SK", { weekday: "long" });
+          return WEEKDAYS[d.getDay()];
         }
 
         function fullDate(d: Date): string {
-          return d.toLocaleDateString("sk-SK", {
-            day: "numeric",
-            month: "long",
-          });
+          return `${d.getDate()}. ${MONTHS[d.getMonth()]}`;
         }
 
         return active.length > 0 ? (
@@ -395,7 +419,16 @@ export default async function RealizacieDashboard() {
                     </span>
                   )}
                   <span>
-                    {new Date(l.realization_completed_at as string).toLocaleDateString("sk-SK")}
+                    {/* Manual DD.MM.YYYY format — CF Workers edge nemá full ICU,
+                        toLocaleDateString("sk-SK") falls back to en-US → hydration
+                        mismatch s browserom → client-side exception. */}
+                    {(() => {
+                      const d = new Date(l.realization_completed_at as string);
+                      const dd = String(d.getUTCDate()).padStart(2, "0");
+                      const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+                      const yyyy = d.getUTCFullYear();
+                      return `${dd}.${mm}.${yyyy}`;
+                    })()}
                   </span>
                 </div>
               </li>

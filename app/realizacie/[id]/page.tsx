@@ -276,7 +276,17 @@ export default async function RealizaciaDetailPage({
           <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-2" aria-hidden />
           <div className="font-bold text-emerald-900">Realizácia dokončená</div>
           <div className="text-xs text-emerald-800 mt-0.5">
-            {new Date(l.realization_completed_at as string).toLocaleString("sk-SK")}
+            {(() => {
+              const d = new Date(l.realization_completed_at as string);
+              const skMs = d.getTime() + 2 * 3600 * 1000;
+              const sk = new Date(skMs);
+              const dd = String(sk.getUTCDate()).padStart(2, "0");
+              const mm = String(sk.getUTCMonth() + 1).padStart(2, "0");
+              const yyyy = sk.getUTCFullYear();
+              const hh = String(sk.getUTCHours()).padStart(2, "0");
+              const mi = String(sk.getUTCMinutes()).padStart(2, "0");
+              return `${dd}.${mm}.${yyyy} ${hh}:${mi}`;
+            })()}
           </div>
         </div>
       )}
