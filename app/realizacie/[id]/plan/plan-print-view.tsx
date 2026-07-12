@@ -797,12 +797,11 @@ function ResponsibilityProtocol({
         <thead>
           <tr>
             <th style={{ width: "5%", textAlign: "center" }}>Č.</th>
-            <th style={{ width: "30%" }}>Úkon</th>
+            <th style={{ width: "32%" }}>Úkon</th>
             <th style={{ width: "18%" }}>Zodpovedná osoba</th>
-            <th style={{ width: "12%" }}>Čas od–do</th>
+            <th style={{ width: "13%" }}>Čas od–do</th>
             <th style={{ width: "8%", textAlign: "center" }}>Hotovo</th>
-            <th style={{ width: "15%" }}>Podpis</th>
-            <th style={{ width: "12%" }}>Poznámka</th>
+            <th style={{ width: "24%" }}>Podpis</th>
           </tr>
         </thead>
         <tbody>
@@ -824,7 +823,6 @@ function ResponsibilityProtocol({
               <td style={{ textAlign: "center" }}>
                 <span className="checkbox"></span>
               </td>
-              <td></td>
               <td></td>
             </tr>
           ))}
