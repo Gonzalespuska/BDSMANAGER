@@ -68,6 +68,8 @@ export function PlanPrintView({
   realizationDate,
   activeView,
   isGarage,
+  isMramorova,
+  isMetalicka,
   plocha,
   systemId: initialSystemId,
   procedureSteps,
