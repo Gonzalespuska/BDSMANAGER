@@ -296,7 +296,7 @@ export function SystemPickerButton({
               {!m2 && (
                 <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
                   ⚠ Obhliadkár nezameral m² — inventúra sa nedá spočítať.
-                  Doplň m² v /obhliadky/{leadId} alebo pokračuj bez inventúry.
+                  Doplň m² v obhliadke alebo pokračuj bez inventúry.
                 </div>
               )}
 
