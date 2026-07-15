@@ -31,6 +31,10 @@ export function MetaTokenForm() {
     }>;
     fix: string | null;
   } | null>(null);
+  // Ak už je token uložený, skryjeme token editor kým user nezaklikne
+  // „Zmeniť token" (user 2026-07-15: „neda mi iba moznost nejkao editnut
+  // ale mam tam stale to iste pole").
+  const [editingToken, setEditingToken] = React.useState(false);
 
   async function testConnection() {
     if (testing) return;
@@ -176,10 +180,13 @@ export function MetaTokenForm() {
       }
       setFlash({
         kind: "ok",
-        text: "✓ Uložené. Cron sync (každých 5 min) použije nový token pri ďalšom behu.",
+        text: "✓ Uložené. Overujem že token funguje…",
       });
       setToken("");
+      setEditingToken(false);
       await load();
+      // Auto-run test — user 2026-07-15: „preco neukaze ze teda funguje".
+      await testConnection();
     } catch (e) {
       setFlash({
         kind: "err",
@@ -193,36 +200,66 @@ export function MetaTokenForm() {
   return (
     <form onSubmit={save} className="space-y-4">
       {existing?.token_set && (
-        <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/60 p-4 flex items-start gap-3">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <div className="font-black text-emerald-900">
-              Token uložený: {existing.token_preview}
+        <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/60 p-4 space-y-2">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="text-sm flex-1">
+              <div className="font-black text-emerald-900">
+                Token uložený: {existing.token_preview}
+              </div>
+              <div className="text-xs text-emerald-800 mt-0.5">
+                {existing.token_updated_at &&
+                  `Posledná zmena: ${new Date(existing.token_updated_at).toLocaleString("sk-SK")}`}
+              </div>
+              <div className="text-xs text-emerald-800">
+                Page IDs:{" "}
+                <span className="font-mono">
+                  {existing.page_ids || "—"}
+                </span>
+              </div>
             </div>
-            <div className="text-xs text-emerald-800 mt-0.5">
-              {existing.token_updated_at &&
-                `Posledná zmena: ${new Date(existing.token_updated_at).toLocaleString("sk-SK")}`}
-            </div>
-            <div className="text-xs text-emerald-800">
-              Page IDs: <span className="font-mono">{existing.page_ids || "—"}</span>
-            </div>
+            {!editingToken && (
+              <button
+                type="button"
+                onClick={() => setEditingToken(true)}
+                className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-black bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+              >
+                ✏️ Zmeniť
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      <div>
-        <label className="text-[10px] uppercase tracking-wider font-black text-slate-700 mb-1 block">
-          META_PAGE_ACCESS_TOKEN
-        </label>
-        <textarea
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="EAA..."
-          rows={4}
-          spellCheck={false}
-          className="w-full px-3 py-2 rounded-lg border-2 border-slate-300 text-sm font-mono focus:outline-none focus:border-sky-400 resize-none"
-        />
-      </div>
+      {/* Token pole zobrazujeme buď ak ešte nič nie je uložené,
+          alebo keď user explicitne klikol „Zmeniť". */}
+      {(!existing?.token_set || editingToken) && (
+        <div>
+          <label className="text-[10px] uppercase tracking-wider font-black text-slate-700 mb-1 block">
+            META_PAGE_ACCESS_TOKEN
+            {editingToken && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingToken(false);
+                  setToken("");
+                }}
+                className="ml-2 text-[10px] font-bold text-slate-500 hover:text-slate-700 normal-case"
+              >
+                (zrušiť zmenu)
+              </button>
+            )}
+          </label>
+          <textarea
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="EAA..."
+            rows={4}
+            spellCheck={false}
+            className="w-full px-3 py-2 rounded-lg border-2 border-slate-300 text-sm font-mono focus:outline-none focus:border-sky-400 resize-none"
+          />
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -284,27 +321,38 @@ export function MetaTokenForm() {
       )}
 
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={busy || !token.trim() || !pageIds.trim()}
-          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black disabled:opacity-60"
-        >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          Uložiť
-        </button>
+        {/* Uložiť zobrazíme iba keď je token editable */}
+        {(!existing?.token_set || editingToken) && (
+          <button
+            type="submit"
+            disabled={busy || !token.trim() || !pageIds.trim()}
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black disabled:opacity-60"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Uložiť
+          </button>
+        )}
         {existing?.token_set && (
           <button
             type="button"
             onClick={testConnection}
             disabled={testing}
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-800 text-sm font-black disabled:opacity-60"
+            className={
+              (existing?.token_set && !editingToken ? "flex-1 " : "") +
+              "inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-black disabled:opacity-60 " +
+              (existing?.token_set && !editingToken
+                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                : "bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-800")
+            }
           >
             {testing ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Wifi className="w-4 h-4" />
             )}
-            Otestovať
+            {existing?.token_set && !editingToken
+              ? "Otestovať teraz"
+              : "Otestovať"}
           </button>
         )}
       </div>
