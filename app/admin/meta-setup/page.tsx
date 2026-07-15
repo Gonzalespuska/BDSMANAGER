@@ -4,6 +4,7 @@ import { KeyRound } from "lucide-react";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { MetaTokenForm } from "./meta-token-form";
+import { WebhookInfoPanel } from "./webhook-info-panel";
 
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
@@ -32,6 +33,8 @@ export default async function MetaSetupPage() {
       </div>
 
       <MetaTokenForm />
+
+      <WebhookInfoPanel />
     </div>
   );
 }
