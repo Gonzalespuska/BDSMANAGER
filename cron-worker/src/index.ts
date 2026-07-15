@@ -127,7 +127,11 @@ async function runSync(
   // Ak sync padne 3× v rade → push notif na mobil aby sa problém včas
   // zachytil (predtým sme 4 dni ani nevedeli, že cron padá na "column
   // termin does not exist").
-  await checkSyncLiveness(env, web);
+  await checkSyncLiveness(env, web, "web");
+  // Meta OAuth token expiruje po 60 dňoch (ak nie je System User Token).
+  // Rovnaká 3× fail streak logika — user sa dozvie IHNEĎ pri prvom
+  // pretrvávajúcom probléme, nie o týždeň keď zistí že chýbajú leady.
+  await checkSyncLiveness(env, meta, "meta");
 
   // ─── ZERO-LEAD ALARM ────────────────────────────────────────────────
   // Aj keď sync vracia 200, môže byť infrastructure problem (webhook na
@@ -236,35 +240,43 @@ async function checkLeadFlow(env: Env): Promise<void> {
 }
 
 /**
- * Zvýš failure streak counter v KV. Ak dosiahne prah → push push cez ntfy.sh.
+ * Zvýš failure streak counter v KV. Ak dosiahne prah → push cez ntfy.sh.
  * Ak sync succes (status 200 + ok:true) → resetni counter.
+ *
+ * @param source "web" (epoxidovo.sk cron) alebo "meta" (Facebook/IG polling).
+ *   Každý zdroj má vlastný counter → izolované fail streaky.
  */
 async function checkSyncLiveness(
   env: Env,
-  webResult: { status?: number; body?: unknown; error?: string; skipped?: string },
+  syncResult: { status?: number; body?: unknown; error?: string; skipped?: string },
+  source: "web" | "meta",
 ): Promise<void> {
   if (!env.SYNC_STATE || !env.NTFY_ALERT_TOPIC) {
-    // KV / topic nenakonfigurovaný — soft-skip (backward-compat).
     return;
   }
   const isSuccess =
-    webResult.status === 200 &&
-    !!(webResult.body as { ok?: boolean } | undefined)?.ok;
+    syncResult.status === 200 &&
+    !!(syncResult.body as { ok?: boolean } | undefined)?.ok;
 
-  const key = "sync_fail_streak";
+  const key = `sync_fail_streak_${source}`;
+  const label = source === "meta" ? "Meta (FB/IG) sync" : "Web sync epoxidovo.sk";
+  const detail =
+    source === "meta"
+      ? "Nové FB/IG lead ads NECHODIA do CRM. Najčastejšia príčina: META_PAGE_ACCESS_TOKEN expiroval (60 dní). Fix: /admin/meta-setup → generuj System User Access Token (nikdy nevyprší) + nastav META_PAGE_IDS."
+      : "Nové web leady z epoxidovo.sk NECHODIA do CRM. Skontroluj Neon schemu + sync-epoxidovo/route.ts.";
+
   const currentRaw = await env.SYNC_STATE.get(key);
   const current = currentRaw ? parseInt(currentRaw, 10) : 0;
 
   if (isSuccess) {
-    // Reset streak
     if (current > 0) {
       await env.SYNC_STATE.delete(key);
-      console.log(`[cron-worker] sync recovered after ${current} fails`);
+      console.log(`[cron-worker] ${source} sync recovered after ${current} fails`);
       if (current >= FAIL_STREAK_ALERT) {
         await ntfyPush(
           env.NTFY_ALERT_TOPIC,
-          "✅ Sync obnovený",
-          `Web sync epoxidovo.sk už funguje. (Padal ${current}× za sebou.)`,
+          `✅ ${label} obnovený`,
+          `${label} už funguje. (Padal ${current}× za sebou.)`,
           "default",
           "white_check_mark",
         );
@@ -273,32 +285,30 @@ async function checkSyncLiveness(
     return;
   }
 
-  // Fail — increment
   const next = current + 1;
   await env.SYNC_STATE.put(key, String(next), { expirationTtl: 3600 });
 
   const errMsg =
-    (webResult.body as { error?: string; detail?: string } | undefined)?.detail ??
-    (webResult.body as { error?: string } | undefined)?.error ??
-    webResult.error ??
-    `HTTP ${webResult.status}`;
+    (syncResult.body as { error?: string; detail?: string } | undefined)?.detail ??
+    (syncResult.body as { error?: string } | undefined)?.error ??
+    syncResult.error ??
+    `HTTP ${syncResult.status}`;
 
-  console.warn(`[cron-worker] sync fail #${next}: ${errMsg}`);
+  console.warn(`[cron-worker] ${source} sync fail #${next}: ${errMsg}`);
 
   if (next === FAIL_STREAK_ALERT) {
     await ntfyPush(
       env.NTFY_ALERT_TOPIC,
-      "🚨 SYNC PADÁ 3× ZA SEBOU",
-      `Web sync epoxidovo.sk padá:\n${errMsg}\n\nNové leady sa NEDOSTÁVAJÚ do CRM. Skontroluj sync-epoxidovo/route.ts + Neon schemu.`,
+      `🚨 ${label} padá 3× v rade`,
+      `${label}:\n${errMsg}\n\n${detail}`,
       "max",
       "rotating_light",
     );
   } else if (next % 10 === 0) {
-    // Po 10, 20, 30 fails znova pripomeň
     await ntfyPush(
       env.NTFY_ALERT_TOPIC,
-      `🚨 Sync padá už ${next}× v rade`,
-      `Stále nefunguje:\n${errMsg}`,
+      `🚨 ${label} padá už ${next}× v rade`,
+      `Stále nefunguje:\n${errMsg}\n\n${detail}`,
       "high",
       "rotating_light",
     );

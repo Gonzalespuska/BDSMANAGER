@@ -81,24 +81,73 @@ export async function POST(request: NextRequest) {
     leads_checked: number;
     leads_new: number;
     errors: string[];
-  } = { forms_discovered: 0, leads_checked: 0, leads_new: 0, errors: [] };
+    mode: "hardcoded_pages" | "me_accounts";
+  } = {
+    forms_discovered: 0,
+    leads_checked: 0,
+    leads_new: 0,
+    errors: [],
+    mode: "me_accounts",
+  };
 
   try {
-    // 1) Discover pages
-    const pagesRes = await fetch(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/me/accounts?access_token=${pageToken}`,
-    );
-    if (!pagesRes.ok) {
-      const text = await pagesRes.text().catch(() => "");
-      return NextResponse.json(
-        { ok: false, error: "graph_me_accounts_failed", detail: text.slice(0, 500) },
-        { status: 500 },
+    // ─── 1) Discover pages ─────────────────────────────────────────────
+    // BEST PRACTICE: nastav `META_PAGE_IDS` env (comma-separated, napr.
+    // "123456789,987654321"). Vtedy preskočíme /me/accounts a nepotrebujeme
+    // User Access Token → môžeš použiť Page Access Token (nikdy nevyprší)
+    // alebo System User Access Token.
+    //
+    // FALLBACK: ak META_PAGE_IDS nie je nastavené, skúsime /me/accounts —
+    // ale to VYŽADUJE User Access Token, ktorý vyprší po ~60 dňoch a
+    // user musí manuálne obnovovať (výsledok: Adriána-style incident).
+    let pages: Array<{ id: string; name: string; access_token?: string }> = [];
+    const hardcodedPageIds = (process.env.META_PAGE_IDS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (hardcodedPageIds.length > 0) {
+      results.mode = "hardcoded_pages";
+      // Voliteľne fetchneme meno každej Page (best-effort). Ak /
+      // {page_id}?fields=name padne, použijeme len ID.
+      for (const pageId of hardcodedPageIds) {
+        try {
+          const nameRes = await fetch(
+            `https://graph.facebook.com/${META_GRAPH_VERSION}/${pageId}?fields=name&access_token=${pageToken}`,
+          );
+          if (nameRes.ok) {
+            const j = (await nameRes.json()) as { name?: string };
+            pages.push({ id: pageId, name: j.name ?? pageId });
+          } else {
+            pages.push({ id: pageId, name: pageId });
+          }
+        } catch {
+          pages.push({ id: pageId, name: pageId });
+        }
+      }
+    } else {
+      // Legacy path — funguje len s User Access Token
+      const pagesRes = await fetch(
+        `https://graph.facebook.com/${META_GRAPH_VERSION}/me/accounts?access_token=${pageToken}`,
       );
+      if (!pagesRes.ok) {
+        const text = await pagesRes.text().catch(() => "");
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "graph_me_accounts_failed",
+            detail: text.slice(0, 500),
+            fix:
+              "Set META_PAGE_IDS env (comma-separated page IDs) to skip /me/accounts and use non-expiring Page/System User Access Token. See /admin/meta-setup for step-by-step.",
+          },
+          { status: 500 },
+        );
+      }
+      const pagesJson = (await pagesRes.json()) as {
+        data?: Array<{ id: string; name: string; access_token?: string }>;
+      };
+      pages = pagesJson.data ?? [];
     }
-    const pagesJson = (await pagesRes.json()) as {
-      data?: Array<{ id: string; name: string; access_token?: string }>;
-    };
-    const pages = pagesJson.data ?? [];
 
     // 2) Discover forms per page
     const forms: DiscoveredForm[] = [];

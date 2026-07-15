@@ -195,6 +195,14 @@ export default async function AdminDashboard() {
       icon: Settings,
       tint: "sky",
     },
+    {
+      href: "/admin/meta-setup",
+      title: "Meta OAuth setup",
+      desc: "Step-by-step: nastavenie System User Access Token pre Meta (FB/IG) tak aby NIKDY nevypršal. Fix pre 'graph_me_accounts_failed' + META_PAGE_IDS bypass.",
+      icon: Settings,
+      badge: "🔧 fix",
+      tint: "violet",
+    },
   ];
 
   return (
