@@ -15,18 +15,21 @@ export default async function MetaSetupPage() {
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
-      <header>
+      <div>
         <Link
           href="/admin"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-sky-700 mb-3"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-sky-700 mb-3 px-2 py-1 rounded-md hover:bg-sky-50/60 transition-colors w-fit"
         >
           ← Späť na admin
         </Link>
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
-          <KeyRound className="w-7 h-7 text-indigo-600" />
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2 mt-3">
+          <KeyRound className="w-7 h-7 text-indigo-600 shrink-0" />
           Meta OAuth Token
         </h1>
-      </header>
+        <p className="text-sm text-muted-foreground mt-1">
+          Token + Page ID pre sync Facebook/Instagram lead ads.
+        </p>
+      </div>
 
       <MetaTokenForm />
     </div>
