@@ -25,7 +25,6 @@ import {
   ROLE_INACTIVE_DAYS,
 } from "@/lib/admin-thresholds";
 import { cn } from "@/lib/utils";
-import { LeadGapAlert } from "./lead-gap-alert";
 import { ActivityLogClient, type ActivityRow } from "./activity-log-client";
 import { PipelineWindowSwitch } from "./pipeline-window-switch";
 
@@ -753,8 +752,10 @@ export default async function PrehladPage({
             tečie, nedochádza k stagnácii a všetky 3 role pracujú.
           </p>
         </div>
-        {/* Lead-source gap indicator + sticky alarm banners */}
-        <LeadGapAlert />
+        {/* Lead-source gap alarm banner odstránený 2026-07-15 na user
+            požiadavku — bol false-positive (šikanoval aj počas noci
+            keď je pochopiteľné že web leady nechodia). Push alarm
+            zostáva iba na ntfy.sh a lead flow-check cron. */}
       </header>
 
       {/* ═══════════════════════════════════════════════════════════════

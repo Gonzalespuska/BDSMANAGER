@@ -11,7 +11,6 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AdminHealthBanner } from "./admin-health-banner";
-import { SyncHealthWidget } from "./sync-health-widget";
 import { LeadStatsPanel } from "./lead-stats-panel";
 
 export const dynamic = "force-dynamic";
@@ -103,7 +102,9 @@ export default async function AdminDashboard() {
           písať a admin sub-moduly hlásia „0 items" alebo tichú chybu. */}
       <AdminHealthBanner />
 
-      <SyncHealthWidget />
+      {/* SyncHealthWidget odstranený 2026-07-15 — false-positive alarm
+          UI je nezmyselný keď je celý cron zdravý. Monitoring zostáva
+          na ntfy.sh push. */}
 
       {/* LEADY — client-side widget s time window switcher.
           User 2026-07-15: „toto ma byt jedna bublina ktora ta linkne na
