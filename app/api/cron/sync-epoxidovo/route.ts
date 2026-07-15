@@ -49,13 +49,25 @@ interface EpxLead {
   spaceType: string | null;
   service: string | null;
   area: number | null;
-  termin: string | null;
+  /** DEPRECATED — column dropped 2026-07-14, termin je v message. */
+  termin?: string | null;
   message: string | null;
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
   referrer: string | null;
   status: string | null;
+}
+
+/**
+ * Extrahuj termín z message poľa (formát "Termín: XXX\n" niekde v texte).
+ * Web epoxidovo.sk teraz posiela termín ako súčasť message stringu, nie
+ * ako samostatný stĺpec.
+ */
+function parseTerminFromMessage(message: string | null): string | null {
+  if (!message) return null;
+  const m = message.match(/Termín\s*:\s*([^\n\r]+)/i);
+  return m ? m[1].trim() : null;
 }
 
 /**
@@ -129,9 +141,14 @@ export async function POST(request: NextRequest) {
     // Pull posledných 200 leadov z epoxidovo.sk. Explicitne cez sql.query()
     // — Next.js SWC/Terser môže mangleovať template literal syntax v
     // production build a Neon parser to nezachytí.
+    // FIX 2026-07-15: stĺpec `termin` bol zmazaný z epoxidovo.sk Neon
+    // DB (User dnes rework webu, termín teraz iba v `message` textovom
+    // poli). Sync padal 4 dni s "column termin does not exist" a
+    // ubehli 4+ leady (Ján Svrbík, Adriána Tiso, Tomáš Dobránsky,
+    // Natália Miscik). Termin sa teraz parsuje z message ak treba.
     const rows = (await sql.query(
       `SELECT id, "createdAt", name, email, phone, source, "spaceType", service,
-             area, termin, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
+             area, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
        FROM "Lead"
        ORDER BY "createdAt" DESC
        LIMIT 200`,
@@ -180,9 +197,10 @@ export async function POST(request: NextRequest) {
             typ_podlahy: l.service
               ? SERVICE_LABELS[l.service] || l.service
               : undefined,
+            // Termin parseovaný z message (obsahuje "Termín: X" riadok).
             termin: l.termin
               ? TERMIN_LABELS[l.termin] || l.termin
-              : undefined,
+              : parseTerminFromMessage(l.message) || undefined,
             message: l.message || undefined,
             utm_source: l.utmSource || undefined,
             utm_medium: l.utmMedium || undefined,
