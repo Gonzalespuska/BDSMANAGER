@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Sparkles, Wifi } from "lucide-react";
 
 /**
  * MetaTokenForm — jednoduchý form s 2 poľami (token + Page IDs) a Save.
@@ -19,6 +19,55 @@ export function MetaTokenForm() {
   const [discovered, setDiscovered] = React.useState<
     Array<{ id: string; name: string }> | null
   >(null);
+  const [testing, setTesting] = React.useState(false);
+  const [testResult, setTestResult] = React.useState<{
+    ok: boolean;
+    results: Array<{
+      page_id: string;
+      page_name: string | null;
+      accessible: boolean;
+      lead_forms_count: number;
+      error: string | null;
+    }>;
+    fix: string | null;
+  } | null>(null);
+
+  async function testConnection() {
+    if (testing) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await fetch("/api/admin/meta-token/test", { method: "POST" });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        results?: Array<{
+          page_id: string;
+          page_name: string | null;
+          accessible: boolean;
+          lead_forms_count: number;
+          error: string | null;
+        }>;
+        fix?: string | null;
+        message?: string;
+      };
+      if (j.results) {
+        setTestResult({
+          ok: !!j.ok,
+          results: j.results,
+          fix: j.fix ?? null,
+        });
+      } else {
+        setFlash({ kind: "err", text: j.message ?? "Test failed" });
+      }
+    } catch (e) {
+      setFlash({
+        kind: "err",
+        text: `Test error: ${e instanceof Error ? e.message : "unknown"}`,
+      });
+    } finally {
+      setTesting(false);
+    }
+  }
   const [flash, setFlash] = React.useState<
     { kind: "ok" | "err"; text: string } | null
   >(null);
@@ -234,14 +283,92 @@ export function MetaTokenForm() {
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={busy || !token.trim() || !pageIds.trim()}
-        className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black disabled:opacity-60"
-      >
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-        Uložiť
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={busy || !token.trim() || !pageIds.trim()}
+          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black disabled:opacity-60"
+        >
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Uložiť
+        </button>
+        {existing?.token_set && (
+          <button
+            type="button"
+            onClick={testConnection}
+            disabled={testing}
+            className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-800 text-sm font-black disabled:opacity-60"
+          >
+            {testing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Wifi className="w-4 h-4" />
+            )}
+            Otestovať
+          </button>
+        )}
+      </div>
+
+      {testResult && (
+        <div
+          className={
+            "rounded-xl border-2 p-4 space-y-2 " +
+            (testResult.ok
+              ? "border-emerald-300 bg-emerald-50"
+              : "border-rose-300 bg-rose-50")
+          }
+        >
+          <div className="flex items-center gap-2 text-sm font-black">
+            {testResult.ok ? (
+              <>
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <span className="text-emerald-900">
+                  Token funguje — Meta lead ads sa budú syncovať.
+                </span>
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                <span className="text-rose-900">
+                  Token má problém — pozri detail nižšie.
+                </span>
+              </>
+            )}
+          </div>
+          <ul className="space-y-1.5">
+            {testResult.results.map((r) => (
+              <li
+                key={r.page_id}
+                className={
+                  "rounded-lg p-2 text-xs " +
+                  (r.error ? "bg-rose-100 border border-rose-200" : "bg-white border border-emerald-200")
+                }
+              >
+                <div className="font-black text-slate-900">
+                  {r.page_name ?? r.page_id}
+                </div>
+                <div className="text-slate-600 font-mono text-[10px]">
+                  {r.page_id}
+                </div>
+                {r.error ? (
+                  <div className="mt-1 text-rose-800 font-semibold">
+                    ✗ {r.error}
+                  </div>
+                ) : (
+                  <div className="mt-1 text-emerald-800 font-semibold">
+                    ✓ Prístup OK · {r.lead_forms_count} lead form(iek) viditeľných
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          {testResult.fix && (
+            <div className="rounded-lg bg-amber-100 border border-amber-300 p-3 text-xs text-amber-900 font-semibold mt-2">
+              💡 Fix: {testResult.fix}
+            </div>
+          )}
+        </div>
+      )}
     </form>
   );
 }
