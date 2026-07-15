@@ -2,7 +2,10 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { ArrowRightLeft, Loader2, X } from "lucide-react";
+
+import { toast } from "@/components/ui/toast";
 
 /**
  * ReassignPicker — admin klikne malé „🔄 Preraď" tlačidlo na leade,
@@ -77,6 +80,7 @@ function ReassignModal({
   currentAssigneeId: string | null;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [agents, setAgents] = React.useState<Agent[] | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -142,9 +146,19 @@ function ReassignModal({
         setBusyId(null);
         return;
       }
-      setOk(`✓ Žiadosť poslaná ${toUserName}. Uvidí sticky notifikáciu.`);
+      // Confirm toast + persist "Adriána" na "Leo" wording pre admina.
+      // Yellow PENDING TRANSFER badge sa objaví na karte cez refresh.
+      const fromName = currentAssigneeId
+        ? (agents?.find((a) => a.id === currentAssigneeId)?.name ?? "aktuálny owner")
+        : "pool (voľný)";
+      toast.success(
+        `⏳ Žiadosť poslaná: „${leadName}" od ${fromName} → ${toUserName}. Karta má žltý PENDING TRANSFER badge kým ${toUserName} neklikne Prijať.`,
+      );
+      setOk(`✓ Žiadosť poslaná ${toUserName}.`);
       setBusyId(null);
-      setTimeout(() => onClose(), 1400);
+      // Refresh aby sa pridal yellow badge okamžite.
+      router.refresh();
+      setTimeout(() => onClose(), 1200);
     } catch (e) {
       setError(e instanceof Error ? e.message : "network");
       setBusyId(null);

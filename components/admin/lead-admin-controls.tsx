@@ -4,6 +4,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, MoreHorizontal, Trash2 } from "lucide-react";
 
+import { toast } from "@/components/ui/toast";
+
 /**
  * LeadAdminControls — malý floating menu na admin lead karte:
  *   • Dropdown "Zmeniť status" (13 statusov)
@@ -70,14 +72,29 @@ export function LeadAdminControls({
         error?: string;
       };
       if (!r.ok || !j.ok) {
-        alert(`Chyba: ${j.error ?? "unknown"}`);
+        toast.error(`Chyba: ${j.error ?? "unknown"}`);
         setBusy(false);
         return;
+      }
+      // Confirm toast — user 2026-07-15: „ked sa udeje nejaka akcia
+      // pride mi confirm neajky ze preradil som lead teraz konkretne".
+      if (action === "set_status") {
+        const label =
+          STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status;
+        toast.success(`✓ ${leadName} → status: ${label}`);
+      } else if (action === "unassign") {
+        toast.success(
+          `✓ ${leadName} vrátený do poolu (bez ownera). Auto-assign ho pridelí najmenej vyťaženému obchodníkovi.`,
+        );
+      } else if (action === "delete") {
+        toast.success(`🗑 ${leadName} natrvalo zmazaný z DB.`);
       }
       setOpen(false);
       router.refresh();
     } catch (e) {
-      alert(`Sieťová chyba: ${e instanceof Error ? e.message : "unknown"}`);
+      toast.error(
+        `Sieťová chyba: ${e instanceof Error ? e.message : "unknown"}`,
+      );
       setBusy(false);
     }
   }
@@ -145,15 +162,16 @@ export function LeadAdminControls({
               onClick={() => {
                 if (
                   window.confirm(
-                    `Odpojiť ownera od „${leadName}"? Lead ostane v DB, ale nebude priradený nikomu.`,
+                    `Vrátiť „${leadName}" do POOLU (bez ownera)?\n\nLead ostane v DB, ale nebude priradený nikomu — auto-assign ho pri ďalšom cron behu (5 min) pridelí najmenej vyťaženému obchodákovi. Aktuálny owner ho stratí zo svojho zoznamu.`,
                   )
                 )
                   call("unassign");
               }}
               disabled={busy}
               className="px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-50 text-left"
+              title="Odoberie current owner-a. Lead sa pošle späť do poolu → auto-assign ho pridelí najmenej vyťaženému."
             >
-              🔓 Odpojiť ownera
+              🔓 Vrátiť do poolu (bez ownera)
             </button>
             <button
               type="button"

@@ -135,7 +135,55 @@ async function runSync(
   // 6h počas business hours (8-20 SK) neprišiel žiadny web lead → push.
   await checkLeadFlow(env);
 
+  // ─── WEEKLY SCHEMA DRIFT CHECK ──────────────────────────────────────
+  // Raz za deň (~1× / 288 cron behov) skontroluje či Neon Lead schema
+  // sedí s naším sync SELECT-om. Ak niekto zase pridá/zmaže stĺpec,
+  // user sa dozvie IHNEĎ (nemusí čakať kým sa niečo rozbije).
+  await maybeCheckSchemaDrift(env);
+
   return { ok: true, web, meta, transition };
+}
+
+async function maybeCheckSchemaDrift(env: Env): Promise<void> {
+  if (!env.NTFY_ALERT_TOPIC || !env.SYNC_STATE || !env.TARGET_URL) return;
+  const key = "last_schema_check_ms";
+  const last = await env.SYNC_STATE.get(key);
+  const now = Date.now();
+  // 6 hodín cool-down
+  if (last && now - parseInt(last, 10) < 6 * 3600_000) return;
+  await env.SYNC_STATE.put(key, String(now), { expirationTtl: 30 * 86400 });
+
+  const url = env.TARGET_URL.replace(
+    "/api/cron/sync-epoxidovo",
+    "/api/cron/schema-drift-check",
+  );
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "X-Cron-Secret": env.CRON_SECRET },
+    });
+    const j = (await r.json().catch(() => ({}))) as {
+      ok?: boolean;
+      alert?: boolean;
+      missing?: string[];
+      extra?: string[];
+    };
+    if (!j.ok) return;
+    if (j.alert && j.missing && j.missing.length > 0) {
+      await ntfyPush(
+        env.NTFY_ALERT_TOPIC,
+        "⚠️ Schema drift na epoxidovo.sk Neon DB",
+        `Chýbajú stĺpce v Lead tabuľke:\n${j.missing.join(", ")}\n\nSync tolerantný (SELECT *) beží ďalej, ale UI môže mať prázdne polia. Skontroluj kto to zmenil.`,
+        "high",
+        "warning",
+      );
+    } else if (j.extra && j.extra.length > 0) {
+      // Iba info — nové stĺpce nemusia znamenať problém
+      console.log("[cron-worker] new columns detected:", j.extra.join(", "));
+    }
+  } catch (e) {
+    console.warn("[cron-worker] schema-drift-check failed:", e);
+  }
 }
 
 async function checkLeadFlow(env: Env): Promise<void> {

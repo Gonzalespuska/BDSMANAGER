@@ -65,6 +65,14 @@ interface AdminLeadRow {
   phone_revealed_at: string | null;
   phone_revealed_by_name: string | null;
   created_at: string;
+  /** Pending transfer info — user 2026-07-15: „nehc je zlty pening
+   *  potom az kym neprijme vtedy zmizne tomu 1. a pridadi sa novemu". */
+  pending_transfer: {
+    to_user_name: string;
+    from_user_name: string;
+    kind: "push" | "pull";
+    created_at: string;
+  } | null;
 }
 
 export default async function AdminLeadsPage({
@@ -95,12 +103,45 @@ export default async function AdminLeadsPage({
   const { data: leadsRaw } = await query;
 
   const leads = leadsRaw ?? [];
+  const leadIds = leads.map((l) => l.id as string);
+
+  // Fetch pending reassign requests pre tieto leady — pre yellow badge.
+  const pendingMap = new Map<
+    string,
+    {
+      to_user_id: string;
+      from_user_id: string | null;
+      kind: "push" | "pull";
+      created_at: string;
+    }
+  >();
+  if (leadIds.length > 0) {
+    const { data: pending } = await sb
+      .from("lead_reassign_requests")
+      .select("lead_id, to_user_id, from_user_id, kind, created_at")
+      .in("lead_id", leadIds)
+      .eq("status", "pending");
+    for (const p of pending ?? []) {
+      pendingMap.set(p.lead_id as string, {
+        to_user_id: p.to_user_id as string,
+        from_user_id: (p.from_user_id as string | null) ?? null,
+        kind: ((p.kind as string) === "pull" ? "pull" : "push") as
+          | "push"
+          | "pull",
+        created_at: p.created_at as string,
+      });
+    }
+  }
 
   const userIds = Array.from(
     new Set(
-      leads
-        .flatMap((l) => [l.assigned_to, l.phone_revealed_by])
-        .filter((x): x is string => !!x),
+      [
+        ...leads.flatMap((l) => [l.assigned_to, l.phone_revealed_by]),
+        ...Array.from(pendingMap.values()).flatMap((p) => [
+          p.to_user_id,
+          p.from_user_id,
+        ]),
+      ].filter((x): x is string => !!x),
     ),
   );
 
@@ -118,24 +159,37 @@ export default async function AdminLeadsPage({
     }
   }
 
-  const rows: AdminLeadRow[] = leads.map((l) => ({
-    id: l.id as string,
-    name: (l.name as string) ?? "",
-    phone: (l.phone as string) ?? null,
-    email: (l.email as string) ?? null,
-    status: (l.status as LeadStatus) ?? "new",
-    source_type: (l.source_type as string) ?? "other",
-    source_campaign: (l.source_campaign as string) ?? null,
-    assigned_to: (l.assigned_to as string) ?? null,
-    assigned_user_name: l.assigned_to
-      ? (userMap.get(l.assigned_to as string) ?? null)
-      : null,
-    phone_revealed_at: (l.phone_revealed_at as string) ?? null,
-    phone_revealed_by_name: l.phone_revealed_by
-      ? (userMap.get(l.phone_revealed_by as string) ?? null)
-      : null,
-    created_at: (l.created_at as string) ?? "",
-  }));
+  const rows: AdminLeadRow[] = leads.map((l) => {
+    const pt = pendingMap.get(l.id as string);
+    return {
+      id: l.id as string,
+      name: (l.name as string) ?? "",
+      phone: (l.phone as string) ?? null,
+      email: (l.email as string) ?? null,
+      status: (l.status as LeadStatus) ?? "new",
+      source_type: (l.source_type as string) ?? "other",
+      source_campaign: (l.source_campaign as string) ?? null,
+      assigned_to: (l.assigned_to as string) ?? null,
+      assigned_user_name: l.assigned_to
+        ? (userMap.get(l.assigned_to as string) ?? null)
+        : null,
+      phone_revealed_at: (l.phone_revealed_at as string) ?? null,
+      phone_revealed_by_name: l.phone_revealed_by
+        ? (userMap.get(l.phone_revealed_by as string) ?? null)
+        : null,
+      created_at: (l.created_at as string) ?? "",
+      pending_transfer: pt
+        ? {
+            to_user_name: userMap.get(pt.to_user_id) ?? "?",
+            from_user_name: pt.from_user_id
+              ? (userMap.get(pt.from_user_id) ?? "?")
+              : "pool",
+            kind: pt.kind,
+            created_at: pt.created_at,
+          }
+        : null,
+    };
+  });
 
   // Zoskupené podľa priradenia
   const byAgent = new Map<string, AdminLeadRow[]>();
@@ -274,11 +328,26 @@ function LeadCardMini({ lead }: { lead: AdminLeadRow }) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+  const pt = lead.pending_transfer;
   return (
     <div
-      className="relative rounded-lg border bg-background p-2.5 hover:border-sky-300 hover:bg-sky-50/30 transition-colors group"
+      className={cn(
+        "relative rounded-lg border bg-background p-2.5 hover:border-sky-300 hover:bg-sky-50/30 transition-colors group",
+        pt && "border-2 border-amber-400 bg-amber-50/40 hover:border-amber-500",
+      )}
       data-lead-search-hay={hay}
     >
+      {/* Yellow PENDING TRANSFER badge — user 2026-07-15: „nehc je zlty
+          pening potom az kym neprijme vtedy zmizne tomu 1. a pridadi
+          sa novemu a uz nebude zlty". */}
+      {pt && (
+        <div className="mb-1.5 -mx-0.5">
+          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-100 border border-amber-400 text-amber-900">
+            ⏳ Pending {pt.kind === "pull" ? "prosba" : "transfer"}: →{" "}
+            {pt.to_user_name}
+          </div>
+        </div>
+      )}
       <Link
         href={`/agent/leads/${lead.id}`}
         className="block"

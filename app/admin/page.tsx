@@ -18,6 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AdminHealthBanner } from "./admin-health-banner";
 import { LeadDistributionPanel } from "./lead-distribution-panel";
+import { SyncHealthWidget } from "./sync-health-widget";
 
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
@@ -211,6 +212,8 @@ export default async function AdminDashboard() {
           Ukazuje ktoré migrácie sú nespustené — bez nich CRUD nemá kam
           písať a admin sub-moduly hlásia „0 items" alebo tichú chybu. */}
       <AdminHealthBanner />
+
+      <SyncHealthWidget />
 
       <LeadDistributionPanel />
 
