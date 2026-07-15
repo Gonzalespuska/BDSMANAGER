@@ -10,13 +10,12 @@ const inter = Inter({
 
 export const viewport = {
   themeColor: "#0ea5e9",
-  // Mobile: nezoomuj pri fokusu inputu (font-size >= 16px v tailwind
-  // zabezpečený v globals.css). maximumScale=1 zamedzí iOS pinch-zoom
-  // ktorý by rozbil sticky layouty.
+  // User 2026-07-12: „stranka nech sa neda zoomovat to je picovina" — CRM
+  // je responsive appka, pinch-zoom rozbíja layout a scroll pozíciu.
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover" as const,
 };
 

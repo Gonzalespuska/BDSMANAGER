@@ -14,6 +14,30 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}
+
+/**
+ * Bezpečnostne validovaný back-link. Prijmeme len INTERNÉ paths
+ * (začínajúce "/" nie "//"). User 2026-07-12: „chcem aby ma to vratilo
+ * tam kade som siel — vsade cez stranku".
+ */
+function safeBackHref(from: string | undefined): string | null {
+  if (!from) return null;
+  if (!from.startsWith("/") || from.startsWith("//")) return null;
+  if (from.length > 500) return null;
+  return from;
+}
+
+function backLabelForPath(path: string): string {
+  if (path.startsWith("/admin/agents/")) return "Späť na profil obchodáka";
+  if (path.startsWith("/admin/prehlad")) return "Späť na Prehľad";
+  if (path.startsWith("/admin")) return "Späť do Adminu";
+  if (path.startsWith("/agent")) return "Späť na Leady";
+  if (path.startsWith("/dm/")) return "💬 Späť do chatu";
+  if (path.startsWith("/realizacie")) return "Späť na Realizácie";
+  if (path.startsWith("/obhliadky")) return "Späť na Obhliadky";
+  return "Späť";
 }
 
 interface Activity {
@@ -78,8 +102,13 @@ function formatDurationFromLead(
   return `za ${parts.join(" ")} od príchodu leadu`;
 }
 
-export default async function LeadDetailPage({ params }: PageProps) {
+export default async function LeadDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params;
+  const sp = await searchParams;
+  const backHref = safeBackHref(sp.from);
   const supabase = await createClient();
 
   const [leadRes, activitiesRes] = await Promise.all([
@@ -100,11 +129,11 @@ export default async function LeadDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex items-center gap-2 flex-wrap">
         <Button asChild variant="ghost" size="sm">
-          <Link href="/agent">
+          <Link href={backHref ?? "/agent"}>
             <ArrowLeft className="w-4 h-4 mr-1.5" aria-hidden />
-            Späť na leady
+            {backHref ? backLabelForPath(backHref) : "Späť na leady"}
           </Link>
         </Button>
       </div>

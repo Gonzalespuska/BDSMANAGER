@@ -12,6 +12,7 @@ import {
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { SK_CITIES } from "@/lib/data/sk-cities";
 
 /**
  * Smart-suggest bars pre obchodáka (v Prehľad paneli pod kalendárom).
@@ -39,21 +40,22 @@ import { cn } from "@/lib/utils";
  */
 export function PrehladSmartSuggest() {
   return (
-    <div className="rounded-2xl border-2 border-amber-200 bg-amber-50/30 p-3.5 space-y-3">
-      <header className="inline-flex items-start gap-2">
-        <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" aria-hidden />
-        <div>
-          <h3 className="text-sm font-extrabold tracking-tight text-amber-900">
-            💡 Checkni si kedy sa oplatí
-          </h3>
-          <p className="text-[11px] text-amber-800/80 leading-snug">
-            Volaš so zákazníkom? Napíš mesto — systém navrhne najlepší deň{" "}
-            <strong>+ presný čas</strong> podľa toho ako sú obhliadkari
-            rozplánovaní (obhliadka trvá 30 min, plus cesta do ďalšieho mesta).
-          </p>
-        </div>
+    <div className="rounded-2xl border-2 border-amber-200 bg-amber-50/30 p-3 sm:p-3.5 space-y-2 sm:space-y-3">
+      <header className="inline-flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-amber-600 shrink-0" aria-hidden />
+        <h3 className="text-sm font-extrabold tracking-tight text-amber-900">
+          💡 Kedy sa oplatí volať späť
+        </h3>
       </header>
-      <div className="grid grid-cols-1 gap-2.5">
+      <p className="text-[11px] text-amber-800/80 leading-snug sm:hidden">
+        Napíš mesto, systém navrhne najlepší deň + čas.
+      </p>
+      <p className="text-[11px] text-amber-800/80 leading-snug hidden sm:block">
+        Volaš so zákazníkom? Napíš mesto — systém navrhne najlepší deň{" "}
+        <strong>+ presný čas</strong> podľa toho ako sú obhliadkari
+        rozplánovaní (obhliadka trvá 30 min, plus cesta do ďalšieho mesta).
+      </p>
+      <div className="grid grid-cols-1 gap-2">
         <ObhliadkaSuggestBar />
         <RealizaciaSuggestBar />
       </div>
@@ -99,12 +101,22 @@ function ObhliadkaSuggestBar() {
             className="w-3.5 h-3.5 text-violet-500 absolute left-2.5 top-1/2 -translate-y-1/2"
             aria-hidden
           />
+          {/* User 2026-07-12: „a nedoplna to intuitivne" — native datalist
+              autocomplete zo SK_CITIES. Fuzzy match funguje v každom browseri. */}
           <Input
             value={city}
             onChange={(e) => setCity(e.target.value)}
+            list="sk-cities-obhliadka"
+            autoComplete="off"
+            autoCapitalize="words"
             placeholder="Mesto zákazníka — napr. Martin"
             className="h-9 pl-8 border-violet-200 bg-white focus-visible:ring-violet-400"
           />
+          <datalist id="sk-cities-obhliadka">
+            {SK_CITIES.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
         </div>
         <SuggestionBadge
           suggestion={suggestion}
@@ -159,9 +171,17 @@ function RealizaciaSuggestBar() {
           <Input
             value={city}
             onChange={(e) => setCity(e.target.value)}
+            list="sk-cities-realizacia"
+            autoComplete="off"
+            autoCapitalize="words"
             placeholder="Mesto — napr. Bratislava"
             className="h-9 pl-8 border-emerald-200 bg-white focus-visible:ring-emerald-400"
           />
+          <datalist id="sk-cities-realizacia">
+            {SK_CITIES.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
         </div>
         <div className="w-[120px] relative">
           <Ruler

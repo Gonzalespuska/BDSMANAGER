@@ -2,9 +2,28 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * Po každej zmene v realization_systems invaliduj cache pre všetky
+ * stránky ktoré čítajú tie dáta — realizátor okamžite vidí nový postup,
+ * obchodák nový systém pri priraďovaní, admin fresh list.
+ * User 2026-07-12: „ked ako admin submitnem tak sa to posle vsetkym".
+ */
+function bustCache() {
+  try {
+    revalidatePath("/admin/systems", "page");
+    revalidatePath("/admin/nastavenia", "page");
+    revalidatePath("/realizacie", "layout");
+    revalidatePath("/agent", "layout");
+    revalidatePath("/obhliadnute", "page");
+  } catch {
+    /* revalidatePath môže padnúť v edge runtime — best effort */
+  }
+}
 
 /**
  * GET /api/admin/systems
@@ -96,7 +115,8 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, system: data });
+  bustCache();
+  return NextResponse.json({ ok: true, system: data, propagated: true });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -128,7 +148,8 @@ export async function PATCH(request: NextRequest) {
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  bustCache();
+  return NextResponse.json({ ok: true, propagated: true });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -150,5 +171,6 @@ export async function DELETE(request: NextRequest) {
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  bustCache();
+  return NextResponse.json({ ok: true, propagated: true });
 }

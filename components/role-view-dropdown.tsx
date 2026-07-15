@@ -1,13 +1,13 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import {
   ChevronDown,
   Phone,
   Hammer,
   ClipboardList,
-  GraduationCap,
-  Headphones,
+  Eye,
   X,
   Shield,
   Loader2,
@@ -26,8 +26,7 @@ type ViewAsRole =
   | "obchod"
   | "obhliadky"
   | "realizacie"
-  | "office"
-  | "skolenie";
+  | "office";
 
 export function RoleViewDropdown({
   currentViewAs,
@@ -37,6 +36,55 @@ export function RoleViewDropdown({
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
   const ref = React.useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+
+  // User 2026-07-12: „tu zobrazit ako by bolo tiez fajn ked som na leo
+  // hrisko" — ak sme na `/admin/agents/<uuid>`, ponúkni „Zobraziť ako
+  // tohto usera" ako first option.
+  const agentDetailMatch = React.useMemo(() => {
+    if (!pathname) return null;
+    const m = pathname.match(
+      /^\/admin\/agents\/([a-f0-9-]{16,})(?:\/|$)/i,
+    );
+    return m ? m[1] : null;
+  }, [pathname]);
+  const [agentName, setAgentName] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!agentDetailMatch) {
+      setAgentName(null);
+      return;
+    }
+    // Fetch meno bez zbytočnej záťaže — jednoduchý cache-first via meta title
+    const heading = document.querySelector("h1")?.textContent?.trim();
+    if (heading && heading.length > 0 && heading.length < 80) {
+      setAgentName(heading.replace(/[⚙️👤📊•·]+/g, "").trim());
+    }
+  }, [agentDetailMatch]);
+
+  async function impersonateUser(userId: string) {
+    setBusy("impersonate");
+    try {
+      const res = await fetch("/api/view-as", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        redirect?: string;
+        error?: string;
+      };
+      if (!json.ok || !json.redirect) {
+        alert(`Chyba: ${json.error ?? "unknown"}`);
+        setBusy(null);
+        return;
+      }
+      window.location.href = json.redirect;
+    } catch (e) {
+      alert(`Chyba pripojenia: ${e instanceof Error ? e.message : "unknown"}`);
+      setBusy(null);
+    }
+  }
 
   React.useEffect(() => {
     if (!open) return;
@@ -143,6 +191,35 @@ export function RoleViewDropdown({
             </>
           )}
 
+          {/* View as špecifický user — iba keď admin pozerá profil obchodáka */}
+          {agentDetailMatch && !isViewingAs && (
+            <>
+              <button
+                type="button"
+                onClick={() => impersonateUser(agentDetailMatch)}
+                disabled={!!busy}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-sky-50 border border-sky-200 bg-sky-50/40 disabled:opacity-50"
+              >
+                <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-700 inline-flex items-center justify-center shrink-0">
+                  {busy === "impersonate" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Eye className="w-4 h-4" aria-hidden />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="font-bold text-sm text-sky-900">
+                    Zobraziť ako {agentName ?? "tohto usera"}
+                  </div>
+                  <div className="text-[11px] text-sky-800">
+                    Otvor CRM očami konkrétneho člena tímu
+                  </div>
+                </div>
+              </button>
+              <div className="my-1 border-t" />
+            </>
+          )}
+
           <RoleButton
             role="obchod"
             current={currentViewAs}
@@ -176,18 +253,7 @@ export function RoleViewDropdown({
             title="Obhliadky"
             desc="Formulár, rozmery, foto z miesta"
           />
-          <RoleButton
-            role="skolenie"
-            current={currentViewAs}
-            busy={busy}
-            onClick={switchTo}
-            icon={<GraduationCap className="w-4 h-4" />}
-            iconBg="bg-rose-100 text-rose-700"
-            hover="hover:bg-rose-50"
-            title="Školenie"
-            desc="Onboarding pre nováčikov — videá, podklady"
-            badge="nováčik"
-          />
+          {/* User 2026-07-12: „tato rola prec" — Školenie tlačidlo skryté. */}
         </div>
       )}
     </div>

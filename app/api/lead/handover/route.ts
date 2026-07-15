@@ -142,6 +142,18 @@ export async function POST(request: Request) {
 
     // Update lead — inspection_at/realization_at je NAPLÁNOVANÝ termín,
     // nie čas kliknutia Potvrdiť. last_activity_at je čas kliknutia.
+    // User 2026-07-14: „obchodakova poznamka je privatna. ak chce zdielat
+    // s obhliadkarom, prida ju pri handover-i". Handover note ide do
+    // lead.data.handover_note (verejná pre obhliadkára/realizátora).
+    const currentData = (lead.data as Record<string, unknown> | null) ?? {};
+    const dataWithNote = note
+      ? {
+          ...currentData,
+          handover_note: note,
+          handover_note_by: user.id,
+          handover_note_at: nowIso,
+        }
+      : currentData;
     const updatePayload =
       mode === "inspection"
         ? {
@@ -149,12 +161,14 @@ export async function POST(request: Request) {
             inspection_by: target_user_id,
             inspection_at: scheduledIso,
             last_activity_at: nowIso,
+            ...(note ? { data: dataWithNote } : {}),
           }
         : {
             status: "in_realization",
             realization_by: target_user_id,
             realization_at: scheduledIso,
             last_activity_at: nowIso,
+            ...(note ? { data: dataWithNote } : {}),
           };
     const { error: updErr } = await sb
       .from("leads")

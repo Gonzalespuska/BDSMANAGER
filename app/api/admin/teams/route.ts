@@ -2,9 +2,20 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+function bustCache() {
+  try {
+    revalidatePath("/admin/agents", "page");
+    revalidatePath("/admin/teams", "page");
+    revalidatePath("/realizacie", "layout");
+  } catch {
+    /* best-effort */
+  }
+}
 
 /**
  * CRUD pre realization_teams.
@@ -90,7 +101,8 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, team: data });
+  bustCache();
+  return NextResponse.json({ ok: true, team: data, propagated: true });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -112,7 +124,8 @@ export async function PATCH(request: NextRequest) {
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  bustCache();
+  return NextResponse.json({ ok: true, propagated: true });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -130,5 +143,6 @@ export async function DELETE(request: NextRequest) {
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  bustCache();
+  return NextResponse.json({ ok: true, propagated: true });
 }

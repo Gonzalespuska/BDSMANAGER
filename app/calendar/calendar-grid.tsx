@@ -702,7 +702,17 @@ export function CalendarGrid({
   // Dnes/Mesiac toggle (obchod/admin) — user: "ked obchodak alebo admin
   // dnes nech mu to ukaze dnes na hodiny presne o kolkej ma kto co, a
   // potom sa viem prekliknut spat na mesiac".
-  const [viewMode, setViewMode] = React.useState<"month" | "day">("month");
+  // User 2026-07-12: „hlavne ten kalendar je totalne v pici" — na mobile
+  // month grid (7 stĺpcov) sa nedá čítať. Pridaný „agenda" mód: vertikálny
+  // zoznam dní s eventami. Auto-select agenda na mobile pri prvom mount.
+  const [viewMode, setViewMode] = React.useState<"month" | "day" | "agenda">(
+    "month",
+  );
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setViewMode("agenda");
+    }
+  }, []);
 
   React.useEffect(() => {
     setLocalNotes(notes);
@@ -1017,6 +1027,18 @@ export function CalendarGrid({
               >
                 Mesiac
               </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("agenda")}
+                className={cn(
+                  "px-3 py-1 rounded-md text-xs font-black transition-colors",
+                  viewMode === "agenda"
+                    ? "bg-sky-500 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100",
+                )}
+              >
+                Agenda
+              </button>
             </div>
             <button
               type="button"
@@ -1144,6 +1166,139 @@ export function CalendarGrid({
             );
           })}
         </div>
+        )}
+
+        {/* AGENDA VIEW — mobile-first vertikálny zoznam.
+            User 2026-07-12: „hlavne ten kalendar je totalne v pici" — mesiac
+            grid s 7 stĺpcami sa na mobile nedá čítať. Agenda ukazuje 1 deň
+            na riadok, tap-to-open detail, iba dni s eventami + dnes. */}
+        {viewMode === "agenda" && (
+          <div className="divide-y">
+            {(() => {
+              // User 2026-07-12: „nech ta agenda zacina od dnes ako keby
+              // nech neukazuje stare veci". Filter: iba dnes + budúce dni.
+              const daysWithEvents = cells
+                .filter((c) => c.inMonth && c.date >= todayStr)
+                .map((c) => ({
+                  ...c,
+                  notes: notesByDate.get(c.date) ?? [],
+                  callbacks: callbacksByDate.get(c.date) ?? [],
+                }))
+                .filter(
+                  (c) =>
+                    c.date === todayStr ||
+                    c.notes.length > 0 ||
+                    c.callbacks.length > 0,
+                );
+              if (daysWithEvents.length === 0) {
+                return (
+                  <div className="p-8 text-center text-sm text-muted-foreground italic">
+                    Žiadne udalosti v tomto mesiaci.
+                  </div>
+                );
+              }
+              return daysWithEvents.map((c) => {
+                const dateObj = new Date(c.date + "T12:00:00");
+                const weekday = WEEKDAYS[
+                  dateObj.getDay() === 0 ? 6 : dateObj.getDay() - 1
+                ];
+                const isToday = c.date === todayStr;
+                const dayNum = dateObj.getDate();
+                const monthLbl = MONTHS[dateObj.getMonth()] ?? "";
+                return (
+                  <button
+                    key={c.date}
+                    type="button"
+                    onClick={() => setSelected(c.date)}
+                    className={cn(
+                      "w-full flex items-start gap-3 p-4 text-left transition-colors hover:bg-sky-50/60",
+                      isToday && "bg-sky-50/40 ring-2 ring-inset ring-sky-300",
+                    )}
+                  >
+                    {/* Left: datum stĺpec */}
+                    <div
+                      className={cn(
+                        "shrink-0 w-14 rounded-xl flex flex-col items-center justify-center py-2",
+                        isToday
+                          ? "bg-sky-500 text-white"
+                          : "bg-slate-100 text-slate-700",
+                      )}
+                    >
+                      <div className="text-[10px] font-black uppercase tracking-wider opacity-80">
+                        {weekday.slice(0, 3)}
+                      </div>
+                      <div className="text-2xl font-black leading-none tabular-nums">
+                        {dayNum}
+                      </div>
+                      <div className="text-[9px] font-bold opacity-70 mt-0.5">
+                        {monthLbl.slice(0, 3)}
+                      </div>
+                    </div>
+                    {/* Right: eventy */}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      {isToday && (
+                        <div className="text-[10px] uppercase font-black text-sky-700 tracking-wider">
+                          🔴 Dnes
+                        </div>
+                      )}
+                      {c.callbacks.length > 0 && (
+                        <div className="space-y-0.5">
+                          {c.callbacks.slice(0, 3).map((cb, i) => (
+                            <div
+                              key={i}
+                              className="text-xs font-bold text-emerald-800 inline-flex items-center gap-1.5"
+                            >
+                              <span className="text-emerald-500">📞</span>
+                              <span className="truncate">
+                                {cb.lead_name} · {new Date(cb.at).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          ))}
+                          {c.callbacks.length > 3 && (
+                            <div className="text-[10px] text-muted-foreground">
+                              +{c.callbacks.length - 3} ďalších callbackov
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {c.notes.length > 0 && (
+                        <div className="space-y-0.5">
+                          {c.notes.slice(0, 3).map((n) => (
+                            <div
+                              key={n.id}
+                              className="text-xs font-semibold text-slate-800 inline-flex items-center gap-1.5"
+                            >
+                              <span className="shrink-0">
+                                {n.kind === "call"
+                                  ? "📞"
+                                  : n.kind === "meeting"
+                                    ? "🗓"
+                                    : "📝"}
+                              </span>
+                              <span className="truncate">{n.body}</span>
+                            </div>
+                          ))}
+                          {c.notes.length > 3 && (
+                            <div className="text-[10px] text-muted-foreground">
+                              +{c.notes.length - 3} ďalších
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {isToday &&
+                        c.callbacks.length === 0 &&
+                        c.notes.length === 0 && (
+                          <div className="text-xs text-muted-foreground italic">
+                            Žiadne udalosti dnes.
+                          </div>
+                        )}
+                    </div>
+                    <div className="text-slate-400 self-center shrink-0">→</div>
+                  </button>
+                );
+              });
+            })()}
+          </div>
         )}
       </div>
 

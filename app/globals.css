@@ -71,10 +71,18 @@
       font-size: inherit;
     }
   }
-  /* Väčšie touch targets na mobile (Apple HIG 44pt, Google Material 48dp) */
+  /* Väčšie touch targets na mobile (Apple HIG 44pt, Google Material 48dp).
+     User 2026-07-12: „polovica buttons na mobile je malo reaktivna" —
+     rozšírené aj na <a> a [href] aby link-tiles boli spoľahlivo tapnuteľné. */
   @media (max-width: 767px) {
-    button, [role="button"] {
+    button, [role="button"], a[href]:not(.no-tap-target) {
       min-height: 44px;
+    }
+    /* Tap-highlight feedback — inak sa v niektorých WebKit zdá že klik
+       neprešiel. Ľahká sivá blesk. */
+    button:active, [role="button"]:active, a[href]:active {
+      opacity: 0.8;
+      transition: opacity 0.1s;
     }
   }
   /* Smooth scrolling + iOS text-size adjust */

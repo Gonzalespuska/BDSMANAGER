@@ -165,6 +165,20 @@ export default async function ObhliadkaDetailPage({
         </div>
       )}
 
+      {/* Handover poznámka od obchodáka — user 2026-07-14: „ak prida poznamku
+          pri poslani na obhliadku, vtedy to vidi aj obhliadkar". Táto
+          poznámka je verejná (rozdiel od agent_note na leade v /agent). */}
+      {typeof data.handover_note === "string" && data.handover_note && (
+        <div className="rounded-xl border-2 border-sky-300 bg-sky-50/50 p-4">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-sky-800 mb-1 inline-flex items-center gap-2">
+            📝 Poznámka od obchodáka (pri poslaní na obhliadku)
+          </div>
+          <p className="text-sm text-sky-900 whitespace-pre-wrap font-semibold">
+            {data.handover_note}
+          </p>
+        </div>
+      )}
+
       {/* Priradenie — obhliadkára ukazovať nemá zmysel (vidí sám seba),
           iba obchodníka koho môže kontaktovať cez DM. Admin, ktorý pozerá
           cudziu obhliadku, si tú info nájde v /obhliadky liste. */}
@@ -178,7 +192,7 @@ export default async function ObhliadkaDetailPage({
             <DmButton
               peerId={salesUser.id}
               peerName={salesUser.name}
-              prefill={`Ahoj ${salesUser.name.split(" ")[0]}, píšem ti ohľadom obhliadky u klienta „${l.name}"${data.lokalita ? ` (${data.lokalita})` : ""}. `}
+              prefill={`Ahoj ${salesUser.name.split(" ")[0]}, píšem ti ohľadom obhliadky u klienta „${l.name}"${data.lokalita ? ` (${data.lokalita})` : ""} → /obhliadky/${l.id} `}
             />
           </div>
         </div>

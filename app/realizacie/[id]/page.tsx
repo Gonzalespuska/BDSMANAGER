@@ -15,10 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatPhoneSK } from "@/lib/phone-format";
 import type { Lead } from "@/lib/types/lead";
 
-import { MediaUpload } from "./media-upload";
-import { MediaGallery } from "./media-gallery";
 import { MarkDoneButton } from "./mark-done-button";
-import { ExecutionWizard } from "./execution-wizard";
 import { DmButton } from "@/components/dm-button";
 import {
   getZodpovednostMinEur,
@@ -30,10 +27,30 @@ export const dynamic = "force-dynamic";
 
 export default async function RealizaciaDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  // Univerzálny back-link — akceptujeme len INTERNÉ paths ("/…" ale nie "//").
+  // User 2026-07-12: „chcem aby ma to vratilo tam kade som siel — vsade
+  // cez stranku".
+  const fromRaw = sp.from ?? null;
+  const backHref =
+    fromRaw && fromRaw.startsWith("/") && !fromRaw.startsWith("//") && fromRaw.length < 500
+      ? fromRaw
+      : null;
+  const backLabel = backHref?.startsWith("/dm/")
+    ? "💬 Späť do chatu"
+    : backHref?.startsWith("/admin/agents/")
+      ? "Späť na profil obchodáka"
+      : backHref?.startsWith("/admin")
+        ? "Späť do Adminu"
+        : backHref
+          ? "Späť"
+          : null;
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
 
@@ -63,13 +80,7 @@ export default async function RealizaciaDetailPage({
     l.assigned_to === user.id;
   if (!canAccess) redirect("/realizacie");
 
-  // Média
-  const { data: mediaRaw } = await sb
-    .from("realization_media")
-    .select("id, storage_path, file_type, original_filename, caption, uploaded_at, uploaded_by")
-    .eq("lead_id", id)
-    .order("uploaded_at", { ascending: false });
-  const media = mediaRaw ?? [];
+  // Média fetch presunutý do Kontent modulu (IN BUILD).
 
   // Assigned user info
   const userIds = [l.assigned_to, l.realization_by].filter(Boolean) as string[];
@@ -94,22 +105,57 @@ export default async function RealizaciaDetailPage({
   return (
     <div className="space-y-6">
       <header>
-        <Link
-          href="/realizacie"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-emerald-700 mb-3 px-2 py-1 rounded-md hover:bg-emerald-50/60 transition-colors w-fit"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
-          Späť na Realizácie
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <Link
+            href="/realizacie"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-emerald-700 px-2 py-1 rounded-md hover:bg-emerald-50/60 transition-colors w-fit"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
+            Späť na Realizácie
+          </Link>
+          {backHref && backLabel && (
+            <Link
+              href={backHref}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-700 hover:text-sky-900 px-2 py-1 rounded-md bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-colors w-fit"
+            >
+              {backLabel}
+            </Link>
+          )}
+        </div>
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
-              <Hammer className="w-6 h-6 text-emerald-500" aria-hidden />
+          <div className="min-w-0">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
               {l.name}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {isCompleted ? "✅ Realizácia dokončená" : "🔨 Aktívna realizácia"}
-            </p>
+            {/* User 2026-07-12: „termin realizacie nech je vedla mena velkym
+                je to asi najdolezitejsia vec" — presunuté z malého sales-info
+                riadku sem, veľkým fontom. Aktívna realizácia hlavička dole prec. */}
+            {l.realization_at && (
+              <div className="mt-2 inline-flex items-center gap-2 rounded-xl border-2 border-sky-300 bg-sky-50 px-3 py-1.5">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-sky-700">
+                  Termín realizácie
+                </span>
+                <span className="text-lg md:text-xl font-black tabular-nums text-sky-900">
+                  {(() => {
+                    // CF Workers edge nemá full ICU s timeZone option — musíme
+                    // manuálne posunúť UTC → SK (+2h leto). BUG FIX 2026-07-11.
+                    const at = new Date(l.realization_at);
+                    const sk = new Date(at.getTime() + 2 * 3600 * 1000);
+                    const dd = String(sk.getUTCDate()).padStart(2, "0");
+                    const mm = String(sk.getUTCMonth() + 1).padStart(2, "0");
+                    const yyyy = sk.getUTCFullYear();
+                    const hh = String(sk.getUTCHours()).padStart(2, "0");
+                    const mi = String(sk.getUTCMinutes()).padStart(2, "0");
+                    return `${dd}.${mm}.${yyyy} · ${hh}:${mi}`;
+                  })()}
+                </span>
+              </div>
+            )}
+            {isCompleted && (
+              <p className="text-sm text-emerald-700 font-bold mt-2">
+                ✅ Realizácia dokončená
+              </p>
+            )}
           </div>
           {l.value_estimate != null && (
             <div className="rounded-xl bg-emerald-50 border-2 border-emerald-200 px-4 py-2 text-right">
@@ -131,7 +177,7 @@ export default async function RealizaciaDetailPage({
         <InfoCard icon={<Hammer className="w-4 h-4" />} label="Typ podlahy" value={data.typ_podlahy ?? "—"} />
         <InfoCard icon={<Phone className="w-4 h-4" />} label="Telefón" value={l.phone ? formatPhoneSK(l.phone) : "—"} link={l.phone ? `tel:${l.phone}` : undefined} />
         <InfoCard icon={<Calendar className="w-4 h-4" />} label="Priestor" value={data.priestor ?? "—"} />
-        <InfoCard icon={<CheckCircle2 className="w-4 h-4" />} label="Termín (želaný)" value={data.termin ?? "—"} />
+        {/* User 2026-07-12: „Termín (želaný) blbost, termín je hore pod menom" */}
       </div>
 
       {/* Message od zákazníka */}
@@ -141,6 +187,18 @@ export default async function RealizaciaDetailPage({
             Poznámka zákazníka
           </div>
           <p className="text-sm whitespace-pre-wrap">{data.message}</p>
+        </div>
+      )}
+
+      {/* Handover poznámka od obchodáka (pri poslaní na realizáciu). */}
+      {typeof data.handover_note === "string" && data.handover_note && (
+        <div className="rounded-xl border-2 border-sky-300 bg-sky-50/50 p-4">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-sky-800 mb-1 inline-flex items-center gap-2">
+            📝 Poznámka od obchodáka (pri poslaní na realizáciu)
+          </div>
+          <p className="text-sm text-sky-900 whitespace-pre-wrap font-semibold">
+            {data.handover_note}
+          </p>
         </div>
       )}
 
@@ -167,7 +225,7 @@ export default async function RealizaciaDetailPage({
             <DmButton
               peerId={salesUser.id}
               peerName={salesUser.name}
-              prefill={`Ahoj ${salesUser.name.split(" ")[0]}, píšem ti ohľadom realizácie u klienta „${l.name}". `}
+              prefill={`Ahoj ${salesUser.name.split(" ")[0]}, píšem ti ohľadom realizácie u klienta „${l.name}" → /realizacie/${id} `}
             />
           </div>
           {salesUser.email && (
@@ -175,109 +233,61 @@ export default async function RealizaciaDetailPage({
               📧 {salesUser.email}
             </div>
           )}
-          {l.realization_at && (
-            <div className="text-[11px] text-sky-800 mt-2 font-semibold">
-              🔨 Termín realizácie:{" "}
-              {(() => {
-                // CF Workers edge nemá full ICU s timeZone option — musíme
-                // manuálne posunúť UTC → SK (+2h leto). BUG FIX 2026-07-11.
-                const at = new Date(l.realization_at);
-                const sk = new Date(at.getTime() + 2 * 3600 * 1000);
-                return sk.toISOString().replace("T", " ").slice(0, 16);
-              })()}
-            </div>
-          )}
+          {/* Termín realizácie presunutý do hlavičky (vedľa mena, big font). */}
         </div>
       )}
 
-      {/* Realizačný wizard — Zodpovednosť · Inventúra · Odovzdanie
-          (interaktívny inline flow so podpismi + auto-výpočet materiálu).
-          Statické PDF plány sú dostupné na /realizacie/[id]/plan?view=... */}
-      {(user.role === "realizacie" || user.role === "admin") && !isCompleted && (
-        <ExecutionWizard
-          leadId={id}
-          m2={parseFloat(data.plocha ?? "0") || 0}
-          typPodlahy={data.typ_podlahy ?? null}
-          priestor={data.priestor ?? null}
-          team={await (async () => {
-            const { data: teamRows } = await sb
-              .from("users")
-              .select("id, name")
-              .eq("role", "realizacie")
-              .eq("active", true)
-              .order("name");
-            return (teamRows ?? []).map((u) => ({
-              id: u.id as string,
-              name: u.name as string,
-            }));
-          })()}
-          meId={user.id}
-          meName={user.name}
-          existing={
-            ((l.data as Record<string, unknown> | null | undefined)
-              ?.realization_execution as never) ?? {}
-          }
-        />
-      )}
-
-      {/* Kontent button — realizator ako field reporter pre marketing */}
-      <Link
-        href={`/realizacie/${id}/kontent`}
-        className="block rounded-xl border-2 border-fuchsia-300 bg-gradient-to-br from-fuchsia-50 to-pink-50 hover:from-fuchsia-100 hover:to-pink-100 p-4 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-fuchsia-500 text-white flex items-center justify-center text-2xl shadow-md">
-            📱
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-black text-lg text-fuchsia-900">
-              Kontent — foto/video pre marketing
-            </div>
-            <div className="text-xs text-fuchsia-800">
-              Fotky a videa pred / počas / po práci pre stories a reels.
-              Marketing to zostrihá.
-            </div>
-          </div>
-          <div className="text-fuchsia-600 font-black">→</div>
-        </div>
-      </Link>
-
-      {/* Statické tlačiteľné PDF plány — druhotné, sekundárny prístup */}
-      <details className="rounded-xl border-2 border-slate-200 bg-white overflow-hidden">
-        <summary className="px-4 py-2.5 cursor-pointer text-xs font-bold text-slate-600 hover:bg-slate-50 uppercase tracking-wider">
-          📋 Tlačiteľné plány (postup / sklad / zodpovednosť — statické PDF)
-        </summary>
-        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-          <Link
-            href={`/realizacie/${id}/plan?view=postup`}
-            className="rounded-lg border hover:bg-emerald-50 hover:border-emerald-300 px-3 py-2 font-semibold"
-          >
-            🔨 Postup (PDF)
-          </Link>
+      {/* User 2026-07-12: „ked som v detaile tak tie buttons musia vyzerat
+          rovnako aj robit to iste" — buttonový rad zhodný s listom
+          (/realizacie), navigácia na /plan?view=X, Kontent v IN BUILD stave.
+          ExecutionWizard interaktívny flow presunutý do plan viewov. */}
+      {!isCompleted && (
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-${showZodpovednost ? "4" : "3"} gap-2`}
+        >
           <Link
             href={`/realizacie/${id}/plan?view=sklad`}
-            className="rounded-lg border hover:bg-orange-50 hover:border-orange-300 px-3 py-2 font-semibold"
+            draggable={false}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm no-drag"
           >
-            📦 Zoznam (PDF)
+            <span>📦</span>
+            Inventúra
+          </Link>
+          <Link
+            href={`/realizacie/${id}/plan?view=postup`}
+            draggable={false}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm no-drag"
+          >
+            <span>🔨</span>
+            Postup
           </Link>
           {showZodpovednost && (
             <Link
               href={`/realizacie/${id}/plan?view=zodpovednost`}
-              className="rounded-lg border hover:bg-amber-50 hover:border-amber-300 px-3 py-2 font-semibold"
+              draggable={false}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm no-drag"
             >
-              ✍️ Zodpovednosť (PDF)
+              <span>✍️</span>
+              Zodpovednosť
             </Link>
           )}
+          <div
+            title="Kontent modul je vo výstavbe — dokončíme po mobil optimalizácii"
+            aria-disabled="true"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-200 text-slate-500 px-3 py-3 text-sm md:text-base font-black shadow-sm no-drag cursor-not-allowed"
+          >
+            <span className="opacity-60">📱</span>
+            <span className="opacity-60">Kontent</span>
+            <span className="ml-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
+              🚧 In build
+            </span>
+          </div>
         </div>
-      </details>
-
-      {/* Media upload — iba pre realizator / admin */}
-      {(user.role === "realizacie" || user.role === "admin") && !isCompleted && (
-        <MediaUpload leadId={id} />
       )}
 
-      {/* Galéria */}
-      <MediaGallery leadId={id} media={media} canDelete={user.role === "admin" || user.role === "realizacie"} />
+      {/* Media upload + galéria — presunuté do Kontent modulu (IN BUILD).
+          User 2026-07-12: „nahrat foto/video z realizacie prec, aj Zatial
+          ziadne fotky ani videa prec — patri to do Kontent". */}
 
       {/* Mark as done — iba realizator */}
       {isRealizator && !isCompleted && (

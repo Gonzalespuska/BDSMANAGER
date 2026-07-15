@@ -114,6 +114,14 @@ export async function POST(request: NextRequest) {
     body_text?: string;
     pdf_base64?: string;
     pdf_filename?: string;
+    /**
+     * Voliteľné — druhá varianta CP (napr. epoxid + polyuretán varianta).
+     * User 2026-07-15: „Moznost poslat dve CP do jedneho mailu — jednu
+     * plusko a druhu manualne vyklikas". Ak je zadané, priloží sa aj
+     * druhé PDF k rovnakému emailu.
+     */
+    pdf_base64_2?: string;
+    pdf_filename_2?: string;
     /** Email obchodáka (Reply-To + BCC copy do jeho inboxu) */
     agent_email?: string;
     /** Meno obchodáka — vloží sa do From display name */
@@ -215,6 +223,16 @@ export async function POST(request: NextRequest) {
           filename: body.pdf_filename ?? "ponuka.pdf",
           content: body.pdf_base64,
         },
+        // Voliteľne druhá varianta CP (napr. epoxid A + polyuretán B).
+        // User 2026-07-15: „jednu plusko a druhu manualne vyklikas".
+        ...(body.pdf_base64_2
+          ? [
+              {
+                filename: body.pdf_filename_2 ?? "ponuka-variant-2.pdf",
+                content: body.pdf_base64_2,
+              },
+            ]
+          : []),
       ],
     });
 

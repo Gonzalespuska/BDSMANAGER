@@ -186,6 +186,9 @@ export function LeadNotesInline({
         <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1.5">
           <StickyNote className="w-3 h-3" aria-hidden />
           Poznámka
+          <span className="ml-1 rounded-full bg-amber-200 text-amber-900 border border-amber-400 px-1.5 py-0 text-[9px] normal-case tracking-normal">
+            🔒 vidíš iba ty
+          </span>
         </div>
         <textarea
           value={draft}
@@ -193,7 +196,7 @@ export function LeadNotesInline({
           onKeyDown={handleKeyDown}
           autoFocus
           rows={2}
-          placeholder="napr. 'zavolat ujovi Petrovi na 12:00'"
+          placeholder="napr. 'zavolat ujovi Petrovi na 12:00' — tvoja privátna poznámka, obhliadkár ani realizátor ju nevidí"
           className="w-full px-2 py-1.5 rounded-md border border-amber-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
         />
 
@@ -369,9 +372,12 @@ export function LeadNotesInline({
     <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 group relative">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1 flex-wrap">
             <StickyNote className="w-3 h-3" aria-hidden />
             Poznámka
+            <span className="ml-1 rounded-full bg-amber-200 text-amber-900 border border-amber-400 px-1.5 py-0 text-[9px] normal-case tracking-normal">
+              🔒 vidíš iba ty
+            </span>
           </div>
           <p className="text-sm text-amber-900 whitespace-pre-wrap leading-snug">
             {note}

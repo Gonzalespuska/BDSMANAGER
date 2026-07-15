@@ -347,22 +347,10 @@ export default async function NotifikaciePage() {
       )}
 
       {/* ────────────── 3. OSOBNÝ KALENDÁR ÚLOH ────────────── */}
+      {/* User 2026-07-12: „osobny kalendar prec" — hlavička skrytá, samotný
+          zoznam sa ukazuje LEN keď má aspoň jednu úlohu. Prázdny stav nič. */}
+      {tasks.length > 0 && (
       <section className="rounded-2xl border-2 border-violet-200 bg-white overflow-hidden">
-        <header className="px-4 py-3 border-b bg-violet-50/60 flex items-center gap-2 flex-wrap">
-          <ListChecks className="w-4 h-4 text-violet-700" aria-hidden />
-          <h2 className="font-extrabold text-sm text-violet-900">
-            📅 Osobný kalendár úloh
-          </h2>
-          <span className="text-[10px] text-violet-800 italic ml-auto">
-            {tasks.length} úloh · najbližšie hore
-          </span>
-        </header>
-        {tasks.length === 0 ? (
-          <div className="p-6 text-center text-sm text-muted-foreground italic">
-            Zatiaľ žiadne úlohy. Ako ti admin alebo obchodák niečo priradí,
-            objaví sa tu.
-          </div>
-        ) : (
           <div className="divide-y">
             {sortedDays.map(([day, dayTasks]) => {
               const dayDate = new Date(day + "T00:00:00");
@@ -451,8 +439,8 @@ export default async function NotifikaciePage() {
               );
             })}
           </div>
-        )}
       </section>
+      )}
 
       {/* ────────────── 4. NOVÉ LEADY (obchod, malá sekcia) ────────────── */}
       {isObchod && (

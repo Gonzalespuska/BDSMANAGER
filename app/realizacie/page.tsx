@@ -23,7 +23,11 @@ export const dynamic = "force-dynamic";
  *     alebo všetky ak admin
  *   - Historické realizácie (won so realization_completed_at)
  */
-export default async function RealizacieDashboard() {
+export default async function RealizacieDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
   const user = await getCurrentAppUser();
   if (!user) redirect("/login");
 
@@ -31,6 +35,17 @@ export default async function RealizacieDashboard() {
     const { dashboardPathForRole } = await import("@/lib/roles");
     redirect(dashboardPathForRole(user.role));
   }
+
+  // Week offset: ?week=0 (default, tento týždeň), ?week=1 (budúci), atď.
+  // User 2026-07-12: „daj aktivne tento tyzden a vedla scroll option sipky
+  // ze vies scrollnut dalsi tyzden loadnut".
+  const sp = await searchParams;
+  const weekOffset = (() => {
+    const n = parseInt(sp.week ?? "0", 10);
+    if (!Number.isFinite(n)) return 0;
+    // Clamp -12 to +12 týždňov aby nikto omylom nespravil DoS.
+    return Math.max(-12, Math.min(12, n));
+  })();
 
   const sb = createAdminClient();
 
@@ -116,28 +131,104 @@ export default async function RealizacieDashboard() {
         </p>
       </header>
 
-      {/* Stats — iba jeden veľký tile "Aktívne realizácie". User: "dokoncene
-          a spolu daj prec to tam netreba ten riadok". Dokončené prípadne
-          pojedú do vlastnej sekcie nižšie. */}
-      <div className="rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-white p-5 flex items-center gap-4 shadow-sm">
-        <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md shrink-0">
-          <Calendar className="w-7 h-7" aria-hidden />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs md:text-sm font-black uppercase tracking-widest text-emerald-800">
-            Aktívne realizácie
+      {/* Stats — jeden tile "Aktívne tento týždeň" + navigácia po týždňoch.
+          User 2026-07-12: „daj aktivne tento tyzden a vedla scroll option
+          sipky ze vies scrollnut dalsi tyzden loadnut". */}
+      {(() => {
+        // Počet realizácií v aktuálnom (offsetnutom) 7-dňovom okne.
+        const now = new Date();
+        const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const start = new Date(today0);
+        start.setDate(start.getDate() + weekOffset * 7);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 7);
+        const activeInWeek = active.filter((l) => {
+          const at = new Date(l.realization_at);
+          // Aktuálny týždeň (weekOffset=0): počítame aj minulé (in-progress)
+          // realizácie — tie sa v day-liste prilepia do „Dnes". Ostatné
+          // týždne: len tie čo padnú do zvoleného 7-dňového okna.
+          if (weekOffset === 0) return at < end;
+          return at >= start && at < end;
+        });
+        const weekLabel =
+          weekOffset === 0
+            ? "Aktívne tento týždeň"
+            : weekOffset === 1
+              ? "Budúci týždeň"
+              : weekOffset === -1
+                ? "Minulý týždeň"
+                : weekOffset > 0
+                  ? `O ${weekOffset} týždne`
+                  : `Pred ${Math.abs(weekOffset)} týždňami`;
+        const rangeLabel = (() => {
+          const fmt = (d: Date) =>
+            `${String(d.getDate()).padStart(2, "0")}.${String(
+              d.getMonth() + 1,
+            ).padStart(2, "0")}.`;
+          const endInclusive = new Date(end);
+          endInclusive.setDate(endInclusive.getDate() - 1);
+          return `${fmt(start)} – ${fmt(endInclusive)}`;
+        })();
+        return (
+          <div className="rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-white p-5 flex items-center gap-4 shadow-sm">
+            <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md shrink-0">
+              <Calendar className="w-7 h-7" aria-hidden />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs md:text-sm font-black uppercase tracking-widest text-emerald-800">
+                {weekLabel}
+              </div>
+              <div className="flex items-baseline gap-3 flex-wrap mt-1">
+                <div className="text-4xl md:text-5xl font-black tabular-nums text-slate-900 leading-none">
+                  {activeInWeek.length}
+                </div>
+                <div className="text-xs md:text-sm text-emerald-800 font-semibold">
+                  {rangeLabel}
+                </div>
+              </div>
+            </div>
+            {/* Šípky — prev / this / next týždeň */}
+            <div className="flex items-center gap-1 shrink-0">
+              <Link
+                href={`/realizacie?week=${weekOffset - 1}`}
+                aria-label="Predchádzajúci týždeň"
+                draggable={false}
+                className="no-drag w-10 h-10 rounded-full border-2 border-emerald-300 bg-white hover:bg-emerald-50 flex items-center justify-center text-emerald-700 hover:text-emerald-900 font-black text-lg shadow-sm transition-colors"
+              >
+                ‹
+              </Link>
+              {weekOffset !== 0 && (
+                <Link
+                  href="/realizacie"
+                  aria-label="Tento týždeň"
+                  draggable={false}
+                  className="no-drag h-10 rounded-full border-2 border-emerald-300 bg-white hover:bg-emerald-50 px-3 flex items-center justify-center text-emerald-700 hover:text-emerald-900 text-[10px] font-black uppercase tracking-wider shadow-sm transition-colors"
+                >
+                  Dnes
+                </Link>
+              )}
+              <Link
+                href={`/realizacie?week=${weekOffset + 1}`}
+                aria-label="Nasledujúci týždeň"
+                draggable={false}
+                className="no-drag w-10 h-10 rounded-full border-2 border-emerald-300 bg-white hover:bg-emerald-50 flex items-center justify-center text-emerald-700 hover:text-emerald-900 font-black text-lg shadow-sm transition-colors"
+              >
+                ›
+              </Link>
+            </div>
           </div>
-          <div className="text-4xl md:text-5xl font-black tabular-nums text-slate-900 leading-none mt-1">
-            {active.length}
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
-      {/* ─── AKTÍVNE — 7-dňový plán ──────────────────────────────────── */}
+      {/* ─── AKTÍVNE — 7-dňový plán (posúva sa cez ?week=N) ──────────── */}
       <section className="space-y-3">
       {(() => {
         const now = new Date();
-        const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayRaw = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // today0 = začiatok viditeľného 7-dňového okna. weekOffset=0 → dnes,
+        // weekOffset=1 → o týždeň, atď.
+        const today0 = new Date(todayRaw);
+        today0.setDate(today0.getDate() + weekOffset * 7);
         const in7d = new Date(today0);
         in7d.setDate(in7d.getDate() + 7);
         const week: Array<{ date: Date; iso: string; items: typeof active }> = [];
@@ -161,8 +252,9 @@ export default async function RealizacieDashboard() {
           const slot = week.find((w) => w.iso === isoDay);
           if (slot) slot.items.push(l);
           else if (at >= in7d) laterItems.push(l);
-          // items pred dneškom (in progress) → prilepím do dnes
-          else week[0].items.push(l);
+          // items mimo okna (pred alebo po) → v laterItems iba ak sme
+          // v aktuálnom týždni (weekOffset=0); inak zobrazíme len okno.
+          else if (weekOffset === 0) week[0].items.push(l);
         }
 
         // Manual weekday/month labels — CF Workers edge nemá full ICU
@@ -357,6 +449,28 @@ export default async function RealizacieDashboard() {
                                         🎨 {data.typ_podlahy}
                                       </span>
                                     )}
+                                    {/* User 2026-07-12: „niekde tu treba
+                                        aby vzdy pisalo system ktory obchodak
+                                        pridelil po obhliadke". Systém sa
+                                        ukladá v data.realization_system.system
+                                        (kód napr. 264, 3000FX). */}
+                                    {(() => {
+                                      const rs = (
+                                        data.realization_system as
+                                          | {
+                                              system?: string;
+                                              type?: string;
+                                            }
+                                          | undefined
+                                      ) ?? {};
+                                      const sysCode = rs.system ?? rs.type ?? null;
+                                      if (!sysCode) return null;
+                                      return (
+                                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 text-sm font-black">
+                                          🧪 Systém {sysCode}
+                                        </span>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                                 <div className="text-right shrink-0">
@@ -409,15 +523,17 @@ export default async function RealizacieDashboard() {
                                     <span>🔨</span>
                                     Postup
                                   </Link>
-                                  <Link
-                                    href={`/realizacie/${l.id}/kontent`}
-                                    draggable={false}
-                                    title="Foto/video zo stavby pre marketing"
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-3 py-3 text-sm md:text-base font-black transition-colors shadow-sm no-drag"
+                                  <div
+                                    title="Kontent modul je vo výstavbe — dokončíme po mobil optimalizácii"
+                                    aria-disabled="true"
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-200 text-slate-500 px-3 py-3 text-sm md:text-base font-black shadow-sm no-drag cursor-not-allowed relative overflow-hidden"
                                   >
-                                    <span>📱</span>
-                                    Kontent
-                                  </Link>
+                                    <span className="opacity-60">📱</span>
+                                    <span className="opacity-60">Kontent</span>
+                                    <span className="ml-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
+                                      🚧 In build
+                                    </span>
+                                  </div>
                                 </div>
                               );
                             })()}

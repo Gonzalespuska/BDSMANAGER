@@ -20,7 +20,7 @@ export type FloorType =
   | "mramorova"
   | "metalicka";
 
-export type MaterialUnit = "area" | "level" | "count" | "surcharge";
+export type MaterialUnit = "area" | "level" | "count" | "surcharge" | "sokel";
 
 export interface Material {
   id: string;
@@ -38,6 +38,14 @@ export interface Material {
   min_mm?: number;
   /** Pre unit="level": default hrúbka v mm pre init. */
   default_mm?: number;
+  /** Pre unit="sokel": sadzba €/bm/cm výšky (default 1,20). */
+  price_per_bm_per_cm?: number;
+  /** Pre unit="sokel": default výška v cm. */
+  default_cm?: number;
+  /** Pre unit="sokel": min výška v cm. */
+  min_cm?: number;
+  /** Pre unit="sokel": max výška v cm. */
+  max_cm?: number;
   /** Pre unit="count": label jednotky pre UI. */
   unit_label?: string;
   optional: boolean;
@@ -172,6 +180,28 @@ function commonOptional(floor_type: FloorType): Material[] {
       optional: true,
     },
     {
+      // SOKEL — epoxidový sokel po obvode. User 2026-07-12: „daj obchodakovi
+      // do specialnych operacii sokel na m2 aj s vyskou v cm, ked ho pridá
+      // musí sa objaviť aj v postupe realizatora aj v inventure a v admine
+      // možnosť nastavovať sadzbu".
+      //
+      // Cena = bm × cm × price_per_bm_per_cm.
+      // Sadzba 1,20 €/bm/cm ≈ 12 €/bm pri štandardnej výške 10 cm.
+      // Zdroj: Peto/Sika market rate 2025, konzultované s userom.
+      // Sadzba je admin-editovateľná (app_settings.sokel_rate_per_bm_per_cm).
+      id: `${floor_type}-sokel`,
+      floor_type,
+      name: "Sokel epoxidový (po obvode)",
+      unit: "sokel",
+      price_per_sqm: 0,
+      price_per_bm_per_cm: 1.2,
+      default_cm: 10,
+      min_cm: 5,
+      max_cm: 30,
+      unit_label: "bm × cm",
+      optional: true,
+    },
+    {
       // ZLOŽKA — obchodník KLIKNE na názov, premenuje ju (napr. "Doprava 200 km",
       // "Demontáž starej podlahy") + zadá sumu. Zobrazí sa na PDF/FA ako
       // samostatný riadok s tým názvom. Bez premenovania sa NEZAPOČÍTA — UI ju
@@ -242,41 +272,41 @@ export const MATERIALS: Material[] = [
     optional: false,
     variant: "polyuretan",
   },
-  // Farebný náter — variant Epoxid (Sikafloor-264 Plus 5,78 €/kg × 1,40 = 8,09 náklad)
-  // Cieľ: 8 + 12 + 48 = 68 €/m² bez laku (materiál 9,72 + práca 22 = 31,72 → 53 % marža)
+  // User 2026-07-14: „polyuretan davame za 77€ m2 total, epoxid 59€,
+  // s lakom 66€". Rozloženie zachováva úpravu+penetráciu (8+12) a
+  // upravuje farebný + lak.
+  //
+  // Epoxid total bez laku = 8 + 12 + 39 = 59 €/m² ✓
+  // Epoxid total s lakom  = 8 + 12 + 39 + 7 = 66 €/m² ✓
+  // Polyuretán total      = 8 + 12 + 47 + 10 = 77 €/m² ✓
   {
     id: "jednofarebna-farebny-epoxid",
     floor_type: "jednofarebna",
     name: "Farebný náter",
     unit: "area",
-    price_per_sqm: 48,
+    price_per_sqm: 39,
     optional: false,
     variant: "epoxid",
   },
-  // Farebný náter — variant Polyuretán (Sikafloor-3000 11,00 €/kg × 1,30 = 14,30 náklad)
-  // Cieľ: 8 + 12 + 60 + 10 = 90 €/m² s lakom (materiál 19,94 + práca 22 = 41,94 → 53 % marža)
   {
     id: "jednofarebna-farebny-polyuretan",
     floor_type: "jednofarebna",
     name: "Farebný náter",
     unit: "area",
-    price_per_sqm: 60,
+    price_per_sqm: 47,
     optional: false,
     variant: "polyuretan",
   },
-  // Vrchný lak — variant Epoxid (Sikafloor-304W Matt 20,48 €/kg × 0,18 = 3,69 náklad)
   {
     id: "jednofarebna-lak-epoxid",
     floor_type: "jednofarebna",
     name: "Vrchný lak",
     unit: "area",
-    price_per_sqm: 13,
+    price_per_sqm: 7,
     optional: false,
     default_enabled: false,
     variant: "epoxid",
   },
-  // Vrchný lak — variant Polyuretán (Sikafloor-3310 7,15 €/kg × 0,20 = 1,43 náklad)
-  // POZOR: spotreba 0,20 (NIE 0,40 ako som mal predtým) — Sika TDS 0,15–0,25 kg/m²
   {
     id: "jednofarebna-lak-polyuretan",
     floor_type: "jednofarebna",
@@ -292,12 +322,15 @@ export const MATERIALS: Material[] = [
   // ═══ CHIPSOVÁ ════════════════════════════════════════════════════════
   // Cieľ: 8 + 12 + 76 = 96 €/m² (52 % marža vs. reálny naklad ~46 €/m²)
   // Materiál: Sikafloor-01 primer + 264 Plus báza + chipsy + broadcast piesok
+  // User 2026-07-14: „chipsova ma stat 50e m2". Total 6 + 8 + 36 = 50 €/m².
+  // Rozdelenie zachováva pôvodný pomer krokov (brúsenie < penetrácia <
+  // farebný s chipsmi).
   {
     id: "chipsova-uprava",
     floor_type: "chipsova",
     name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    price_per_sqm: 8, // bolo 6 → 8
+    price_per_sqm: 6,
     optional: false,
   },
   {
@@ -305,7 +338,7 @@ export const MATERIALS: Material[] = [
     floor_type: "chipsova",
     name: "Penetrácia",
     unit: "area",
-    price_per_sqm: 12, // bolo 7 → 12
+    price_per_sqm: 8,
     optional: false,
   },
   {
@@ -313,9 +346,7 @@ export const MATERIALS: Material[] = [
     floor_type: "chipsova",
     name: "Farebný náter s chipsmi",
     unit: "area",
-    // 264 Plus RAL (1,5 kg × 5,78 = 8,67) + chipsy (~10 €/m²) + piesok
-    // + náročná práca full-broadcast + zbrúsenie zvyškov + vysávanie
-    price_per_sqm: 76, // bolo 26 → 76 (chipsová bola v strate)
+    price_per_sqm: 36,
     optional: false,
   },
   // Vrchný lak — pri chipsovej sa NEDÁVA (rozhodnutie 2026-06-26)
@@ -362,12 +393,13 @@ export const MATERIALS: Material[] = [
   // ═══ METALICKÁ (Topstone EP11 + EP02 báza, EP22 Plus vrch) ════════════
   // Cieľ: 8 + 18 + 110 + 24 = 160 €/m² (52 % marža vs. reálny naklad ~77 €/m²)
   // Zdroj cien: Topstone faktúra 0000000352 (metalická podlaha 42,42 €/m² materiál)
+  // User 2026-07-14: „metalicka 129€ m2". Total 8 + 18 + 79 + 24 = 129 €/m².
   {
     id: "metalicka-uprava",
     floor_type: "metalicka",
     name: "Úprava povrchu (diamantové brúsenie)",
     unit: "area",
-    price_per_sqm: 8, // bolo 6 → 8
+    price_per_sqm: 8,
     optional: false,
   },
   {
@@ -375,8 +407,7 @@ export const MATERIALS: Material[] = [
     floor_type: "metalicka",
     name: "Penetrácia",
     unit: "area",
-    // Topstone EP02 RAL 7035 (0,93 kg × 7,56 = 7,03 €/m² materiál, 2 vrstvy)
-    price_per_sqm: 18, // bolo 14 → 18
+    price_per_sqm: 18,
     optional: false,
   },
   {
@@ -384,9 +415,7 @@ export const MATERIALS: Material[] = [
     floor_type: "metalicka",
     name: "Farebný náter (metalická báza)",
     unit: "area",
-    // Topstone EP11 (1,22 kg × 17,00 = 20,74 €/m²) + pigment 0,59 + akcelerátor 0,47
-    // Práca metalickej (mix pigmentov, 3D efekt): +35 €/m²
-    price_per_sqm: 110, // bolo 90 → 110
+    price_per_sqm: 79,
     optional: false,
   },
   {
@@ -394,8 +423,7 @@ export const MATERIALS: Material[] = [
     floor_type: "metalicka",
     name: "Vrchný lak (UV stabilný)",
     unit: "area",
-    // Topstone EP22 Plus (1,19 kg × 9,79 = 11,65 €/m² materiál, 2 vrstvy)
-    price_per_sqm: 24, // bolo 19 → 24
+    price_per_sqm: 24,
     optional: false,
     default_enabled: true,
   },
@@ -454,6 +482,13 @@ export function calcLine(
     // Ignorujeme price_per_sqm aj mm; obchodák píše konkrétnu sumu v UI.
     qty = Math.max(0, m2);
     total = qty;
+  } else if (m.unit === "sokel") {
+    // Sokel — m2 parameter = bm (bežné metre po obvode), mm parameter = cm výšky.
+    // Cena = bm × cm × price_per_bm_per_cm (default 1,20 €/bm/cm).
+    // cm clampnuté na [min_cm, max_cm].
+    const cm = Math.max(m.min_cm ?? 5, Math.min(m.max_cm ?? 30, mm || (m.default_cm ?? 10)));
+    mmEff = cm;
+    total = qty * cm * (m.price_per_bm_per_cm ?? 1.2);
   } else {
     total = qty * m.price_per_sqm;
   }

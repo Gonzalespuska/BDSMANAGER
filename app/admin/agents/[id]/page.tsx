@@ -523,7 +523,7 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
                       </td>
                       <td className="px-3 py-2 text-right">
                         <Link
-                          href={`/agent/leads/${cp.lead_id}`}
+                          href={`/agent/leads/${cp.lead_id}?from=${encodeURIComponent(`/admin/agents/${id}`)}`}
                           className="inline-flex items-center gap-1 text-xs font-bold text-violet-700 hover:text-violet-900 hover:underline"
                         >
                           Pozrieť →
@@ -598,7 +598,7 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
                     </td>
                     <td className="px-3 py-2">
                       <Link
-                        href={`/agent/leads/${a.lead_id}`}
+                        href={`/agent/leads/${a.lead_id}?from=${encodeURIComponent(`/admin/agents/${id}`)}`}
                         className="font-bold text-sm hover:underline decoration-dotted"
                       >
                         {leadInfo?.name || (

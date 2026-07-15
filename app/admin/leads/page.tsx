@@ -18,6 +18,7 @@ import {
 } from "@/lib/types/lead";
 import { isTestLeadName } from "@/lib/test-account";
 import { cn } from "@/lib/utils";
+import { ReassignButton } from "@/components/admin/reassign-picker";
 
 /** "pred 2h 15min" / "pred 3d" — kompaktný SK relative time. */
 function relTimeSK(iso: string): string {
@@ -64,16 +65,32 @@ interface AdminLeadRow {
   created_at: string;
 }
 
-export default async function AdminLeadsPage() {
+export default async function AdminLeadsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ source?: string }>;
+}) {
   const sb = createAdminClient();
+  // ?source=meta | web | google → filter na server-side query, aby sme
+  // nešahali 500 nepotrebných riadkov keď admin chce vidieť len jeden zdroj.
+  const sp = (await searchParams) ?? {};
+  const sourceFilter = (sp.source ?? "").toLowerCase();
+  const SOURCE_MAP: Record<string, string[]> = {
+    meta: ["facebook", "instagram", "meta_form", "fb_lead_ads"],
+    web: ["web_webhook", "website", "web"],
+    google: ["google"],
+  };
+  const sourceIn = SOURCE_MAP[sourceFilter];
 
-  const { data: leadsRaw } = await sb
+  let query = sb
     .from("leads")
     .select(
       "id, name, email, phone, status, source_type, source_campaign, assigned_to, phone_revealed_at, phone_revealed_by, created_at",
     )
     .order("created_at", { ascending: false })
     .limit(500);
+  if (sourceIn) query = query.in("source_type", sourceIn);
+  const { data: leadsRaw } = await query;
 
   const leads = leadsRaw ?? [];
 
@@ -232,48 +249,60 @@ export default async function AdminLeadsPage() {
 // ────────────────────────────────────────────────────────────────────────
 function LeadCardMini({ lead }: { lead: AdminLeadRow }) {
   return (
-    <Link
-      href={`/agent/leads/${lead.id}`}
-      className="block rounded-lg border bg-background p-2.5 hover:border-sky-300 hover:bg-sky-50/30 transition-colors"
-    >
-      <div className="flex items-center justify-between gap-1.5 mb-1">
-        <span
-          className={cn(
-            "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
-            STATUS_META[lead.status]?.pill ?? "bg-zinc-400 text-white",
+    <div className="relative rounded-lg border bg-background p-2.5 hover:border-sky-300 hover:bg-sky-50/30 transition-colors group">
+      <Link
+        href={`/agent/leads/${lead.id}`}
+        className="block"
+      >
+        <div className="flex items-center justify-between gap-1.5 mb-1">
+          <span
+            className={cn(
+              "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
+              STATUS_META[lead.status]?.pill ?? "bg-zinc-400 text-white",
+            )}
+          >
+            {STATUS_META[lead.status]?.label ?? lead.status}
+          </span>
+          <span className="text-[9px] text-muted-foreground">
+            {SOURCE_TYPE_LABELS[lead.source_type] ?? lead.source_type}
+          </span>
+        </div>
+        <div className="font-bold text-sm truncate">
+          {lead.name || (
+            <span className="text-muted-foreground italic">bez mena</span>
           )}
-        >
-          {STATUS_META[lead.status]?.label ?? lead.status}
-        </span>
-        <span className="text-[9px] text-muted-foreground">
-          {SOURCE_TYPE_LABELS[lead.source_type] ?? lead.source_type}
-        </span>
-      </div>
-      <div className="font-bold text-sm truncate">
-        {lead.name || (
-          <span className="text-muted-foreground italic">bez mena</span>
-        )}
-      </div>
-      <div className="text-[11px] text-muted-foreground truncate mt-0.5 tabular-nums">
-        {lead.phone ? formatPhoneSK(lead.phone) : (lead.email ?? "—")}
-      </div>
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
-        {lead.phone_revealed_at ? (
-          <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
-            <Eye className="w-2.5 h-2.5" aria-hidden />
-            {formatShort(lead.phone_revealed_at)}
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate mt-0.5 tabular-nums">
+          {lead.phone ? formatPhoneSK(lead.phone) : (lead.email ?? "—")}
+        </div>
+        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
+          {lead.phone_revealed_at ? (
+            <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
+              <Eye className="w-2.5 h-2.5" aria-hidden />
+              {formatShort(lead.phone_revealed_at)}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <EyeOff className="w-2.5 h-2.5" aria-hidden />
+              neodhalené
+            </span>
+          )}
+          <span className="text-muted-foreground tabular-nums">
+            {formatShort(lead.created_at)}
           </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-muted-foreground">
-            <EyeOff className="w-2.5 h-2.5" aria-hidden />
-            neodhalené
-          </span>
-        )}
-        <span className="text-muted-foreground tabular-nums">
-          {formatShort(lead.created_at)}
-        </span>
+        </div>
+      </Link>
+      {/* Admin: preraď — otvorí picker modal → pošle žiadosť inému obchodákovi.
+          User 2026-07-15: „preradit aj ak je otvoreny uz". Absolute pozícia
+          aby to nekolidovalo s Link parent. */}
+      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <ReassignButton
+          leadId={lead.id}
+          leadName={lead.name || "Bez mena"}
+          currentAssigneeId={lead.assigned_to}
+        />
       </div>
-    </Link>
+    </div>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronDown, Loader2, Pencil, X } from "lucide-react";
+import { Check, ChevronDown, Loader2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
@@ -305,6 +305,20 @@ export function MissingFieldChip({
   }
 
   // ─── DISPLAY MODE ───
+  // User 2026-07-12: „nech sa da editovat len to co nebolo povodne
+  // zodpovedane v leade" — ak pole má hodnotu (prišlo z leadu), zobraz
+  // ako read-only pill; iba prázdne polia sú editovateľné „Doplniť" chipy.
+  if (hasValue) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-zinc-100 text-zinc-800"
+        aria-label={`${labelForField(field)}: ${displayValue}`}
+      >
+        <span>{displayValue}</span>
+        {suffix && <span className="opacity-60">{suffix}</span>}
+      </span>
+    );
+  }
   return (
     <button
       type="button"
@@ -315,27 +329,15 @@ export function MissingFieldChip({
       }}
       className={cn(
         "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all group",
-        hasValue
-          ? "bg-zinc-100 text-zinc-800 hover:bg-sky-100 hover:text-sky-800"
-          : "border-2 border-dashed border-amber-300 bg-amber-50/50 text-amber-800 hover:border-amber-500 hover:bg-amber-50 animate-pulse-slow",
+        "border-2 border-dashed border-amber-300 bg-amber-50/50 text-amber-800 hover:border-amber-500 hover:bg-amber-50 animate-pulse-slow",
       )}
-      aria-label={hasValue ? `Upraviť ${labelForField(field)}` : `Doplniť ${labelForField(field)}`}
+      aria-label={`Doplniť ${labelForField(field)}`}
     >
-      {hasValue ? (
-        <>
-          <span>{displayValue}</span>
-          {suffix && <span className="opacity-60">{suffix}</span>}
-          <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 transition-opacity" />
-        </>
-      ) : (
-        <>
-          <span className="text-[13px]">+</span>
-          <span>{placeholder}</span>
-          {kind === "typ_podlahy" || kind === "priestor" ? (
-            <ChevronDown className="w-3 h-3 opacity-70" />
-          ) : null}
-        </>
-      )}
+      <span className="text-[13px]">+</span>
+      <span>{placeholder}</span>
+      {kind === "typ_podlahy" || kind === "priestor" ? (
+        <ChevronDown className="w-3 h-3 opacity-70" />
+      ) : null}
     </button>
   );
 }

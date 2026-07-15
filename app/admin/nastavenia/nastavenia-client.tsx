@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { Loader2, Plus, Save, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { saveSettingAction } from "@/app/admin/settings/actions";
+import { saveSettingV2 } from "@/app/admin/settings/actions";
 
 type Setting = { key: string; value: unknown; label: string; description: string };
 type City = { slug: string; label: string; km_from_hq: number; active: boolean };
@@ -37,18 +36,6 @@ type CustomMaterial = {
   active: boolean;
 };
 
-const TABS = [
-  { id: "firma", label: "🏢 Firma", filter: "company." },
-  { id: "doprava", label: "🚗 Doprava", filter: "transport." },
-  { id: "mesta", label: "📍 Mestá" },
-  { id: "sika", label: "📦 Sika katalóg" },
-  { id: "materialy", label: "🧱 Vlastné materiály" },
-  { id: "zlavy", label: "💰 Zľavy" },
-  { id: "skolenie", label: "🎓 Skolenie" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
-
 export function NastaveniaClient({
   settings,
   cities,
@@ -62,43 +49,129 @@ export function NastaveniaClient({
   training: Training[];
   materials: CustomMaterial[];
 }) {
-  const [tab, setTab] = React.useState<TabId>("firma");
+  // User 2026-07-12: „nechapem toto je tu tuplne na nic daj to prec a tie
+  // ostatne nastavenia crm daj asi postupne od hora dole ale na jednu stranu".
+  // Odstranené tabs (Firma/Doprava/Mestá/Sika/Materiály/Zľavy/Skolenie) —
+  // všetko sa vykresľuje stacked, admin len skroluje.
+  const firmaSet = settings.filter(
+    (s) =>
+      s.key.startsWith("company.") ||
+      s.key.startsWith("pdf.") ||
+      s.key.startsWith("email."),
+  );
+  const dopravaSet = settings.filter(
+    (s) => s.key.startsWith("transport.") || s.key.startsWith("delivery."),
+  );
+  const zlavySet = settings.filter((s) => s.key.startsWith("discounts."));
+  // Legacy — všetko čo nespadá do firma/doprava/zľavy (napr. dph.rate,
+  // markup.*, margin.*, order.*). User vidí čo v DB naozaj má aj bez
+  // migrácie 39, a vie tú hodnotu editovať priamo.
+  const legacySet = settings.filter(
+    (s) =>
+      !s.key.startsWith("company.") &&
+      !s.key.startsWith("pdf.") &&
+      !s.key.startsWith("email.") &&
+      !s.key.startsWith("transport.") &&
+      !s.key.startsWith("delivery.") &&
+      !s.key.startsWith("discounts."),
+  );
+
+  // User 2026-07-12: „od doprava dole vsetko prec … mesta sa budu
+  // nastavovat v sadzbi materialu". Ostáva iba Firma + Doprava; Mestá
+  // sa presúvajú do editora materiálových sadzieb, ostatné sekcie prec.
+  void cities;
+  void sika;
+  void materials;
+  void training;
+  void zlavySet;
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-1 border-b-2 pb-2">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-sm font-black transition-colors",
-              tab === t.id
-                ? "bg-sky-600 text-white shadow-sm"
-                : "text-slate-600 hover:bg-slate-100",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-6">
+      <SectionBlock title="🏢 Firma" desc="Firemné údaje, PDF footer, email brand.">
+        <SettingsList settings={firmaSet} />
+      </SectionBlock>
 
-      {(tab === "firma" || tab === "doprava" || tab === "zlavy") && (
-        <SettingsList
-          settings={settings.filter((s) => {
-            if (tab === "firma") return s.key.startsWith("company.") || s.key.startsWith("pdf.") || s.key.startsWith("email.");
-            if (tab === "doprava") return s.key.startsWith("transport.");
-            if (tab === "zlavy") return s.key.startsWith("discounts.");
-            return false;
-          })}
-        />
+      <SectionBlock title="🚗 Doprava" desc="Sadzby km + rezerva + rýchlosť.">
+        <SettingsList settings={dopravaSet} />
+      </SectionBlock>
+
+      {legacySet.length > 0 && (
+        <SectionBlock
+          title="⚙️ Ostatné (marže, DPH, min. objednávka)"
+          desc="Kľúče uložené v DB ktoré nespadajú do Firma/Doprava. Používajú sa generatorom."
+        >
+          <SettingsList settings={legacySet} />
+        </SectionBlock>
       )}
-      {tab === "mesta" && <CitiesTab initial={cities} />}
-      {tab === "sika" && <SikaTab initial={sika} />}
-      {tab === "materialy" && <MaterialsTab initial={materials} />}
-      {tab === "skolenie" && <TrainingTab initial={training} />}
     </div>
+  );
+}
+
+/**
+ * Preloží raw DB error message do zrozumiteľnej správy pre admina.
+ * Ak sa v texte vyskytne názov chýbajúcej tabuľky, ukáže presnú migráciu
+ * ktorú má spustiť. Iné errory nechá tak.
+ */
+function explainDbError(
+  raw: string | undefined,
+  migrationNum: number,
+  expectedTable: string,
+): string {
+  const s = String(raw ?? "");
+  if (
+    s.includes("does not exist") ||
+    s.includes("relation") ||
+    s.includes(expectedTable) ||
+    s === "invalid_field"
+  ) {
+    return `⚠ Tabuľka „${expectedTable}" neexistuje. Spusti supabase/${String(
+      migrationNum,
+    ).padStart(2, "0")}_*.sql v Supabase SQL editore.`;
+  }
+  return s || "unknown_error";
+}
+
+function InlineBanner({
+  err,
+  msg,
+}: {
+  err: string | null;
+  msg?: string | null;
+}) {
+  if (err) {
+    return (
+      <div className="rounded-lg border-2 border-rose-300 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-900">
+        {err}
+      </div>
+    );
+  }
+  if (msg) {
+    return (
+      <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900">
+        {msg}
+      </div>
+    );
+  }
+  return null;
+}
+
+function SectionBlock({
+  title,
+  desc,
+  children,
+}: {
+  title: string;
+  desc: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3">
+      <header>
+        <h3 className="text-lg font-black">{title}</h3>
+        <p className="text-xs text-muted-foreground">{desc}</p>
+      </header>
+      {children}
+    </section>
   );
 }
 
@@ -136,20 +209,16 @@ function SettingRow({ setting }: { setting: Setting }) {
   async function save() {
     setBusy(true);
     setMsg(null);
-    const fd = new FormData();
-    fd.set("key", setting.key);
-    fd.set("value", val);
     try {
-      await saveSettingAction(fd);
-    } catch (e) {
-      // Server action redirects — Next.js throws NEXT_REDIRECT. Not error.
-      const err = e as { digest?: string; message?: string };
-      if (!err.digest?.startsWith("NEXT_REDIRECT")) {
-        setMsg(`⚠ ${err.message ?? "unknown"}`);
+      const res = await saveSettingV2(setting.key, val);
+      if (!res.ok) {
+        setMsg(`⚠ ${explainDbError(res.error, 39, "app_settings")}`);
       } else {
         setMsg("✓ Uložené");
         setTimeout(() => setMsg(null), 1500);
       }
+    } catch (e) {
+      setMsg(`⚠ ${e instanceof Error ? e.message : "unknown"}`);
     }
     setBusy(false);
   }
@@ -189,43 +258,84 @@ function CitiesTab({ initial }: { initial: City[] }) {
   const [newLabel, setNewLabel] = React.useState("");
   const [newKm, setNewKm] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [msg, setMsg] = React.useState<string | null>(null);
 
   async function refresh() {
-    const r = await fetch("/api/admin/cities");
-    const j = await r.json();
-    if (j.ok) setItems(j.cities);
+    try {
+      const r = await fetch("/api/admin/cities");
+      const j = await r.json();
+      if (j.ok) setItems(j.cities);
+      else setErr(explainDbError(j.error, 39, "city_distances"));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "network_error");
+    }
   }
 
   async function add() {
     if (!newLabel.trim() || !newKm) return;
     setBusy(true);
-    await fetch("/api/admin/cities", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: newLabel.trim(), km_from_hq: Number(newKm) }),
-    });
-    setNewLabel("");
-    setNewKm("");
-    await refresh();
+    setErr(null);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/admin/cities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: newLabel.trim(),
+          km_from_hq: Number(newKm),
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        setErr(explainDbError(j.error, 39, "city_distances"));
+        setBusy(false);
+        return;
+      }
+      setNewLabel("");
+      setNewKm("");
+      setMsg(`✓ ${newLabel.trim()} pridané`);
+      setTimeout(() => setMsg(null), 2000);
+      await refresh();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "network_error");
+    }
     setBusy(false);
   }
 
   async function updateKm(slug: string, km: number) {
-    await fetch("/api/admin/cities", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, km_from_hq: km }),
-    });
+    setErr(null);
+    try {
+      const r = await fetch("/api/admin/cities", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, km_from_hq: km }),
+      });
+      const j = await r.json();
+      if (!j.ok) setErr(j.error);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "network_error");
+    }
   }
 
   async function remove(slug: string) {
     if (!confirm("Zmazať mesto?")) return;
-    await fetch("/api/admin/cities", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug }),
-    });
-    setItems((prev) => prev.filter((i) => i.slug !== slug));
+    setErr(null);
+    try {
+      const r = await fetch("/api/admin/cities", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        setErr(j.error);
+        return;
+      }
+      setItems((prev) => prev.filter((i) => i.slug !== slug));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "network_error");
+    }
   }
 
   return (
@@ -253,6 +363,8 @@ function CitiesTab({ initial }: { initial: City[] }) {
           <Plus className="w-3.5 h-3.5" /> Pridať
         </button>
       </div>
+
+      <InlineBanner err={err} msg={msg} />
 
       <div className="text-xs text-muted-foreground">{items.length} miest</div>
       <ul className="space-y-1">
@@ -308,41 +420,67 @@ function SikaTab({ initial }: { initial: Sika[] }) {
   const [newName, setNewName] = React.useState("");
   const [newPack, setNewPack] = React.useState("");
   const [newKg, setNewKg] = React.useState("");
+  const [err, setErr] = React.useState<string | null>(null);
+  const [msg, setMsg] = React.useState<string | null>(null);
 
   async function add() {
     if (!newSap || !newName) return;
-    await fetch("/api/admin/sika-catalog", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sap_number: newSap,
-        name: newName,
-        packaging: newPack,
-        packaging_kg: newKg ? Number(newKg) : null,
-      }),
-    });
-    const r = await fetch("/api/admin/sika-catalog");
-    const j = await r.json();
-    if (j.ok) setItems(j.items);
-    setCreating(false);
-    setNewSap("");
-    setNewName("");
-    setNewPack("");
-    setNewKg("");
+    setErr(null);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/admin/sika-catalog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sap_number: newSap,
+          name: newName,
+          packaging: newPack,
+          packaging_kg: newKg ? Number(newKg) : null,
+        }),
+      });
+      const jj = await r.json();
+      if (!jj.ok) {
+        setErr(explainDbError(jj.error, 39, "sika_catalog"));
+        return;
+      }
+      const r2 = await fetch("/api/admin/sika-catalog");
+      const j = await r2.json();
+      if (j.ok) setItems(j.items);
+      setCreating(false);
+      setNewSap("");
+      setNewName("");
+      setNewPack("");
+      setNewKg("");
+      setMsg("✓ Produkt pridaný");
+      setTimeout(() => setMsg(null), 2000);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "network_error");
+    }
   }
 
   async function remove(sap: string) {
     if (!confirm(`Zmazať ${sap}?`)) return;
-    await fetch("/api/admin/sika-catalog", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sap_number: sap }),
-    });
-    setItems((prev) => prev.filter((i) => i.sap_number !== sap));
+    setErr(null);
+    try {
+      const r = await fetch("/api/admin/sika-catalog", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sap_number: sap }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        setErr(j.error);
+        return;
+      }
+      setItems((prev) => prev.filter((i) => i.sap_number !== sap));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "network_error");
+    }
   }
 
   return (
     <div className="space-y-3">
+      <InlineBanner err={err} msg={msg} />
       <div className="flex justify-between items-center">
         <div className="text-sm text-muted-foreground">{items.length} produktov</div>
         <button

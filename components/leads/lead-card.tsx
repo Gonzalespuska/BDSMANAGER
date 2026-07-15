@@ -198,6 +198,35 @@ export function LeadCard({
   }
 
   /**
+   * „Do koša" — okamžité zahodenie leadu (bez follow-up SMS/Email).
+   * User 2026-07-14: „pridaj ak mame proste uz neaktivny lead ze to
+   * proste uz nechce moznost ho zahodit … novy status ktory sa bude
+   * volat kos alebo tak". Trash != Archived: archive = „follow-up
+   * niekedy neskor", trash = „mrtvy lead, ignoruj".
+   */
+  async function handleTrash() {
+    if (
+      !confirm(
+        `Hodiť "${lead.name || "lead"}" do koša?\n\n` +
+          "Lead sa presunie do Koš tabu a už sa nebude auto-priradzovať " +
+          "obchodákom. Neposielame follow-up. Môžeš ho odtiaľ obnoviť.",
+      )
+    )
+      return;
+    setLeaving(true);
+    const result = await callLeadAction("trash");
+    if (!result.ok) {
+      setLeaving(false);
+      toast.error(`Chyba: ${result.error}`);
+    } else {
+      toast.success(`🗑 ${lead.name || "Lead"} → Kôš`, {
+        href: "/agent?tab=kos",
+      });
+      router.refresh();
+    }
+  }
+
+  /**
    * "Kontakt" — agent volal a zákazník zdvihol.
    * Karta zmizne z Nové tab-u, objaví sa v Kontakt tab-e po refreshi.
    */
@@ -452,23 +481,19 @@ export function LeadCard({
               placeholder="Mesto"
               autocomplete={SK_CITIES}
             />
-            {/* Callscript — matchne najlepší podľa typ_podlahy + priestor.
-                User: "to tlacidlo na otvorenie call scriptu nemusi byt
-                velke". */}
-            <CallscriptButton
-              floorType={coerceString(dataFields.typ_podlahy)}
-              space={coerceString(dataFields.priestor)}
-            />
           </div>
 
-          {/* Message excerpt — pekný blockquote namiesto italic kvôli AI vibe */}
+          {/* Callscript — floating pravý-dolný roh leadu (user 2026-07-12:
+              „ten call script nech je v pravo dole v leade vzdy"). Absolútna
+              pozícia vnútri <article className="relative">, aby držala tam
+              nezávisle od obsahu. Tlačidlo má vlastný z-index nad content. */}
+
+          {/* Message excerpt — collapse/expand ak je dlhá.
+              User 2026-07-14: „nemame moznost zobrazit celu poznamku a preto
+              ju nevidime celu — pridat tam zobrazit celu poznamku". */}
           {typeof dataFields.message === "string" && dataFields.message && (
             <div className="px-5 pt-3">
-              <div className="border-l-2 border-zinc-300 pl-3 py-0.5">
-                <p className="text-sm text-zinc-700 leading-snug line-clamp-2">
-                  {dataFields.message}
-                </p>
-              </div>
+              <MessageExcerpt message={dataFields.message as string} />
             </div>
           )}
 
@@ -515,26 +540,34 @@ export function LeadCard({
             </div>
           )}
 
-          {/* Kontakt tab — veľký Ponuka button (priamy presmer na generátor) */}
+          {/* Kontakt tab — veľký Ponuka button + Nedvíha (druhý pokus).
+              User 2026-07-14: „nefunguje tlacidlo nezdviha" — v Kontakt
+              tabe chýbalo Nedvíha, keď obchodák volá druhýkrát a nezdvihnú. */}
           {lead.status === "phone_revealed" && (
-            <div className="mb-2 flex gap-2">
-              <Button
-                asChild
-                className="flex-1 h-12 bg-sky-600 hover:bg-sky-700 text-white font-bold text-base shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
-              >
-                <Link href={`/generator?lead=${lead.id}`}>
-                  <Calculator className="w-5 h-5 mr-2" aria-hidden />
-                  Poslať cenovú ponuku
-                </Link>
-              </Button>
-              {lead.email && (
-                <QuickEmailButton
-                  leadId={lead.id}
-                  email={lead.email}
-                  leadName={lead.name}
-                  hasSavedQuote={hasSavedQuote}
-                />
-              )}
+            <div className="mb-2 space-y-2">
+              <div className="flex gap-2">
+                <Button
+                  asChild
+                  className="flex-1 h-12 bg-sky-600 hover:bg-sky-700 text-white font-bold text-base shadow-[0_3px_10px_rgba(2,132,199,0.3)]"
+                >
+                  <Link href={`/generator?lead=${lead.id}`}>
+                    <Calculator className="w-5 h-5 mr-2" aria-hidden />
+                    Poslať cenovú ponuku
+                  </Link>
+                </Button>
+                {lead.email && (
+                  <QuickEmailButton
+                    leadId={lead.id}
+                    email={lead.email}
+                    leadName={lead.name}
+                    hasSavedQuote={hasSavedQuote}
+                  />
+                )}
+              </div>
+              <MissedCallDropdown
+                busy={busy}
+                onPick={(hrs) => handleMissedCall(hrs)}
+              />
             </div>
           )}
 
@@ -559,6 +592,10 @@ export function LeadCard({
               </Button>
             </div>
           )}
+
+          {/* User 2026-07-14: „do kosa je strasne — ma byt normalne v tom
+              statuse ze to tam manulane hodis". Samostatný red-button prec,
+              „Kôš" je teraz option v status pickeri (dropdown pri statuse). */}
 
           {/* AssignedBanner ("Kontakt: <name>") odstránený — leady sú
               rozdelené medzi agentov rovnomerne (auto-assign), nepotrebujeme
@@ -739,6 +776,16 @@ export function LeadCard({
           )}
         </div>
         </div>
+        {/* Callscript — samostatný riadok pod akciami (predtým floating,
+            prekrýval sa so „Zavolať" tlačidlom na mobile).
+            User 2026-07-12: „to callscript je cez zavolat cize total napicu
+            musi to mat vlastne miesto". */}
+        <div className="px-5 pb-4 -mt-1 flex items-center justify-end">
+          <CallscriptButton
+            floorType={coerceString(dataFields.typ_podlahy)}
+            space={coerceString(dataFields.priestor)}
+          />
+        </div>
       </article>
 
       {modalOpen && (
@@ -764,6 +811,42 @@ export function LeadCard({
  * Používa sa v MissingFieldChip aby chip fungoval aj keď hodnota v
  * lead.data je uložená ako number namiesto string (napr. plocha=80).
  */
+/**
+ * MessageExcerpt — zobrazí poznámku klienta s možnosťou rozbaliť celý text.
+ * User 2026-07-14: „nemame moznost zobrazit celu poznamku a preto ju
+ * nevidime celu — pridat tam zobrazit celu poznamku alebo to nejako
+ * vymysliet". Ak sa text vojde do 2 riadkov, „Zobraziť celú" sa nezobrazí.
+ */
+function MessageExcerpt({ message }: { message: string }) {
+  const [expanded, setExpanded] = React.useState(false);
+  // Heuristika: viac ako 120 znakov ALEBO viac ako 2 riadky → treba expand.
+  const needsExpand = message.length > 120 || message.split("\n").length > 2;
+  return (
+    <div className="border-l-2 border-zinc-300 pl-3 py-0.5">
+      <p
+        className={cn(
+          "text-sm text-zinc-700 leading-snug whitespace-pre-wrap",
+          !expanded && needsExpand && "line-clamp-2",
+        )}
+      >
+        {message}
+      </p>
+      {needsExpand && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((x) => !x);
+          }}
+          className="mt-1 text-xs font-bold text-sky-700 hover:text-sky-900 underline underline-offset-2"
+        >
+          {expanded ? "Skryť" : "Zobraziť celú poznámku ▾"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function coerceString(v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
   if (typeof v === "string") return v.trim() || null;

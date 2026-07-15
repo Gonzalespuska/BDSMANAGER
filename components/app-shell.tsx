@@ -22,9 +22,12 @@ import { cn } from "@/lib/utils";
 import type { Notification } from "@/lib/notifications";
 
 import { NavPillClient } from "./nav-pill-client";
+import { MobileNavMenu, type MobileNavItem } from "./mobile-nav-menu";
 import { ProfileMenu } from "./profile-menu";
 import { NotificationsBell } from "./notifications-bell";
 import { ImpersonationBanner } from "./impersonation-banner";
+import { ReassignRequestsBar } from "./reassign-requests-bar";
+import { PoolSearchDrawer } from "./pool-search-drawer";
 import { Toaster } from "./ui/toast";
 import { RoleViewDropdown } from "./role-view-dropdown";
 
@@ -199,14 +202,23 @@ export async function AppShell({
       {/* Global toast notifikacie (top-right) — dostupné z každého client
           komponentu cez `import { toast } from "@/components/ui/toast"`. */}
       <Toaster />
-      {impersonatedName && <ImpersonationBanner userName={impersonatedName} />}
-      {isDev && (
-        <div className="bg-amber-100 border-b border-amber-200 text-amber-900 text-[11px] font-medium px-4 py-1.5 text-center">
-          ⚡ DEV mode · auth bypass aktívny (prihlásený ako bootstrap admin). Vypne sa v produkcii.
-        </div>
-      )}
-
-      <header className="border-b bg-background sticky top-0 z-10">
+      {/* Sticky top-right žiadosti o preradenie leadu — cvakot + ne-zmizne.
+          User 2026-07-15: „nezmitne ak neodkliknes" + „nech mi ta skurvena
+          aplikacia cinka ked chce nieco potvrdit". */}
+      {user.role === "obchod" || user.role === "admin" ? (
+        <ReassignRequestsBar />
+      ) : null}
+      {/* Sticky wrapper — banner + dev + header sa scroll-ujú ako jeden celok
+          a zostávajú prilepené na hore. User 2026-07-14: „nech ked kukas ako
+          niekto je to sticky ten bar". */}
+      <div className="sticky top-0 z-20">
+        {impersonatedName && <ImpersonationBanner userName={impersonatedName} />}
+        {isDev && (
+          <div className="bg-amber-100 border-b border-amber-200 text-amber-900 text-[11px] font-medium px-4 py-1.5 text-center">
+            ⚡ DEV mode · auth bypass aktívny (prihlásený ako bootstrap admin). Vypne sa v produkcii.
+          </div>
+        )}
+        <header className="border-b bg-background">
         {/* Header — kompaktnejší na mobile (menšia logika + hidden CRM subtitle). */}
         <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-3 sm:px-6 py-2 md:py-4 flex items-center justify-between gap-2 md:gap-3">
           <Link
@@ -223,6 +235,12 @@ export async function AppShell({
 
           <div className="flex items-center gap-1.5 md:gap-3">
             {isRealAdmin && <RoleViewDropdown currentViewAs={currentViewAs} />}
+            {/* Pool search — obchod + admin. „/" hotkey hocikde v app-ke.
+                User 2026-07-15: „ak potrebuje manualne podla mena si pridelit
+                lead a vie to meno tak chyti a vyhlada si to". */}
+            {(user.role === "obchod" || user.role === "admin") && (
+              <PoolSearchDrawer />
+            )}
             {/* Realizator nemá notifikácie — pracuje na stavbe, netreba mu je. */}
             {user.role !== "realizacie" && (
               <NotificationsBell initial={notifications} />
@@ -234,13 +252,32 @@ export async function AppShell({
               avatarUrl={avatarUrl}
               showPodkladyLink={!showPodkladyInNav}
             />
+            {/* Burger — iba mobile. User 2026-07-12: „leady/obhliadnute/
+                kalendar nech je v burger menu pri ucte na pravo". */}
+            <MobileNavMenu
+              items={visibleTabs.map((tabId) => {
+                const def = NAV_TAB_DEFS[tabId];
+                const inBuilding =
+                  tabId === "team" || tabId === "notifikacie";
+                const badge =
+                  tabId === "obhliadnute" ? obhliadnuteBadge : undefined;
+                return {
+                  id: tabId,
+                  label: def.label,
+                  href: def.href,
+                  icon: def.icon,
+                  inBuilding,
+                  badge,
+                  tint: tabId === "admin" ? "rose" : "sky",
+                } satisfies MobileNavItem;
+              })}
+            />
           </div>
         </div>
 
-        {/* Secondary nav — na mobile horizontal scroll (jedna línia),
-            od md+ sa tab-y môžu zabaliť do druhého riadku aby Admin nezmizol
-            za pravou hranou. Admin má rose tint. */}
-        <nav className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] mx-auto pb-2 md:pb-3 flex items-center gap-1.5 md:gap-2 md:flex-wrap overflow-x-auto md:overflow-visible scrollbar-hide px-3 sm:px-6 pr-6">
+        {/* Secondary nav — na md+ horizontal pills; na mobile ich nahrádza
+            burger menu (MobileNavMenu vyššie). */}
+        <nav className="hidden md:flex max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] mx-auto pb-2 md:pb-3 items-center gap-1.5 md:gap-2 md:flex-wrap md:overflow-visible px-3 sm:px-6 pr-6">
           {visibleTabs.map((tabId) => {
             const def = NAV_TAB_DEFS[tabId];
             // „In building" — VŠETCI (aj admin) vidia iba blanknuté disabled
@@ -278,6 +315,7 @@ export async function AppShell({
           })}
         </nav>
       </header>
+      </div>
 
       <main
         className={cn(

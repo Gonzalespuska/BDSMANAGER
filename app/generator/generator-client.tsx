@@ -127,7 +127,12 @@ export function GeneratorClient({
         init[m.id] = savedQuote.state.lines[m.id] ?? {
           enabled: false,
           m2: "",
-          mm: m.unit === "level" ? String(m.default_mm ?? m.min_mm ?? 4) : "0",
+          mm:
+            m.unit === "level"
+              ? String(m.default_mm ?? m.min_mm ?? 4)
+              : m.unit === "sokel"
+                ? String(m.default_cm ?? 10)
+                : "0",
         };
       }
       return init;
@@ -225,6 +230,19 @@ export function GeneratorClient({
   const [materialQtys, setMaterialQtys] = React.useState<
     Record<string, string>
   >(savedQuote?.state.materialQtys ?? {});
+
+  // ─── Dual-variant email (2026-07-15) ─────────────────────────────────
+  // User: „Moznost poslat dve CP do jedneho mailu — jednu plusko a druhu
+  // manualne vyklikas". Obchodák si vygeneruje prvú variantu (napr. epoxid),
+  // klikne „Uložiť ako variant A", potom prestaví generátor na druhú
+  // variantu (napr. polyuretán) a klikne „Pošli 2 varianty" → v prílohe
+  // idú OBIDVE PDF-ká v jednom emaili.
+  const [variantASnapshot, setVariantASnapshot] = React.useState<{
+    pdfBase64: string;
+    filename: string;
+    total: number;
+    label: string;
+  } | null>(null);
 
   // Subtotal pre material mode — pre každý produkt aplikujeme jeho per-role
   // maržu (`markup.primer` / `markup.main` / `markup.topcoat` / `markup.additive`
@@ -389,8 +407,9 @@ export function GeneratorClient({
     setLines((prev) => {
       const next = { ...prev };
       for (const m of getMaterialsByFloorType(floorType)) {
-        // Skip count (prasklíny) a surcharge (zložka — EUR, nie m²)
-        if (m.unit === "count" || m.unit === "surcharge") continue;
+        // Skip count (prasklíny), surcharge (zložka — EUR, nie m²) a sokel
+        // (bm po obvode, obchodák ho zadá manuálne — nemá nič s podlahou m²).
+        if (m.unit === "count" || m.unit === "surcharge" || m.unit === "sokel") continue;
         if (!next[m.id]) continue;
         next[m.id] = { ...next[m.id], m2: value };
       }
@@ -458,15 +477,34 @@ export function GeneratorClient({
 
   // ─── Množstevná zľava (automatický volume discount podľa m²) ──────────
   // Pri 100/300/500/1000+ m² dostane zákazník automaticky 3/6/10/15% zľavu
-  // (tiery sú v lib/data/materials.ts). Aplikuje sa na subtotal predtým
-  // než sa pridá margin alebo špeciálna zľava.
-  const effectiveM2 = (() => {
-    const firstReq = materials.find((m) => !m.optional);
-    if (!firstReq) return 0;
-    return parseFloat(lines[firstReq.id]?.m2 ?? "") || 0;
-  })();
-  const volumeTier = getVolumeDiscountTier(effectiveM2);
-  const volumeDiscountValue = subtotalRaw * (volumeTier.discount_pct / 100);
+  // (tiery sú v lib/data/materials.ts). Aplikuje sa iba v realizácii, NIE
+  // v „Iba materiál + doprava" — user 2026-07-14: „pri iba material mi
+  // dava mnozstevne zlavu a nieem to zrusit, plus to zle rata".
+  //
+  // BUG FIX 2026-07-15: user hlásil že Skrytá zložka 100€ pridá len 97€.
+  // Príčina: zľava sa počítala zo `subtotalRaw` ktorý zahŕňa aj surcharge
+  // (Pomenovaná + Skrytá zložka). Zľava má ísť len na m² operácie
+  // (Úprava/Penetrácia/Farebný/Lak/Sokel/Nivelácia/Zošívanie), nie na
+  // zložky (extra marža obchodáka nesmie byť ukrátená zákazníckou zľavou).
+  const effectiveM2 =
+    saleMode === "material"
+      ? 0
+      : (() => {
+          const firstReq = materials.find((m) => !m.optional);
+          if (!firstReq) return 0;
+          return parseFloat(lines[firstReq.id]?.m2 ?? "") || 0;
+        })();
+  const volumeTier =
+    saleMode === "material"
+      ? { min_m2: 0, discount_pct: 0, label: "" }
+      : getVolumeDiscountTier(effectiveM2);
+  // Základ pre množstevnú zľavu — LEN podlaha, bez zložiek.
+  const discountBase = calcs.reduce((s, c) => {
+    if (!c.calc) return s;
+    if (c.m.unit === "surcharge") return s; // zložka nedostáva zľavu
+    return s + (c.calc.total ?? 0);
+  }, 0);
+  const volumeDiscountValue = discountBase * (volumeTier.discount_pct / 100);
   const subtotal = subtotalRaw - volumeDiscountValue;
 
   const marginPercent = parseFloat(margin) || 0;
@@ -643,6 +681,45 @@ export function GeneratorClient({
       downloadBlob(blob, filename);
     } catch (e) {
       alert(`PDF chyba: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * „Uložiť ako variant A" — vygeneruje aktuálne PDF a uloží ho do
+   * variantASnapshot. Obchodák potom môže generátor prestaviť na inú
+   * variantu (napr. z epoxidu na polyuretán) a poslať OBIDVE v jednom
+   * emaili. User 2026-07-15: „jednu plusko a druhu manualne vyklikas".
+   */
+  async function handleSaveVariantA() {
+    setBusy(true);
+    try {
+      const { generator, input } = await buildPdfInput();
+      const { blob, filename } = generator(input);
+      const arrayBuffer = await blob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const pdfBase64 = btoa(binary);
+      // Prípona -variant-A pred .pdf, aby v Gmaili obchodák hneď videl
+      // rozdiel medzi prílohami.
+      const filenameA = filename.replace(/\.pdf$/i, "") + "-variant-A.pdf";
+      setVariantASnapshot({
+        pdfBase64,
+        filename: filenameA,
+        total,
+        label: input.floor_type_label,
+      });
+      toast.success(
+        `💾 Variant A uložený (${input.floor_type_label} · ${total.toFixed(0)} €). Prestav generátor na druhú variantu a pošli obidve naraz.`,
+      );
+    } catch (e) {
+      toast.error(
+        `Variant A chyba: ${e instanceof Error ? e.message : "unknown"}`,
+      );
     } finally {
       setBusy(false);
     }
@@ -838,6 +915,13 @@ ${signatureLines.join("\n")}`;
         input.agent_email,
         "www.epoxidovo.sk",
       ].filter(Boolean);
+      // Ak máme uloženú variantu A — v texte upozorníme že sú 2 varianty
+      // v prílohe (A = uložená, B = aktuálna). User 2026-07-15.
+      const hasVariantA = !!variantASnapshot;
+      const variantsNote = hasVariantA
+        ? `\n\nV prílohe sú DVE varianty cenovej ponuky:\n  • Variant A — ${variantASnapshot!.label} (${variantASnapshot!.total.toFixed(0)} €)\n  • Variant B — ${input.floor_type_label} (${total.toFixed(0)} €)\n\nPorovnajte si prosím obe možnosti a dajte mi vedieť ktorá Vám vyhovuje viac.`
+        : "";
+
       const bodyText = isFinal
         ? // FINÁLNA — user: "text na konci vravi aj za aku podlahu konkretne
           // ze jednofarebnu to tam nemusi byt a ma to koncit ze v prilohe
@@ -845,7 +929,7 @@ ${signatureLines.join("\n")}`;
           // podlahu" a "Ponuka je vypracovaná..." odsek.
           `Dobrý deň prajeme,
 
-Ďakujeme za obhliadku. V prílohe Vám posielam finálnu cenovú ponuku.
+Ďakujeme za obhliadku. V prílohe Vám posielam finálnu cenovú ponuku.${variantsNote}
 
 V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
 
@@ -853,7 +937,7 @@ S pozdravom,
 ${signatureLinesFinal.join("\n")}`
         : `Dobrý deň prajeme,
 
-Na základe nášho telefonátu Vám v prílohe posielam ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu.
+Na základe nášho telefonátu Vám v prílohe posielam ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu.${variantsNote}
 
 Upozorňujeme, že ide o orientačné ceny — presná cenová ponuka bude vyčíslená až po obhliadke. V závislosti od stavu podkladu sa cena môže líšiť o niekoľko percent (viac alebo menej).
 
@@ -906,8 +990,17 @@ ${signatureLines.join("\n")}`;
           to_name: customerName.trim() || "Zákazník",
           subject,
           body_text: bodyText,
-          pdf_base64: pdfBase64,
-          pdf_filename: filename,
+          // Variant B (aktuálna) = hlavná príloha; Variant A (uložená) =
+          // priložená druhá. Poradie v Gmail prílohách: A prvá (uložená
+          // skôr) → obchodák dostane obe naraz.
+          pdf_base64: variantASnapshot?.pdfBase64 ?? pdfBase64,
+          pdf_filename: variantASnapshot?.filename ?? filename,
+          pdf_base64_2: variantASnapshot
+            ? pdfBase64
+            : undefined,
+          pdf_filename_2: variantASnapshot
+            ? filename.replace(/\.pdf$/i, "") + "-variant-B.pdf"
+            : undefined,
           agent_email: input.agent_email,
           agent_name: input.agent_name,
           quote_state: quoteStateSnapshot,
@@ -1067,8 +1160,10 @@ ${signatureLines.join("\n")}`;
           </div>
         </>
       ) : (
-        // Kompaktné pills v rade — fotka 40×40 + meno, aby zostalo miesto na zvyšok
-        <div className="grid grid-cols-4 gap-2">
+        // User 2026-07-12: „vyber podlah typu ide cez okienka" — na mobile
+        // 4 tiles v jednej linke rezali názvy („Jednof", „Chipso"…). Fix:
+        // 2 stĺpce na mobile, 4 na desktope.
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {(Object.keys(FLOOR_TYPE_LABELS) as FloorType[]).map((type) => {
             const active = floorType === type;
             return (
@@ -1077,7 +1172,7 @@ ${signatureLines.join("\n")}`;
                 type="button"
                 onClick={() => selectFloorType(type)}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-xl border p-2 text-left transition-all",
+                  "flex items-center gap-2.5 rounded-xl border p-2 text-left transition-all min-h-[52px]",
                   active
                     ? "border-sky-500 bg-sky-50 ring-2 ring-sky-200 shadow-sm"
                     : "border-border bg-background hover:border-foreground/30 hover:bg-muted/40",
@@ -1091,7 +1186,7 @@ ${signatureLines.join("\n")}`;
                 />
                 <span
                   className={cn(
-                    "text-sm font-bold tracking-tight",
+                    "text-sm font-bold tracking-tight truncate",
                     active && "text-sky-800",
                   )}
                 >
@@ -1403,7 +1498,42 @@ ${signatureLines.join("\n")}`;
           </div>
         </div>
 
-        <div className="flex gap-2 pt-2 mt-2 border-t border-sky-200 flex-wrap">
+        {/* Variant A chip — ak obchodák uložil prvú variantu (napr. epoxid),
+            zobrazíme fialovú kartičku s totalom + „X" na zrušenie. User
+            2026-07-15: „jednu plusko a druhu manualne vyklikas". */}
+        {variantASnapshot && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg border-2 border-violet-300 bg-violet-50 px-3 py-2">
+            <div className="text-lg">💾</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-wider font-black text-violet-700">
+                Variant A uložený
+              </div>
+              <div className="text-sm font-bold text-violet-900 truncate">
+                {variantASnapshot.label} ·{" "}
+                <span className="tabular-nums">
+                  {variantASnapshot.total.toFixed(0)} €
+                </span>
+              </div>
+            </div>
+            <div className="text-[10px] text-violet-700 hidden sm:block">
+              Prestav generátor na druhú variantu →
+            </div>
+            <button
+              type="button"
+              onClick={() => setVariantASnapshot(null)}
+              className="shrink-0 w-7 h-7 rounded-md bg-violet-200 hover:bg-violet-300 text-violet-900 font-black text-sm flex items-center justify-center"
+              title="Zrušiť uloženú variantu A"
+              aria-label="Zrušiť uloženú variantu A"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* User 2026-07-12: „ta ceruzka je random proste vyrovnaj sama dole".
+            Ceruzka teraz drží pevnú pozíciu vpravo pri „Pošli email", oba
+            buttons rovnaká výška, žiadny wrap-out do samostatného riadku. */}
+        <div className="flex items-stretch gap-2 pt-2 mt-2 border-t border-sky-200 flex-wrap">
           <Button
             type="button"
             onClick={handleDownloadPdf}
@@ -1416,39 +1546,56 @@ ${signatureLines.join("\n")}`;
             <FileText className="w-4 h-4 mr-1" aria-hidden />
             Stiahnuť PDF
           </Button>
-          <Button
-            type="button"
-            onClick={handleSendEmail}
-            disabled={
-              busy ||
-              total <= 0 ||
-              !customerEmail.trim() ||
-              !customerEmail.includes("@")
-            }
-            className="flex-1 min-w-[200px] bg-emerald-600 hover:bg-emerald-700"
-          >
-            <Mail className="w-4 h-4 mr-1.5" aria-hidden />
-            {isResend ? "Preposlať upravenú ponuku" : "Pošli email s ponukou"}
-          </Button>
-          {/* Malé tlačidlo vpravo — otvorí modal na doplnenie textu
-              PRED odoslaním. Užitočné keď obchodák chce pridať
-              individuálnu poznámku ("dohodli sme sa na X", "kontaktoval
-              ma Váš syn", atd.) namiesto generickeho textu. */}
-          <Button
-            type="button"
-            onClick={handleOpenEditor}
-            disabled={
-              busy ||
-              total <= 0 ||
-              !customerEmail.trim() ||
-              !customerEmail.includes("@")
-            }
-            variant="outline"
-            className="min-w-[44px] px-3 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
-            title="Upraviť text pred odoslaním"
-          >
-            ✏️
-          </Button>
+          {/* „Uložiť ako variant A" — iba ak ešte nie je uložená. Po uložení
+              chip vyššie preberá informáciu + krížik na zrušenie. */}
+          {!variantASnapshot && (
+            <Button
+              type="button"
+              onClick={handleSaveVariantA}
+              disabled={busy || total <= 0}
+              variant="outline"
+              className="flex-1 min-w-[160px] border-violet-300 text-violet-800 hover:bg-violet-50"
+              title="Ulož aktuálnu CP ako variant A. Potom prestav generátor na druhú variantu a pošli obidve naraz."
+            >
+              💾 Uložiť ako variant A
+            </Button>
+          )}
+          <div className="flex-1 min-w-[200px] flex items-stretch gap-1.5">
+            <Button
+              type="button"
+              onClick={handleSendEmail}
+              disabled={
+                busy ||
+                total <= 0 ||
+                !customerEmail.trim() ||
+                !customerEmail.includes("@")
+              }
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+            >
+              <Mail className="w-4 h-4 mr-1.5" aria-hidden />
+              {variantASnapshot
+                ? "Pošli 2 varianty naraz"
+                : isResend
+                  ? "Preposlať upravenú ponuku"
+                  : "Pošli email s ponukou"}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleOpenEditor}
+              disabled={
+                busy ||
+                total <= 0 ||
+                !customerEmail.trim() ||
+                !customerEmail.includes("@")
+              }
+              variant="outline"
+              className="shrink-0 w-12 px-0 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+              title="Upraviť text pred odoslaním"
+              aria-label="Upraviť text pred odoslaním"
+            >
+              ✏️
+            </Button>
+          </div>
         </div>
       </div>
       )}
@@ -1954,7 +2101,7 @@ function LineRow({
               <div className="w-24" onClick={(e) => e.stopPropagation()}>
                 <Input
                   type="number"
-                  placeholder="m²"
+                  placeholder={material.unit === "sokel" ? "bm" : "m²"}
                   value={state.m2}
                   onFocus={ensureEnabled}
                   onChange={(e) => {
@@ -1964,6 +2111,53 @@ function LineRow({
                   className="h-9 text-sm"
                 />
               </div>
+
+              {material.unit === "sokel" && (
+                <div
+                  className="inline-flex items-center gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={material.min_cm ?? 5}
+                    max={material.max_cm ?? 30}
+                    step={1}
+                    placeholder="cm"
+                    value={state.mm}
+                    onFocus={ensureEnabled}
+                    onChange={(e) => {
+                      ensureEnabled();
+                      onChange({
+                        ...state,
+                        mm: e.target.value,
+                        enabled: true,
+                      });
+                    }}
+                    onBlur={(e) => {
+                      const v = parseFloat(e.target.value) || 0;
+                      const min = material.min_cm ?? 5;
+                      const max = material.max_cm ?? 30;
+                      if (v < min || v > max) {
+                        onChange((prev) => ({
+                          ...prev,
+                          mm: String(Math.max(min, Math.min(max, v || min))),
+                        }));
+                      }
+                    }}
+                    className="h-9 w-16 text-sm text-center font-bold"
+                  />
+                  <span className="text-[10px] font-bold text-muted-foreground">
+                    cm
+                  </span>
+                  <span
+                    className="text-[9px] uppercase tracking-wider font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded"
+                    title={`Sadzba ${material.price_per_bm_per_cm ?? 1.2} €/bm/cm`}
+                  >
+                    {material.price_per_bm_per_cm ?? 1.2} €/bm/cm
+                  </span>
+                </div>
+              )}
 
               {material.unit === "level" && (
                 <div
@@ -2590,85 +2784,94 @@ function MaterialRow({
   return (
     <li
       className={cn(
-        "px-4 py-3 flex items-center gap-3",
+        // Mobile: stacked (kvázi karta); Desktop (sm+): horizontal row.
+        // User 2026-07-12: „toto su materialy … optimalizuj aby to davalo
+        // zmysel na mobile".
+        "px-3 py-3 sm:px-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3",
         qty > 0 && "bg-sky-50/40",
       )}
     >
+      {/* Info blok */}
       <div className="flex-1 min-w-0">
-        <div className="font-extrabold text-base inline-flex items-center gap-1.5 leading-snug">
-          {p.name}
+        <div className="font-extrabold text-[15px] sm:text-base inline-flex items-start gap-1.5 leading-snug flex-wrap">
+          <span className="break-words">{p.name}</span>
           {p.note && (
-            <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded shrink-0">
               {p.note}
             </span>
           )}
         </div>
         {p.desc && (
-          <div className="text-[13px] font-semibold text-foreground/80 leading-snug mt-0.5">
+          <div className="text-[12px] sm:text-[13px] font-semibold text-foreground/80 leading-snug mt-0.5">
             {p.desc}
           </div>
         )}
-        <div className="text-[12px] font-bold text-muted-foreground mt-0.5 tabular-nums">
+        <div className="text-[11px] sm:text-[12px] font-bold text-muted-foreground mt-0.5 tabular-nums">
           {subtitle}
         </div>
       </div>
-      <div
-        className="inline-flex items-center gap-1"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            setMaterialQtys((prev) => {
-              const cur = parseFloat(prev[p.id] ?? "") || 0;
-              const next = Math.max(0, cur - 1);
-              return { ...prev, [p.id]: next > 0 ? String(next) : "" };
-            });
-          }}
-          className="w-7 h-7 rounded-md border bg-background hover:bg-muted/60 text-lg font-bold leading-none disabled:cursor-not-allowed"
-          aria-label="Menej"
+
+      {/* Ovládanie + cena — na mobile v samostatnom riadku pod info,
+          zarovnané do jedného kompaktného páska. */}
+      <div className="flex items-center justify-between gap-2 sm:gap-1 sm:justify-end">
+        <div
+          className="inline-flex items-center gap-1"
+          onClick={(e) => e.stopPropagation()}
         >
-          −
-        </button>
-        <Input
-          type="number"
-          inputMode="numeric"
-          min={0}
-          step={p.sell_by === "kg" ? 0.5 : 1}
-          placeholder="0"
-          value={materialQtys[p.id] ?? ""}
-          disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            setMaterialQtys((prev) => ({ ...prev, [p.id]: v }));
-          }}
-          className="h-7 w-14 text-center text-sm font-bold tabular-nums"
-        />
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            setMaterialQtys((prev) => {
-              const cur = parseFloat(prev[p.id] ?? "") || 0;
-              return { ...prev, [p.id]: String(cur + 1) };
-            });
-          }}
-          className="w-7 h-7 rounded-md border bg-background hover:bg-muted/60 text-lg font-bold leading-none disabled:cursor-not-allowed"
-          aria-label="Viac"
-        >
-          +
-        </button>
-        <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground ml-1 w-8">
-          {unit}
-        </span>
-      </div>
-      <div className="w-24 text-right font-bold tabular-nums text-sm">
-        {lineSell !== null && lineSell > 0 ? (
-          formatEur(lineSell)
-        ) : (
-          <span className="text-muted-foreground text-xs font-normal">—</span>
-        )}
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              setMaterialQtys((prev) => {
+                const cur = parseFloat(prev[p.id] ?? "") || 0;
+                const next = Math.max(0, cur - 1);
+                return { ...prev, [p.id]: next > 0 ? String(next) : "" };
+              });
+            }}
+            className="w-9 h-9 sm:w-7 sm:h-7 rounded-lg sm:rounded-md border bg-background hover:bg-muted/60 text-xl sm:text-lg font-bold leading-none disabled:cursor-not-allowed"
+            aria-label="Menej"
+          >
+            −
+          </button>
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={p.sell_by === "kg" ? 0.5 : 1}
+            placeholder="0"
+            value={materialQtys[p.id] ?? ""}
+            disabled={disabled}
+            onChange={(e) => {
+              const v = e.target.value;
+              setMaterialQtys((prev) => ({ ...prev, [p.id]: v }));
+            }}
+            className="h-9 w-16 sm:h-7 sm:w-14 text-center text-base sm:text-sm font-bold tabular-nums"
+          />
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              setMaterialQtys((prev) => {
+                const cur = parseFloat(prev[p.id] ?? "") || 0;
+                return { ...prev, [p.id]: String(cur + 1) };
+              });
+            }}
+            className="w-9 h-9 sm:w-7 sm:h-7 rounded-lg sm:rounded-md border bg-background hover:bg-muted/60 text-xl sm:text-lg font-bold leading-none disabled:cursor-not-allowed"
+            aria-label="Viac"
+          >
+            +
+          </button>
+          <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground ml-1">
+            {unit}
+          </span>
+        </div>
+        <div className="min-w-[70px] sm:w-24 text-right font-black tabular-nums text-sm sm:text-sm">
+          {lineSell !== null && lineSell > 0 ? (
+            formatEur(lineSell)
+          ) : (
+            <span className="text-muted-foreground text-xs font-normal">—</span>
+          )}
+        </div>
       </div>
     </li>
   );

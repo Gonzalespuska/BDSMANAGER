@@ -26,13 +26,10 @@ export async function createAgentAction(input: {
   name: string;
   email: string;
   phone: string;
-  role:
-    | "admin"
-    | "obchod"
-    | "obhliadky"
-    | "realizacie"
-    | "office"
-    | "skolenie";
+  role: "admin" | "obchod" | "obhliadky" | "realizacie" | "office";
+  secondary_roles?: Array<
+    "admin" | "obchod" | "obhliadky" | "realizacie" | "office"
+  >;
   capacity: number;
 }): Promise<ActionResult<{ id: string; magic_link?: string }>> {
   const me = await requireAdmin();
@@ -41,25 +38,36 @@ export async function createAgentAction(input: {
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
   const phone = input.phone.trim();
+  // User 2026-07-12: „skolenie mas dat dopice som ti povedal zo vsade" —
+  // rola „skolenie" už NIE JE v allowed set. Existujúci users s touto
+  // rolou v DB fungujú kvôli backwards-compat check constraint.
   const ALLOWED_ROLES = [
     "admin",
     "obchod",
     "obhliadky",
     "realizacie",
     "office",
-    "skolenie",
   ] as const;
   const role = (ALLOWED_ROLES as readonly string[]).includes(input.role)
     ? input.role
     : "obchod";
+  // Multi-role: uložíme len valid roles, deduplikované, bez primary.
+  const secondary = Array.from(
+    new Set(
+      (input.secondary_roles ?? []).filter(
+        (r) => (ALLOWED_ROLES as readonly string[]).includes(r) && r !== role,
+      ),
+    ),
+  );
   const capacity = Math.max(0, Math.min(10, Math.floor(input.capacity || 5)));
 
   if (!name) return { ok: false, error: "Meno je povinné" };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, error: "Neplatný email" };
   }
-  if (!phone) return { ok: false, error: "Telefón je povinný" };
-  if (phone.replace(/\s/g, "").length < 9) {
+  // User 2026-07-12: „ak nedas cislo nevadi nech sa to da potvrdit vytvorit
+  // a doplnit neskor". Telefón je voliteľný pri create.
+  if (phone && phone.replace(/\s/g, "").length < 9) {
     return { ok: false, error: "Telefón je príliš krátky" };
   }
 
@@ -108,19 +116,37 @@ export async function createAgentAction(input: {
   }
 
   // 2. Vlož row do public.users.
-  const { data: newUser, error: insertError } = await sb
+  // secondary_roles column je optional (pridá sa až migráciou 41 ak treba);
+  // ak neexistuje, fallback na uloženie do metadata JSONB alebo bez neho.
+  const baseInsert: Record<string, unknown> = {
+    auth_id: authUserId,
+    email,
+    name,
+    role,
+    active: true,
+    capacity,
+    phone: phone || null,
+  };
+  if (secondary.length > 0) {
+    baseInsert.secondary_roles = secondary;
+  }
+  const attempt = await sb
     .from("users")
-    .insert({
-      auth_id: authUserId,
-      email,
-      name,
-      role,
-      active: true,
-      capacity,
-      phone,
-    })
+    .insert(baseInsert)
     .select("id")
     .single();
+  let newUser = attempt.data;
+  let insertError = attempt.error;
+  if (
+    insertError &&
+    /secondary_roles.*column|column.*secondary_roles/i.test(insertError.message)
+  ) {
+    // Fallback: DB nemá secondary_roles column — odstráň a insert znovu.
+    delete baseInsert.secondary_roles;
+    const retry = await sb.from("users").insert(baseInsert).select("id").single();
+    newUser = retry.data;
+    insertError = retry.error;
+  }
 
   if (insertError || !newUser) {
     return {

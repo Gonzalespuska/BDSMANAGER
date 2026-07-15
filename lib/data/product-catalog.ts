@@ -212,13 +212,15 @@ const SIKA: Product[] = [
   {
     id: "sika-264plus-kg",
     brand: "sika",
-    name: "Sikafloor-264 Plus RAL 7032/7035 (30 kg, na kg)",
+    name: "Sikafloor-264 Plus RAL 7032/7035 (30 kg sud)",
     desc: "2K epoxid pre priemysel + garáže · spotreba 1,40 kg/m² (2 vrstvy)",
-    package_size_kg: null,
-    cost_per_package: null,
-    // Peto: 5,78 €/kg bez DPH × 1,23 = 7,11 €/kg s DPH
+    package_size_kg: 30,
+    // User 2026-07-14: „pocitaj s tym ze sa to predava na sudy nie na kg".
+    // Sikafloor-264 Plus RAL 7032/35 sa predáva v 30 kg sudoch.
+    // Náklad = 30 × 7,11 €/kg = 213,30 € s DPH.
+    cost_per_package: 213,
     cost_per_kg: 7.11,
-    sell_by: "kg",
+    sell_by: "package",
     role: "main",
     floor_types: ["jednofarebna", "chipsova", "mramorova"],
   },
@@ -268,13 +270,13 @@ const SIKA: Product[] = [
   {
     id: "sika-3310-kg",
     brand: "sika",
-    name: "Sikafloor-3310 RAL 7032/7035 (20 kg, na kg)",
+    name: "Sikafloor-3310 RAL 7032/7035 (20 kg sud)",
     desc: "PU vrchný lak k Sikafloor-3000 systému · spotreba 0,20 kg/m² (Sika TDS)",
-    package_size_kg: null,
-    cost_per_package: null,
-    // Peto: 7,15 €/kg bez DPH × 1,23 = 8,79 €/kg s DPH
+    package_size_kg: 20,
+    // Predáva sa v 20 kg sudoch. Náklad = 20 × 8,79 = 175,80 € s DPH.
+    cost_per_package: 176,
     cost_per_kg: 8.79,
-    sell_by: "kg",
+    sell_by: "package",
     role: "topcoat",
     floor_types: ["jednofarebna"],
     compatible_with: ["sika-3000-20", "sika-3000fx-20"],

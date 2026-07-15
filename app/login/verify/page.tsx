@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { getCurrentAppUser, dashboardPathForRole } from "@/lib/auth";
 import { verifyOtpAction } from "../actions";
 import { VerifyOtpSubmit } from "./verify-submit";
+import { PasteOtpButton } from "./paste-otp-button";
 
 export const runtime = "edge";
 
@@ -118,16 +119,26 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
                 name="token"
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]{6,10}"
-                maxLength={10}
+                pattern="[0-9]{6}"
+                minLength={6}
+                maxLength={6}
                 autoComplete="one-time-code"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
                 autoFocus
                 required
                 placeholder="123456"
                 className="text-3xl font-mono tracking-[0.4em] text-center h-16 font-bold border-sky-200 focus:border-sky-500 focus:ring-sky-500/30"
               />
+              <p className="text-[11px] text-muted-foreground leading-tight">
+                📱 <strong>Mobil:</strong> Otvor Mail appku a kód sa objaví
+                nad klávesnicou ako návrh (iOS auto-detektor). Alebo klikni
+                „Vložiť zo schránky".
+              </p>
             </div>
 
+            <PasteOtpButton />
             <VerifyOtpSubmit />
           </form>
 

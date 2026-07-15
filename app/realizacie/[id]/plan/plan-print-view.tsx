@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@/lib/utils";
 import { SIKA_PRODUCTS } from "@/lib/data/sika-products";
 import {
   FLOOR_SYSTEMS,
@@ -31,24 +32,64 @@ interface Step {
  */
 function buildSteps(isGarage: boolean): Step[] {
   const steps: Step[] = [
-    { n: 1, label: "Vybrúsenie" },
-    { n: 2, label: "Zošívanie / spravovanie podkladu" },
-    { n: 3, label: "Vysávanie" },
+    {
+      n: 1,
+      label: "Vybrúsenie",
+      note: "Podklad prebrúsiť diamantovou brúskou (zrno 30/40). Skontrolovať rovinnosť a odstrániť nesúdržné časti. Pri väčších plochách postupovať v pásoch, na okrajoch dobrúsiť ručne.",
+    },
+    {
+      n: 2,
+      label: "Zošívanie / spravovanie podkladu",
+      note: "Praskliny prerezať flexou, vyčistiť a zošiť oceľovými stužkami každých 20–25 cm. Zaliať epoxidovou opravnou hmotou zmiešanou s kremičitým pieskom. Nechať vytvrdnúť minimálne 4h.",
+    },
+    {
+      n: 3,
+      label: "Vysávanie",
+      note: "Priemyselným vysávačom (HEPA) dôkladne povysávať celú plochu — najprv veľké nečistoty, potom prach v pásoch. Následne pretrieť micro-fibra utierkou aby nezostal jemný prach.",
+    },
     {
       n: 4,
       label: "Kontrola — správne povysávané a vybrúsené pred penetráciou",
-      note: "vizuálna kontrola + prípadné opravné vybrúsenie",
+      note: "Vizuálna kontrola podkladu — musí byť matný, súdržný, bez prachu a mastnôt. Ak treba, opravné vybrúsenie a povysávanie. Bez tohto kroku nesmie ísť penetrácia.",
     },
-    { n: 5, label: "Penetrácia" },
-    { n: 6, label: "Vybrúsenie penetrácie" },
-    { n: 7, label: "Povysávanie" },
-    { n: 8, label: "Kontrola povysávania" },
-    { n: 9, label: "Farebná vrstva" },
+    {
+      n: 5,
+      label: "Penetrácia",
+      note: "Zmiešať zložku A + B podľa TDS (min. 3 min miešačkou pri nízkych otáčkach). Naniesť valčekom rovnomerne cca 300–400 g/m². Krížovým pohybom aby sa vsakla do pórov. Čas otvorenej doby ~30 min.",
+    },
+    {
+      n: 6,
+      label: "Vybrúsenie penetrácie",
+      note: "Po zaschnutí (12–24h podľa teploty) preleštiť/prebrúsiť penetrovaný povrch jemným zrnom (80–120) aby ďalšia vrstva držala. Neprebrúsiť naspäť na podklad.",
+    },
+    {
+      n: 7,
+      label: "Povysávanie",
+      note: "Po brúsení penetrácie znova dôkladne povysávať. Prach z brúsenia by inak narušil priľnavosť farebnej vrstvy.",
+    },
+    {
+      n: 8,
+      label: "Kontrola povysávania",
+      note: "Vizuálna kontrola — povrch čistý, matný, bez prachu. Skontrolovať aj rohy a rimsy. Ak zostal prach, zopakovať vysávanie + utrieť micro-fibra.",
+    },
+    {
+      n: 9,
+      label: "Farebná vrstva",
+      note: "Zmiešať A + B + farbivo. Naniesť liatinovým stierkovaním alebo valčekom v hrúbke podľa systému (typicky 1,5–2 kg/m²). Odvzdušniť ihličkovým valčekom. Čas otvorenej doby cca 25 min pri 20°C.",
+    },
   ];
   if (isGarage) {
-    steps.push({ n: 10, label: "Chipsy (rozsypanie + rovnomerné pokrytie)" });
+    steps.push({
+      n: 10,
+      label: "Chipsy (rozsypanie + rovnomerné pokrytie)",
+      note: "Ihneď po nanesení farebnej vrstvy (kým je mokrá) rovnomerne rozsypať chipsy z výšky 1,5–2 m. Rozsypať postupne v pásoch, pokryť 100 % plochu. Po vytvrdnutí vysávať prebytočné chipsy a preleštit.",
+    });
   } else {
-    steps.push({ n: 10, label: "Vrchný lak" });
+    steps.push({
+      n: 10,
+      label: "Vrchný lak",
+      note: "Po vytvrdnutí farebnej vrstvy (min. 24h) naniesť transparentný vrchný lak valčekom cca 100–120 g/m². Krížovým pohybom, odvzdušniť. Konečná pochôdznosť po 24h, plná záťaž po 7 dňoch.",
+    });
   }
   return steps;
 }
@@ -84,6 +125,7 @@ export function PlanPrintView({
   isChipsFloor,
   inspectionMeasurements,
   responsibilitySteps,
+  sokel,
 }: {
   leadName: string;
   leadPhone?: string | null;
@@ -142,19 +184,37 @@ export function PlanPrintView({
     moisture_cm_avg: number | null;
     measured_by: string | null;
   };
+  /** Sokel — ak obchodák pridal v CP, obsahuje bm (obvod) + cm (výška).
+   *  Realizator vidí extra krok v Postupe + extra riadok v Inventúre. */
+  sokel?: { bm: number; cm: number } | null;
 }) {
   // Ak sme dostali kroky z DB (podľa priradeného systému), použij ich.
   // Inak fallback na hardcoded buildSteps(isGarage).
   // User: "autoamticky mu to na dany system upravi aj postup pretoze
   // postup je iny pre ine systemy".
-  const steps: Step[] =
-    procedureSteps && procedureSteps.length > 0
-      ? procedureSteps.map((s) => ({
-          n: s.step,
-          label: s.title,
-          note: s.note,
-        }))
-      : buildSteps(isGarage);
+  const steps: Step[] = (() => {
+    const base =
+      procedureSteps && procedureSteps.length > 0
+        ? procedureSteps.map((s) => ({
+            n: s.step,
+            label: s.title,
+            note: s.note,
+          }))
+        : buildSteps(isGarage);
+    // Sokel — extra krok na konci, ak obchodák pridal sokel v CP.
+    // User 2026-07-12: „ked obchodak pridá sokel v CP, realizator ho musí
+    // vidieť v postupe aj v inventure".
+    if (sokel && sokel.bm > 0) {
+      const nextN =
+        base.length > 0 ? Math.max(...base.map((s) => s.n)) + 1 : 1;
+      base.push({
+        n: nextN,
+        label: `Sokel epoxidový — ${sokel.bm.toLocaleString("sk-SK")} bm × ${sokel.cm} cm`,
+        note: `Po obvode celej plochy natrieť epoxidový sokel do výšky ${sokel.cm} cm. Total ${sokel.bm.toLocaleString("sk-SK")} bm. Pred nanesením zamaskovať pásku horný okraj (rovná línia). Použiť rovnaký materiál ako farebná vrstva. Odhadovaná spotreba: ${((sokel.bm * sokel.cm) / 100 * 1.4).toFixed(1)} kg epoxidu.`,
+      });
+    }
+    return base;
+  })();
   void systemCode;
   void initialSystemId;
   const areaNum = parseFloat((plocha ?? "").replace(",", ".")) || 0;
@@ -212,10 +272,9 @@ export function PlanPrintView({
           .print-page h2 { margin: 6px 0 3px; }
           .print-page .no-print { display: none !important; }
           .no-print { display: none !important; }
-          /* User 2026-07-12: „chcem to na 1 stranu" — jeden print súbor
-             = jedna A4 strana, žiadny break-after. Ak by prípadne kontent
-             pretiekol pre veľa položiek, prehľadá radšej menšie fonty
-             než ďalšiu stranu. */
+          /* User 2026-07-12: jedna A4 strana, ziadny break-after.
+             Ak by kontent pretiekol pre vela poloziek, pouzije mensi
+             font namiesto dalsej strany. */
           .print-page .avoid-break { page-break-inside: avoid; }
           .print-page table { page-break-inside: avoid; }
         }
@@ -262,6 +321,12 @@ export function PlanPrintView({
             <div>
               <strong>Tím:</strong> {teamName ?? "—"}
             </div>
+            {(realizationSystemLabel || floorType) && (
+              <div>
+                <strong>Systém:</strong>{" "}
+                {realizationSystemLabel ?? floorType ?? "—"}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -365,6 +430,41 @@ export function PlanPrintView({
                       </td>
                     </tr>
                   ))}
+                  {/* Sokel — extra riadok ak obchodák pridal v CP. Spotreba
+                      1,4 kg epoxidu / m² skirtingu (Sika ~1,4 kg farebnej
+                      vrstvy / m²). User 2026-07-12: aj v inventure. */}
+                  {sokel && sokel.bm > 0 && (() => {
+                    const skirtingM2 = (sokel.bm * sokel.cm) / 100;
+                    const kgEpoxid = skirtingM2 * 1.4;
+                    return (
+                      <tr className="border border-amber-400 avoid-break bg-amber-50/40">
+                        <td className="border border-amber-300 px-2 py-2 print:py-1 text-center tabular-nums font-black text-lg print:text-base text-amber-900">
+                          +
+                        </td>
+                        <td className="border border-amber-300 px-3 py-2 print:py-1">
+                          <div className="font-black text-base print:text-sm text-amber-900">
+                            🧱 Sokel — extra epoxid na obvod
+                          </div>
+                          <div className="text-[10px] text-amber-800 font-semibold mt-0.5">
+                            {sokel.bm.toLocaleString("sk-SK")} bm × {sokel.cm} cm = {skirtingM2.toFixed(2)} m² skirtingu
+                          </div>
+                          <div className="text-[10px] text-amber-800 italic mt-0.5 print:hidden">
+                            Použi zvyšný epoxid z farebnej vrstvy (1,4 kg/m²).
+                          </div>
+                        </td>
+                        <td className="border border-amber-300 px-2 py-2 print:py-1 text-center">
+                          <div className="text-3xl print:text-xl font-black tabular-nums text-amber-900">
+                            {kgEpoxid.toFixed(1)}
+                          </div>
+                        </td>
+                        <td className="border border-amber-300 px-2 py-2 print:py-1 text-center">
+                          <div className="text-lg print:text-base font-black tabular-nums text-amber-900">
+                            kg
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })()}
                 </tbody>
               </table>
 
@@ -412,18 +512,7 @@ export function PlanPrintView({
       {/* Print footer */}
       <div className="mt-8 pt-4 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
         <span>Epoxidovo s.r.o. · najcrm.sk</span>
-        <span>
-          {(() => {
-            const d = new Date();
-            const sk = new Date(d.getTime() + 2 * 3600 * 1000);
-            const dd = String(sk.getUTCDate()).padStart(2, "0");
-            const mm = String(sk.getUTCMonth() + 1).padStart(2, "0");
-            const yy = sk.getUTCFullYear();
-            const hh = String(sk.getUTCHours()).padStart(2, "0");
-            const mi = String(sk.getUTCMinutes()).padStart(2, "0");
-            return `${dd}.${mm}.${yy} ${hh}:${mi}`;
-          })()}
-        </span>
+        <ClientTimestamp />
       </div>
     </div>
   );
@@ -879,7 +968,7 @@ function PostupAccordion({ steps }: { steps: Step[] }) {
                 <div className="font-black text-base print:text-sm text-slate-900">
                   {s.label}
                 </div>
-                {!isOpen && !s.note && (
+                {!isOpen && s.note && (
                   <div className="text-[10px] text-slate-400 mt-0.5 print:hidden">
                     Klikni pre detail
                   </div>
@@ -944,4 +1033,22 @@ function PostupAccordion({ steps }: { steps: Step[] }) {
       </div>
     </div>
   );
+}
+
+// ClientTimestamp — renders "DD.MM.YYYY HH:mm" but only after mount.
+// Prevents hydration mismatch: `new Date()` on server-render is
+// different from `new Date()` on client-hydrate (seconds apart).
+function ClientTimestamp() {
+  const [ts, setTs] = React.useState<string>("");
+  React.useEffect(() => {
+    const d = new Date();
+    const sk = new Date(d.getTime() + 2 * 3600 * 1000);
+    const dd = String(sk.getUTCDate()).padStart(2, "0");
+    const mm = String(sk.getUTCMonth() + 1).padStart(2, "0");
+    const yy = sk.getUTCFullYear();
+    const hh = String(sk.getUTCHours()).padStart(2, "0");
+    const mi = String(sk.getUTCMinutes()).padStart(2, "0");
+    setTs(`${dd}.${mm}.${yy} ${hh}:${mi}`);
+  }, []);
+  return <span suppressHydrationWarning>{ts}</span>;
 }

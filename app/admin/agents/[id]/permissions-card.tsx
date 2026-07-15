@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Check,
   ClipboardList,
-  GraduationCap,
   Hammer,
   Loader2,
   Package,
@@ -82,13 +81,9 @@ const ROLE_DEFS: Array<{
     icon: <Package className="w-4 h-4" />,
     tint: "slate",
   },
-  {
-    role: "skolenie",
-    label: "Školenie",
-    desc: "Iba prístup do Podkladov (call scripty, postupy, tréning).",
-    icon: <GraduationCap className="w-4 h-4" />,
-    tint: "rose",
-  },
+  // User 2026-07-12: „tato rola prec" — rola „skolenie" odstranená z pickeru.
+  // Type + DB constraint držíme kvôli back-compat s existujúcimi users,
+  // ale v UI sa už nedá priradiť. Migrácia: scripts/migrate-skolenie.mjs.
 ];
 
 export function PermissionsCard({

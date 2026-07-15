@@ -28,6 +28,7 @@ const TABS = [
   // (dátum obhliadky uplynul → automaticky sem)
   { id: "obhliadnute_hotove", label: "✔️ Obhliadnuté" },
   { id: "archivovane", label: "📦 Archivované" },
+  { id: "kos", label: "🗑 Kôš" },
   { id: "ukoncene", label: "✅ Hotové realizácie" },
 ] as const;
 
@@ -198,7 +199,22 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
       }
 
       case "archivovane": {
+        // Archivované = follow-up neskôr. Vylúč trash (mrtvý).
+        // Ak DB nemá status='trash' constraint, mrtvé leady sú v status='archived'
+        // s data.trashed=true → tie treba tu explicitne vylúčiť.
         let q = supabase.from("leads").select("*").in("status", ["archived", "lost", "not_interested"]);
+        if (!isAdmin) q = q.eq("assigned_to", user.id);
+        q = q.or("data->>trashed.is.null,data->>trashed.eq.false");
+        return q.order("last_activity_at", { ascending: false }).limit(200);
+      }
+
+      case "kos": {
+        // Kôš — status='trash' ALEBO archived s data.trashed=true (fallback).
+        // User 2026-07-14: „novy status ktory sa bude volat kos".
+        let q = supabase
+          .from("leads")
+          .select("*")
+          .or("status.eq.trash,data->>trashed.eq.true");
         if (!isAdmin) q = q.eq("assigned_to", user.id);
         return q.order("last_activity_at", { ascending: false }).limit(200);
       }
@@ -372,9 +388,14 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
         </div>
       </header>
 
+      {/* User 2026-07-12: „na leadoch tie statusy 2 v riadku pod sebou divne
+          optimalizovat". Na mobile → horizontálny scroll s snap-x (iOS-style
+          pills). Na desktope wrap ako predtým. */}
       <div
         className={cn(
-          "flex flex-wrap gap-2",
+          "flex gap-2 -mx-4 px-4 sm:mx-0 sm:px-0",
+          "overflow-x-auto scrollbar-hide flex-nowrap sm:flex-wrap sm:overflow-visible",
+          "snap-x snap-mandatory sm:snap-none",
           searchMode && "opacity-40 pointer-events-none",
         )}
         aria-disabled={searchMode}
@@ -387,17 +408,18 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
               key={id}
               href={`/agent?tab=${id}`}
               className={cn(
-                "px-4 py-2.5 rounded-xl font-bold text-sm transition-colors",
+                "shrink-0 sm:shrink px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-sm transition-colors snap-start",
+                "inline-flex items-center gap-2",
                 active
                   ? "bg-foreground text-background shadow-sm"
                   : "bg-background border hover:border-foreground/30 hover:bg-muted/40",
               )}
             >
-              {label}
+              <span className="whitespace-nowrap">{label}</span>
               {count !== undefined && (
                 <span
                   className={cn(
-                    "ml-2 inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full text-xs font-bold",
+                    "inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 rounded-full text-[11px] font-black tabular-nums",
                     active
                       ? "bg-background/20 text-background"
                       : "bg-muted text-foreground",

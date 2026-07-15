@@ -55,14 +55,16 @@ export const ROLE_ICON_NAME: Record<AppUserRole, string> = {
   skolenie: "GraduationCap",
 };
 
-/** Allowed roles array pre runtime validáciu (server actions, dev routes). */
+/** Allowed roles array pre runtime validáciu (server actions, dev routes).
+ * User 2026-07-12: „skolenie mas dat dopice som ti povedal zo vsade" —
+ * „skolenie" už NIE JE v allowed. Type ostáva kvôli backwards-compat s
+ * existujúcimi users v DB, ale nikto nový ju nedostane. */
 export const ALLOWED_ROLES: readonly AppUserRole[] = [
   "admin",
   "obchod",
   "obhliadky",
   "realizacie",
   "office",
-  "skolenie",
 ];
 
 /**

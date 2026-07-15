@@ -95,6 +95,29 @@ export default async function RealizationPlanPage({
     (lead.created_at as string | null);
 
   const data = (lead.data ?? {}) as Record<string, unknown>;
+
+  // Sokel — extrahuj z quote_state ktorý obchodák uložil v generatore.
+  // User 2026-07-12: „ked obchodak pridá sokel musí sa objaviť aj v postupe
+  // realizatora aj v inventure".
+  let sokel: { bm: number; cm: number } | null = null;
+  try {
+    const qs = (data.quote_state ?? {}) as {
+      lines?: Record<string, { enabled?: boolean; m2?: string; mm?: string }>;
+    };
+    const lines = qs.lines ?? {};
+    for (const [key, val] of Object.entries(lines)) {
+      if (!key.endsWith("-sokel")) continue;
+      if (!val?.enabled) continue;
+      const bm = parseFloat(String(val.m2 ?? "0")) || 0;
+      const cm = parseFloat(String(val.mm ?? "10")) || 10;
+      if (bm > 0) {
+        sokel = { bm, cm };
+        break;
+      }
+    }
+  } catch {
+    /* quote_state schema mimo očakávania — sokel neurčený */
+  }
   const floorType =
     (data.typ_podlahy as string | null) ??
     (data.floor_type as string | null) ??
@@ -266,6 +289,7 @@ export default async function RealizationPlanPage({
         zakazkaCislo={(lead.id as string).slice(0, 8).toUpperCase()}
         isChipsFloor={isChipsova}
         inspectionMeasurements={inspectionMeasurements}
+        sokel={sokel}
       />
     </div>
   );

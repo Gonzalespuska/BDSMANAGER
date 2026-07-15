@@ -214,34 +214,38 @@ export async function POST(request: NextRequest) {
         // aby ich lead card mohla zobraziť rovnako ako web leady
         const normalized = normalizeMetaFields(fields);
 
-        const { error: insertError } = await admin.from("leads").insert({
-          source_id: sourceMeta.id,
-          source_type: platform === "instagram" ? "instagram" : "facebook",
-          source_campaign: fetched.campaign_name ?? sourceMeta.label,
-          name,
-          phone: phone || null,
-          email: email?.toLowerCase() || null,
-          priority: "medium",
-          status: "new",
-          data: {
-            // Normalizované štandardné kľúče majú prednosť
-            ...normalized,
-            // Raw fields pre debug / originálne meta hodnoty
-            ...fields,
-            // A prepíš znovu normalizované na koniec — nesmú byť overriden
-            ...normalized,
-            meta_leadgen_id: leadgen_id,
-            meta_form_id: form_id,
-            meta_ad_id: ad_id,
-            meta_created_time: created_time,
-            meta_campaign_id: fetched.campaign_id,
-            meta_campaign_name: fetched.campaign_name,
-            meta_adset_id: fetched.adset_id,
-            meta_adset_name: fetched.adset_name,
-            meta_ad_name: fetched.ad_name,
-            meta_platform: platform,
-          },
-        });
+        const { data: insertedLead, error: insertError } = await admin
+          .from("leads")
+          .insert({
+            source_id: sourceMeta.id,
+            source_type: platform === "instagram" ? "instagram" : "facebook",
+            source_campaign: fetched.campaign_name ?? sourceMeta.label,
+            name,
+            phone: phone || null,
+            email: email?.toLowerCase() || null,
+            priority: "medium",
+            status: "new",
+            data: {
+              // Normalizované štandardné kľúče majú prednosť
+              ...normalized,
+              // Raw fields pre debug / originálne meta hodnoty
+              ...fields,
+              // A prepíš znovu normalizované na koniec — nesmú byť overriden
+              ...normalized,
+              meta_leadgen_id: leadgen_id,
+              meta_form_id: form_id,
+              meta_ad_id: ad_id,
+              meta_created_time: created_time,
+              meta_campaign_id: fetched.campaign_id,
+              meta_campaign_name: fetched.campaign_name,
+              meta_adset_id: fetched.adset_id,
+              meta_adset_name: fetched.adset_name,
+              meta_ad_name: fetched.ad_name,
+              meta_platform: platform,
+            },
+          })
+          .select("id")
+          .single();
 
         if (insertError) {
           console.error("[meta-webhook] insert failed:", insertError);
@@ -251,6 +255,20 @@ export async function POST(request: NextRequest) {
             reason: `db_insert: ${insertError.message}`,
           });
         } else {
+          // Auto-assign new Meta lead k aktívnemu obchodákovi.
+          // User 2026-07-14: „nove leady co chodia nech su automaticky
+          // pridelovane aktivnym".
+          try {
+            const { pickObchodakForNewLead, assignLeadToUser } = await import(
+              "@/lib/lead-assignment"
+            );
+            const userId = await pickObchodakForNewLead(admin);
+            if (userId && insertedLead) {
+              await assignLeadToUser(admin, insertedLead.id, userId);
+            }
+          } catch (e) {
+            console.warn("[meta-webhook] auto-assign failed:", e);
+          }
           results.push({ leadgen_id, ok: true });
         }
       } catch (err) {

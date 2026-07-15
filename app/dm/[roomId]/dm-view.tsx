@@ -251,7 +251,7 @@ export function DmView({
                       : "bg-white border border-slate-200 text-slate-900 rounded-bl-md",
                   )}
                 >
-                  {m.body}
+                  {renderMessageBody(m.body, mine, roomId)}
                 </div>
                 <div
                   className={cn(
@@ -324,4 +324,40 @@ function initials(name: string): string {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+}
+
+/**
+ * Render message body — detect internal path tokens (napr. /realizacie/{uuid},
+ * /obhliadky/{uuid}, /agent/leads/{uuid}) a premeň ich na klikateľné Linky.
+ * User 2026-07-12: „nech je meno klienta v prvej správe kliknuteľné aby sa
+ * druhá strana dostala na lead a mohla sa vrátiť späť."
+ * Návrat späť do chatu je stored v ?from=<roomId> na cieli — na detail
+ * stránke sa objaví "← Späť do chatu" tlačidlo.
+ */
+function renderMessageBody(body: string, mine: boolean, roomId: string) {
+  // Regex — /realizacie/UUID, /obhliadky/UUID, /agent/leads/UUID.
+  // Ak nič nenájdeme, vrátime plain text.
+  const pattern =
+    /(\/(?:realizacie|obhliadky|agent\/leads)\/[a-f0-9-]{6,})/gi;
+  const parts = body.split(pattern);
+  if (parts.length === 1) return body;
+  const linkClass = mine
+    ? "underline underline-offset-2 decoration-2 hover:text-sky-100 font-semibold"
+    : "text-sky-700 underline underline-offset-2 decoration-2 hover:text-sky-900 font-semibold";
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (pattern.test(p)) {
+          pattern.lastIndex = 0;
+          const href = `${p}?from=${encodeURIComponent(`/dm/${roomId}`)}`;
+          return (
+            <Link key={i} href={href} className={linkClass}>
+              otvoriť detail →
+            </Link>
+          );
+        }
+        return <React.Fragment key={i}>{p}</React.Fragment>;
+      })}
+    </>
+  );
 }

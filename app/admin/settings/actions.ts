@@ -74,7 +74,9 @@ export async function resetMaterialPriceAction(formData: FormData) {
 }
 
 /**
- * Uloží global setting.
+ * Uloží global setting a REDIRECTNE na /admin/settings.
+ * Používa sa v HTML `<form action={...}>` — post-redirect-get pattern.
+ * Client-side callers by mali použiť saveSettingV2 (vracia JSON).
  */
 export async function saveSettingAction(formData: FormData) {
   const me = await assertAdmin();
@@ -91,13 +93,18 @@ export async function saveSettingAction(formData: FormData) {
   parsedValue = Number.isFinite(num) ? num : rawValue;
 
   const sb = createAdminClient();
+  // UPSERT — ak kľúč ešte neexistuje, vytvorí ho. UPDATE by tichým 0-rows
+  // pádom vytvoril ilúziu úspechu bez uloženia (bug do 2026-07-12).
   const { error } = await sb
     .from("app_settings")
-    .update({
-      value: parsedValue,
-      updated_by: me.id,
-    })
-    .eq("key", key);
+    .upsert(
+      {
+        key,
+        value: parsedValue,
+        updated_by: me.id,
+      },
+      { onConflict: "key" },
+    );
 
   if (error) {
     console.error("[saveSetting] failed:", error.message);
@@ -106,4 +113,32 @@ export async function saveSettingAction(formData: FormData) {
     );
   }
   redirect("/admin/settings?tab=global&ok=1");
+}
+
+/**
+ * V2 — pre client-side použitie. Vracia { ok, error }. Bez redirectu.
+ * User 2026-07-12: „vsetko v tom admine sa da manualne nastavovat" —
+ * client musí vedieť či save fakt prešlo, nielen chytiť NEXT_REDIRECT.
+ */
+export async function saveSettingV2(
+  key: string,
+  rawValue: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await assertAdmin();
+  const k = key.trim();
+  if (!k) return { ok: false, error: "missing_key" };
+
+  let parsedValue: number | string;
+  const num = parseFloat(rawValue.replace(",", "."));
+  parsedValue = Number.isFinite(num) ? num : rawValue;
+
+  const sb = createAdminClient();
+  const { error } = await sb
+    .from("app_settings")
+    .upsert(
+      { key: k, value: parsedValue, updated_by: me.id },
+      { onConflict: "key" },
+    );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }

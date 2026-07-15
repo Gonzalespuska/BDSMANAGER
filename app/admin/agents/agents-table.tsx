@@ -85,7 +85,7 @@ export function AgentsTable({ initial }: { initial: AgentListRow[] }) {
           className="bg-sky-600 hover:bg-sky-700 text-white"
         >
           <UserPlus className="w-4 h-4 mr-1.5" aria-hidden />
-          Pridať obchodníka
+          Pridať agenta
         </Button>
       </div>
 
@@ -404,11 +404,22 @@ function AddAgentModal({
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
-  const [role, setRole] = React.useState<
-    "admin" | "obchod" | "obhliadky" | "realizacie" | "office" | "skolenie"
-  >("obchod");
+  // User 2026-07-12: „daj moznost pridat viac roli na raz" — multi-select.
+  // Primárna rola je prvá v poli, ostatné sa uložia do secondary_roles.
+  type AgentRole = "admin" | "obchod" | "obhliadky" | "realizacie" | "office";
+  const [roles, setRoles] = React.useState<AgentRole[]>(["obchod"]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  function toggleRole(r: AgentRole) {
+    setRoles((prev) =>
+      prev.includes(r)
+        ? prev.filter((x) => x !== r).length > 0
+          ? prev.filter((x) => x !== r)
+          : prev // aspoň jedna musí ostať
+        : [...prev, r],
+    );
+  }
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -420,14 +431,21 @@ function AddAgentModal({
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const res = await createAgentAction({ name, email, phone, role, capacity: 5 });
+    // Primárna rola = prvá v poli; ostatné pošleme ako secondary_roles.
+    const [primary, ...secondary] = roles;
+    const res = await createAgentAction({
+      name,
+      email,
+      phone,
+      role: primary,
+      secondary_roles: secondary,
+      capacity: 5,
+    });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
       return;
     }
-    // Agent vytvorený — magic link nezobrazujeme (admin si pozve usera ručne
-    // alebo cez nový magic link button v zozname agentov).
     onCreated();
   }
 
@@ -445,7 +463,7 @@ function AddAgentModal({
         <header className="px-5 py-3 border-b flex items-center justify-between">
           <h2 className="text-base font-bold inline-flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-sky-600" aria-hidden />
-            Pridať obchodníka
+            Pridať agenta
           </h2>
           <button
             type="button"
@@ -488,26 +506,26 @@ function AddAgentModal({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Rola *</Label>
+              <Label>Roly * (aspoň jedna, môže byť viac naraz)</Label>
               <div className="grid grid-cols-2 gap-2">
                 {(
                   [
-                    { id: "obchod", label: "📞 Obchod (default)", color: "sky" },
+                    { id: "obchod", label: "📞 Obchod", color: "sky" },
                     { id: "obhliadky", label: "🔍 Obhliadky", color: "violet" },
                     { id: "realizacie", label: "🔨 Realizácie", color: "emerald" },
                     { id: "admin", label: "🛡 Admin", color: "amber" },
                     { id: "office", label: "📦 Office", color: "slate" },
-                    { id: "skolenie", label: "🎓 Školenie", color: "rose" },
                   ] as const
                 ).map((r) => {
-                  const active = role === r.id;
+                  const active = roles.includes(r.id);
+                  const isPrimary = roles[0] === r.id;
                   return (
                     <button
                       key={r.id}
                       type="button"
-                      onClick={() => setRole(r.id)}
+                      onClick={() => toggleRole(r.id)}
                       className={
-                        "px-3 py-2 rounded-lg border-2 text-sm font-bold transition-all " +
+                        "relative px-3 py-2 rounded-lg border-2 text-sm font-bold transition-all " +
                         (active
                           ? r.color === "sky"
                             ? "border-sky-500 bg-sky-50 text-sky-900"
@@ -515,43 +533,49 @@ function AddAgentModal({
                               ? "border-violet-500 bg-violet-50 text-violet-900"
                               : r.color === "emerald"
                                 ? "border-emerald-500 bg-emerald-50 text-emerald-900"
-                                : r.color === "rose"
-                                  ? "border-rose-500 bg-rose-50 text-rose-900"
-                                  : r.color === "slate"
-                                    ? "border-slate-500 bg-slate-50 text-slate-900"
-                                    : "border-amber-500 bg-amber-50 text-amber-900"
+                                : r.color === "slate"
+                                  ? "border-slate-500 bg-slate-50 text-slate-900"
+                                  : "border-amber-500 bg-amber-50 text-amber-900"
                           : "border-zinc-200 bg-background hover:bg-muted/40 text-muted-foreground")
                       }
                     >
+                      {active && (
+                        <span className="absolute top-0.5 right-1 text-[10px] font-black opacity-70">
+                          {isPrimary ? "★" : "✓"}
+                        </span>
+                      )}
                       {r.label}
                     </button>
                   );
                 })}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                <strong>🎓 Školenie</strong> = default pre nováčikov, iba
-                onboarding materiály; <strong>Obchod</strong> = volajú leady;{" "}
-                <strong>Obhliadky</strong> = chodia obhliadnuť realizáciu;{" "}
-                <strong>Realizácie</strong> = robia podlahy.
+                Klik pridá / odoberie rolu. <strong>★</strong> = primárna
+                (default dashboard po prihlásení). Ak niekto robí aj obchod
+                aj realizácie, zaklikni obe — bude mať UI oboch rolí.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="agent-phone">Telefón * (do mailov + PDF footera)</Label>
+              <Label htmlFor="agent-phone">
+                Telefón{" "}
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  (voliteľné — dá sa doplniť neskôr v profile)
+                </span>
+              </Label>
               <Input
                 id="agent-phone"
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+421 905 123 456"
-                required
               />
             </div>
 
             <div className="flex gap-2 pt-2 border-t">
               <Button
                 type="submit"
-                disabled={busy || !name.trim() || !email.trim() || !phone.trim()}
+                disabled={busy || !name.trim() || !email.trim() || roles.length === 0}
                 className="flex-1 bg-sky-600 hover:bg-sky-700"
               >
                 {busy ? "Vytváram…" : (<>

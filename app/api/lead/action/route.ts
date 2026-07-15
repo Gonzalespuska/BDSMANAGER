@@ -232,6 +232,57 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      case "trash": {
+        // User 2026-07-14: „novy status kos" — mrtvý lead, žiadny follow-up.
+        // Nastavíme status='trash'. Ak CHECK constraint zakazuje trash value,
+        // fallback na 'archived' + flag v data. Migrácia 42 CHECK rozšíri.
+        const trashUpdate = await admin
+          .from("leads")
+          .update({
+            status: "trash",
+            last_activity_at: nowIso,
+            assigned_to: null,
+          })
+          .eq("id", body.lead_id);
+        if (trashUpdate.error && /check constraint|invalid input/i.test(trashUpdate.error.message)) {
+          // Fallback: použi archived + flag data.trashed=true.
+          const { data: cur } = await admin
+            .from("leads")
+            .select("data")
+            .eq("id", body.lead_id)
+            .maybeSingle();
+          const merged = {
+            ...((cur?.data as Record<string, unknown> | null) ?? {}),
+            trashed: true,
+            trashed_at: nowIso,
+            trashed_by: user.id,
+          };
+          const retry = await admin
+            .from("leads")
+            .update({
+              status: "archived",
+              data: merged,
+              last_activity_at: nowIso,
+              assigned_to: null,
+            })
+            .eq("id", body.lead_id);
+          if (retry.error) throw new Error(retry.error.message);
+        } else if (trashUpdate.error) {
+          throw new Error(trashUpdate.error.message);
+        }
+        admin
+          .from("lead_activities")
+          .insert({
+            lead_id: body.lead_id,
+            user_id: user.id,
+            type: "status_changed",
+            data: { to: "trash" },
+          })
+          .then(() => {})
+          .catch(() => {});
+        return NextResponse.json({ ok: true });
+      }
+
       case "contact": {
         // Agent klikol "Kontakt" — zákazník zdvihol → presun do phone_revealed
         const { error } = await admin

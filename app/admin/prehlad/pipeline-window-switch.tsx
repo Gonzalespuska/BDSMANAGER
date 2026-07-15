@@ -12,11 +12,14 @@ import { cn } from "@/lib/utils";
 export function PipelineWindowSwitch({ current }: { current: "7d" | "30d" }) {
   const router = useRouter();
   const sp = useSearchParams();
-  const [pending, setPending] = React.useState(false);
+  const [isPending, startTransition] = React.useTransition();
+
+  // User 2026-07-12: „tento button moc nejde" — Predtym sa pending state
+  // nikdy nezresetoval, takze tlacidla ostali disabled + opacity-70.
+  // Fix: useTransition namiesto local state — auto-reset po nav.
 
   function switchTo(win: "7d" | "30d") {
     if (win === current) return;
-    setPending(true);
     const params = new URLSearchParams(sp?.toString() ?? "");
     if (win === "7d") {
       params.delete("pw"); // 7d je default → clean URL
@@ -24,8 +27,11 @@ export function PipelineWindowSwitch({ current }: { current: "7d" | "30d" }) {
       params.set("pw", win);
     }
     const qs = params.toString();
-    router.push(qs ? `/admin/prehlad?${qs}` : "/admin/prehlad");
+    startTransition(() => {
+      router.push(qs ? `/admin/prehlad?${qs}` : "/admin/prehlad");
+    });
   }
+  const pending = isPending;
 
   return (
     <div

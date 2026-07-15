@@ -64,6 +64,14 @@ const PRODUCT_ROLES: Array<{ v: string; label: string }> = [
   { v: "other", label: "Iné" },
 ];
 
+export type LibraryStep = {
+  id: string;
+  title: string;
+  default_note: string;
+  sort_order: number;
+  active: boolean;
+};
+
 export function SystemsAdmin({
   initialSystems,
 }: {
@@ -73,6 +81,8 @@ export function SystemsAdmin({
   const [systems, setSystems] = React.useState<System[]>(initialSystems);
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [library, setLibrary] = React.useState<LibraryStep[]>([]);
+  const [libraryTab, setLibraryTab] = React.useState(false);
 
   async function refresh() {
     try {
@@ -85,35 +95,79 @@ export function SystemsAdmin({
     router.refresh();
   }
 
+  async function refreshLibrary() {
+    try {
+      const r = await fetch("/api/admin/procedure-step-library");
+      const j = await r.json();
+      if (j.ok) setLibrary(j.steps as LibraryStep[]);
+    } catch {
+      /* ignore — chýbajúca migrácia 40 */
+    }
+  }
+
+  React.useEffect(() => {
+    void refreshLibrary();
+  }, []);
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-muted-foreground">
-          {systems.length} systém{systems.length === 1 ? "" : "ov"} celkom
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLibraryTab(false)}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-colors",
+              !libraryTab
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+            )}
+          >
+            Systémy ({systems.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setLibraryTab(true)}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-colors",
+              libraryTab
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+            )}
+          >
+            📚 Knižnica krokov ({library.length})
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Nový systém
-        </button>
+        {!libraryTab && (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nový systém
+          </button>
+        )}
       </div>
 
-      <ul className="space-y-2">
-        {systems.map((s) => (
-          <SystemCard
-            key={s.id}
-            system={s}
-            expanded={expanded === s.id}
-            onToggle={() =>
-              setExpanded((cur) => (cur === s.id ? null : s.id))
-            }
-            onChanged={refresh}
-          />
-        ))}
-      </ul>
+      {libraryTab ? (
+        <LibraryPanel library={library} onChanged={refreshLibrary} />
+      ) : (
+        <ul className="space-y-2">
+          {systems.map((s) => (
+            <SystemCard
+              key={s.id}
+              system={s}
+              library={library}
+              expanded={expanded === s.id}
+              onToggle={() =>
+                setExpanded((cur) => (cur === s.id ? null : s.id))
+              }
+              onChanged={refresh}
+            />
+          ))}
+        </ul>
+      )}
 
       {creating && (
         <NewSystemModal
@@ -131,11 +185,13 @@ export function SystemsAdmin({
 // ────────────────────────────────────────────────────────────────────────
 function SystemCard({
   system,
+  library,
   expanded,
   onToggle,
   onChanged,
 }: {
   system: System;
+  library: LibraryStep[];
   expanded: boolean;
   onToggle: () => void;
   onChanged: () => void;
@@ -192,7 +248,7 @@ function SystemCard({
         <div className="border-t border-slate-200 p-4 space-y-4 bg-slate-50/40">
           <SystemEditor system={system} onChanged={onChanged} />
           <ProductsEditor system={system} onChanged={onChanged} />
-          <StepsEditor system={system} onChanged={onChanged} />
+          <StepsEditor system={system} library={library} onChanged={onChanged} />
           <ResponsibilityStepsEditor system={system} onChanged={onChanged} />
         </div>
       )}
@@ -241,7 +297,7 @@ function SystemEditor({
       setMsg(`⚠ ${j.error}`);
       return;
     }
-    setMsg("✓ Uložené");
+    setMsg("✓ Uložené a nasadené pre celý tím");
     setTimeout(() => setMsg(null), 1500);
     onChanged();
   }
@@ -702,9 +758,11 @@ function NewProductRow({
 // ────────────────────────────────────────────────────────────────────────
 function StepsEditor({
   system,
+  library,
   onChanged,
 }: {
   system: System;
+  library: LibraryStep[];
   onChanged: () => void;
 }) {
   const initial: ProcedureStep[] = Array.isArray(system.procedure_steps)
@@ -718,6 +776,18 @@ function StepsEditor({
     setSteps((prev) => [
       ...prev,
       { step: prev.length + 1, title: "", note: "" },
+    ]);
+  }
+  function addFromLibrary(libId: string) {
+    const lib = library.find((l) => l.id === libId);
+    if (!lib) return;
+    setSteps((prev) => [
+      ...prev,
+      {
+        step: prev.length + 1,
+        title: lib.title,
+        note: lib.default_note,
+      },
     ]);
   }
   function update(i: number, patch: Partial<ProcedureStep>) {
@@ -761,25 +831,51 @@ function StepsEditor({
       setMsg(`⚠ ${j.error}`);
       return;
     }
-    setMsg("✓ Postup uložený");
+    setMsg("✓ Postup uložený — realizátori uvidia zmenu okamžite");
     setTimeout(() => setMsg(null), 1500);
     onChanged();
   }
 
   return (
     <section className="rounded-xl bg-white border border-slate-200 p-3 space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
           🔨 Postup krokov (uvidí realizator)
         </div>
-        <button
-          type="button"
-          onClick={add}
-          className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-1 text-xs font-black"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Krok
-        </button>
+        <div className="flex items-center gap-1.5">
+          {library.length > 0 && (
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  addFromLibrary(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+              defaultValue=""
+              className="h-7 rounded border border-slate-300 text-xs font-bold px-2 bg-white hover:bg-slate-50 cursor-pointer"
+              title="Pridať krok z knižnice — title + default popis sa skopírujú"
+            >
+              <option value="" disabled>
+                📚 Pridať z knižnice…
+              </option>
+              {library
+                .filter((l) => l.active)
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.title}
+                  </option>
+                ))}
+            </select>
+          )}
+          <button
+            type="button"
+            onClick={add}
+            className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-1 text-xs font-black"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Prázdny krok
+          </button>
+        </div>
       </div>
       {steps.length === 0 && (
         <div className="text-xs text-slate-500 italic">
@@ -1099,7 +1195,7 @@ function ResponsibilityStepsEditor({
       setMsg(`⚠ ${j.error}`);
       return;
     }
-    setMsg("✓ Zodpovednosť uložená");
+    setMsg("✓ Zodpovednosť uložená — realizátori uvidia zmenu okamžite");
     setTimeout(() => setMsg(null), 1500);
     onChanged();
   }
@@ -1122,8 +1218,8 @@ function ResponsibilityStepsEditor({
       <div className="text-[10px] text-slate-600 leading-snug bg-amber-50 border border-amber-200 rounded p-2">
         Tieto kroky sa auto-priradia členom tímu round-robin. Ak označíš{" "}
         <strong>Kontrolný</strong>, na papieri má sivé pozadie a poznámku
-        „podpisuje INÁ osoba". Príklad chipsová: pridaj 11. krok „Sypanie
-        chipsov".
+        &quot;podpisuje INÁ osoba&quot;. Príklad chipsová: pridaj 11. krok
+        &quot;Sypanie chipsov&quot;.
       </div>
       {steps.length === 0 && (
         <div className="text-xs text-slate-500 italic">
@@ -1168,7 +1264,7 @@ function ResponsibilityStepsEditor({
               <input
                 value={s.title}
                 onChange={(e) => update(i, { title: e.target.value })}
-                placeholder="Názov kroku (napr. „Sypanie chipsov")"
+                placeholder={`Názov kroku (napr. Sypanie chipsov)`}
                 className="w-full h-8 px-2 rounded border border-slate-300 text-sm font-black"
               />
               <label className="inline-flex items-center gap-1.5 text-[11px] font-bold">
@@ -1209,5 +1305,255 @@ function ResponsibilityStepsEditor({
         {msg && <span className="text-xs font-bold text-slate-600">{msg}</span>}
       </div>
     </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// LibraryPanel — CRUD pre `procedure_step_library`. Admin si spravuje
+// zoznam typicky-použiteľných krokov aj s default popismi. Keď potom
+// tvorí systém, vyberá z tohto zoznamu.
+//
+// User 2026-07-12: „pridaj toto do admina ako jednotlive body ktore mozem
+// pridavat k systemom … mozem ku tomu bodu dat popis najskor a potom
+// pridelujem uz iba".
+function LibraryPanel({
+  library,
+  onChanged,
+}: {
+  library: LibraryStep[];
+  onChanged: () => void;
+}) {
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [newTitle, setNewTitle] = React.useState("");
+  const [msg, setMsg] = React.useState<string | null>(null);
+
+  async function createStep() {
+    const title = newTitle.trim();
+    if (!title) return;
+    setBusyId("__create__");
+    const maxSort =
+      library.length > 0
+        ? Math.max(...library.map((l) => l.sort_order))
+        : 0;
+    const r = await fetch("/api/admin/procedure-step-library", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        default_note: "",
+        sort_order: maxSort + 10,
+      }),
+    });
+    const j = await r.json();
+    setBusyId(null);
+    if (!j.ok) {
+      setMsg(`⚠ ${j.error}`);
+      return;
+    }
+    setNewTitle("");
+    setMsg("✓ Pridané");
+    setTimeout(() => setMsg(null), 1500);
+    onChanged();
+  }
+
+  async function update(id: string, patch: Partial<LibraryStep>) {
+    setBusyId(id);
+    const r = await fetch("/api/admin/procedure-step-library", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...patch }),
+    });
+    const j = await r.json();
+    setBusyId(null);
+    if (!j.ok) {
+      setMsg(`⚠ ${j.error}`);
+      return;
+    }
+    setMsg("✓ Uložené a nasadené pre celý tím");
+    setTimeout(() => setMsg(null), 1500);
+    onChanged();
+  }
+
+  async function del(id: string) {
+    if (!confirm("Odstrániť tento krok z knižnice? Systémy ktoré ho už majú pridaný ostanú nedotknuté.")) return;
+    setBusyId(id);
+    const r = await fetch("/api/admin/procedure-step-library", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const j = await r.json();
+    setBusyId(null);
+    if (!j.ok) {
+      setMsg(`⚠ ${j.error}`);
+      return;
+    }
+    setMsg("✓ Odstránené");
+    setTimeout(() => setMsg(null), 1500);
+    onChanged();
+  }
+
+  return (
+    <section className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-sm font-black text-slate-900">
+            📚 Knižnica krokov postupu
+          </div>
+          <div className="text-xs text-slate-600 mt-0.5">
+            Zoznam typicky-použiteľných krokov. Ku každému môžeš mať default
+            popis (materiál, spotreba, tipy). Pri tvorbe systému ich vyberáš
+            z rozbaľovacieho zoznamu — title + popis sa skopírujú.
+          </div>
+        </div>
+        {msg && (
+          <span className="text-xs font-bold text-emerald-700">{msg}</span>
+        )}
+      </div>
+
+      {/* Pridať nový krok */}
+      <div className="flex items-center gap-2">
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") createStep();
+          }}
+          placeholder={`Názov nového kroku (napr. „Ofóliovanie")`}
+          className="flex-1 h-9 px-3 rounded-lg border border-slate-300 text-sm font-semibold"
+        />
+        <button
+          type="button"
+          onClick={createStep}
+          disabled={busyId === "__create__" || !newTitle.trim()}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 text-sm font-black disabled:opacity-50"
+        >
+          {busyId === "__create__" ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Plus className="w-4 h-4" />
+          )}
+          Pridať
+        </button>
+      </div>
+
+      {/* Zoznam krokov */}
+      {library.length === 0 ? (
+        <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+          Knižnica je prázdna. Pridaj prvý krok vyššie alebo spusti migráciu
+          <code className="mx-1 px-1 py-0.5 rounded bg-slate-200 font-mono text-xs">
+            40_procedure_step_library.sql
+          </code>
+          ktorá zaseeduje 23 default krokov.
+        </div>
+      ) : (
+        <ol className="space-y-2">
+          {library.map((l) => (
+            <LibraryStepRow
+              key={l.id}
+              step={l}
+              busy={busyId === l.id}
+              onUpdate={(patch) => update(l.id, patch)}
+              onDelete={() => del(l.id)}
+            />
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function LibraryStepRow({
+  step,
+  busy,
+  onUpdate,
+  onDelete,
+}: {
+  step: LibraryStep;
+  busy: boolean;
+  onUpdate: (patch: Partial<LibraryStep>) => void;
+  onDelete: () => void;
+}) {
+  const [title, setTitle] = React.useState(step.title);
+  const [note, setNote] = React.useState(step.default_note);
+  const [expanded, setExpanded] = React.useState(false);
+  const dirty = title !== step.title || note !== step.default_note;
+
+  React.useEffect(() => {
+    setTitle(step.title);
+    setNote(step.default_note);
+  }, [step.title, step.default_note]);
+
+  return (
+    <li
+      className={cn(
+        "rounded-lg border-2 bg-white p-2.5 transition-colors",
+        step.active ? "border-slate-200" : "border-rose-200 bg-rose-50/40",
+        dirty && "ring-2 ring-amber-300",
+      )}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="flex-1 min-w-0 h-8 px-2 rounded border border-slate-300 text-sm font-black"
+        />
+        <button
+          type="button"
+          onClick={() => setExpanded((x) => !x)}
+          className="rounded px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100"
+        >
+          {expanded ? "▲ Skryť popis" : `▼ Popis${note ? " ✓" : ""}`}
+        </button>
+        <button
+          type="button"
+          onClick={() => onUpdate({ active: !step.active })}
+          disabled={busy}
+          className={cn(
+            "rounded px-2 py-1 text-xs font-bold",
+            step.active
+              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              : "bg-rose-50 text-rose-700 hover:bg-rose-100",
+          )}
+        >
+          {step.active ? "Aktívny" : "Vypnutý"}
+        </button>
+        {dirty && (
+          <button
+            type="button"
+            onClick={() => onUpdate({ title, default_note: note })}
+            disabled={busy}
+            className="inline-flex items-center gap-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 text-xs font-black"
+          >
+            {busy ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            Uložiť
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={busy}
+          className="rounded p-1 text-rose-500 hover:bg-rose-50"
+          title="Odstrániť z knižnice"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-2">
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            placeholder="Default popis — čo tento krok obnáša (materiál, spotreba, tipy, kontrola). Skopíruje sa keď krok pridáš do systému."
+            className="w-full px-3 py-2 rounded border border-slate-300 text-sm resize-y"
+          />
+        </div>
+      )}
+    </li>
   );
 }

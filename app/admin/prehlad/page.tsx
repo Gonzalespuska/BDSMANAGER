@@ -676,13 +676,30 @@ export default async function PrehladPage({
   const realizacieActiveDelta = dailyDelta(realizacieActive, realizacieActive24h);
 
   // Recent lists — leady/obhliadky/realizacie pre 3 sekcie nižšie
-  const { data: recentObhliadkyRaw } = await sb
-    .from("leads")
-    .select("id, name, status, next_callback_at, last_activity_at, assigned_to, data")
-    .in("status", ["scheduled", "interested", "needs_inspection"])
-    .order("last_activity_at", { ascending: false })
-    .limit(20);
+  // Obhliadky sa delia na 2 časti — Neobhliadnuté (scheduled/interested/
+  // needs_inspection) a Obhliadnuté (status="inspected", pred CP). User
+  // 2026-07-12: „obhliadky nech rozdeluje na obhliadnute a neobhliadnute
+  // tu lebo vidim ze jedna je a neukazuje ju predpokladam ze bola
+  // obhlaidnuta alebo co kazdoapdne tam musi byt aj obhliadnuta".
+  const [
+    { data: recentObhliadkyRaw },
+    { data: recentInspectedRaw },
+  ] = await Promise.all([
+    sb
+      .from("leads")
+      .select("id, name, status, next_callback_at, last_activity_at, assigned_to, data")
+      .in("status", ["scheduled", "interested", "needs_inspection"])
+      .order("last_activity_at", { ascending: false })
+      .limit(20),
+    sb
+      .from("leads")
+      .select("id, name, status, next_callback_at, last_activity_at, assigned_to, data")
+      .eq("status", "inspected")
+      .order("last_activity_at", { ascending: false })
+      .limit(20),
+  ]);
   const recentObhliadky = (recentObhliadkyRaw ?? []).filter(notTest).slice(0, 10);
+  const recentInspected = (recentInspectedRaw ?? []).filter(notTest).slice(0, 10);
 
   // POZOR: Realizácie musia byť skutočné realizácie, NIE CP.
   // Preto NE-zahrnujeme "quote_sent" (to je CP → patrí do CP stĺpca).
@@ -700,7 +717,7 @@ export default async function PrehladPage({
 
   // ─── Resolve assigned user names ──────────────────────────────────────
   const allAssigned = new Set<string>();
-  for (const arr of [recentLeads, recentObhliadky, recentRealizacie] as const) {
+  for (const arr of [recentLeads, recentObhliadky, recentInspected, recentRealizacie] as const) {
     for (const l of arr ?? []) {
       if (l.assigned_to) allAssigned.add(l.assigned_to);
     }
@@ -856,6 +873,15 @@ export default async function PrehladPage({
           tint="violet"
           href="/obhliadky"
         >
+          {/* Neobhliadnuté — status scheduled/interested/needs_inspection */}
+          <div className="px-3 pt-1.5 pb-1 flex items-center justify-between">
+            <div className="text-[10px] font-black uppercase tracking-widest text-violet-700">
+              Neobhliadnuté
+            </div>
+            <div className="text-[10px] font-bold text-slate-500 tabular-nums">
+              {recentObhliadky.length}
+            </div>
+          </div>
           {(recentObhliadky?.length ?? 0) > 0 ? (
             <ul className="divide-y">
               {recentObhliadky!.map((l) => (
@@ -886,6 +912,36 @@ export default async function PrehladPage({
             </ul>
           ) : (
             <EmptyState message="Žiadne otvorené obhliadky" />
+          )}
+
+          {/* Obhliadnuté — status inspected (obhliadka hotová, čaká CP) */}
+          <div className="px-3 pt-3 pb-1 border-t border-violet-100 flex items-center justify-between">
+            <div className="text-[10px] font-black uppercase tracking-widest text-emerald-700">
+              ✔ Obhliadnuté
+            </div>
+            <div className="text-[10px] font-bold text-slate-500 tabular-nums">
+              {recentInspected.length}
+            </div>
+          </div>
+          {(recentInspected?.length ?? 0) > 0 ? (
+            <ul className="divide-y">
+              {recentInspected!.map((l) => (
+                <PipelineItem
+                  key={l.id}
+                  leadId={l.id as string}
+                  name={l.name as string}
+                  status={l.status as LeadStatus}
+                  city={(l.data as Record<string, string>)?.lokalita ?? null}
+                  assignedName={
+                    l.assigned_to ? (userMap.get(l.assigned_to as string) ?? null) : null
+                  }
+                  lastActivityAt={l.last_activity_at as string}
+                  stagnationCutoffMs={stagnationCutoffMs}
+                />
+              ))}
+            </ul>
+          ) : (
+            <EmptyState message="Žiadne obhliadnuté (čakajúce na CP)" />
           )}
         </PipelineColumn>
 

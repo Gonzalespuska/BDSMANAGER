@@ -106,7 +106,14 @@ export function CallscriptButton({
       const r = await fetch("/api/admin/call-scripts");
       const j = await r.json();
       if (!j.ok) {
-        setError(j.error ?? "Nepodarilo sa načítať skripty");
+        const raw = String(j.error ?? "");
+        // Preložime PostgREST schema-cache error na actionable správu.
+        // Table 'call_scripts' existuje v DB (migrácia 31), len PostgREST
+        // cache ho ešte nezachytila — admin musí spustiť NOTIFY pgrst.
+        const friendly = /schema cache|not.*found.*table|call_scripts/i.test(raw)
+          ? `PostgREST cache je stale. Otvor /admin a klikni „Reload PostgREST schema cache" — do 2s to bude fungovať.`
+          : raw || "Nepodarilo sa načítať skripty";
+        setError(friendly);
         setLoading(false);
         return;
       }
@@ -175,7 +182,30 @@ export function CallscriptButton({
           </div>
         )}
         {error && (
-          <div className="p-5 text-sm text-rose-800 bg-rose-50">⚠ {error}</div>
+          <div className="p-5 text-sm text-rose-800 bg-rose-50 space-y-3">
+            <div>⚠ {error}</div>
+            {/schema cache|Reload PostgREST/i.test(error) && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setError(null);
+                  setLoading(true);
+                  try {
+                    await fetch("/api/admin/reload-postgrest", { method: "POST" });
+                    await new Promise((r) => setTimeout(r, 1500));
+                    setScripts(null); // force re-fetch
+                    openModal();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "reload failed");
+                    setLoading(false);
+                  }
+                }}
+                className="rounded-lg bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 text-sm font-black shadow-sm"
+              >
+                🔄 Reload cache teraz
+              </button>
+            )}
+          </div>
         )}
         {scripts && scripts.length === 0 && !loading && (
           <div className="p-8 text-center text-slate-500">

@@ -216,10 +216,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Auto-assign každý nový lead aktívnemu obchodákovi (least-loaded).
+    // User 2026-07-14: „nove leady co chodia nech su automaticky pridelovane
+    // aktivnym". Non-fatal: ak assign zlyhá, lead ostane unassigned a admin
+    // ho môže priradiť ručne.
+    const { pickObchodakForNewLead, assignLeadToUser } = await import(
+      "@/lib/lead-assignment"
+    );
+    let autoAssigned = 0;
+    for (const lead of inserted ?? []) {
+      try {
+        const userId = await pickObchodakForNewLead(sb);
+        if (userId) {
+          const res = await assignLeadToUser(sb, lead.id, userId);
+          if (res.ok) autoAssigned++;
+        }
+      } catch (e) {
+        console.warn("[cron/sync-epoxidovo] auto-assign failed for", lead.id, e);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       checked: rows.length,
       new: inserted?.length ?? 0,
+      auto_assigned: autoAssigned,
       leads:
         inserted?.map((l) => ({ id: l.id, name: l.name, created_at: l.created_at })) ??
         [],

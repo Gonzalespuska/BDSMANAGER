@@ -29,8 +29,11 @@ export function ImpersonationBanner({ userName }: { userName: string }) {
     }
   }
 
+  // User 2026-07-14: „nech ked kukas ako niekto je to sticky ten bar
+  // ze aj ked scrollujem ho vidim". Sticky správanie zabezpečuje parent
+  // wrapper v app-shell.tsx (banner + dev + header ako jeden celok).
   return (
-    <div className="bg-violet-600 text-white text-xs md:text-sm font-semibold px-4 py-2 flex items-center justify-center gap-3 shadow-inner">
+    <div className="bg-violet-600 text-white text-xs md:text-sm font-semibold px-4 py-2 flex items-center justify-center gap-3 shadow-lg">
       <Eye className="w-4 h-4" aria-hidden />
       <span>
         Prezeráš ako <strong>{userName}</strong> — vidíš presne to čo on
