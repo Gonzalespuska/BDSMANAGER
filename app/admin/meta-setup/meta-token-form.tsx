@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Sparkles } from "lucide-react";
 
 /**
  * MetaTokenForm — jednoduchý form s 2 poľami (token + Page IDs) a Save.
@@ -15,6 +15,10 @@ export function MetaTokenForm() {
   const [token, setToken] = React.useState("");
   const [pageIds, setPageIds] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [discovering, setDiscovering] = React.useState(false);
+  const [discovered, setDiscovered] = React.useState<
+    Array<{ id: string; name: string }> | null
+  >(null);
   const [flash, setFlash] = React.useState<
     { kind: "ok" | "err"; text: string } | null
   >(null);
@@ -49,6 +53,50 @@ export function MetaTokenForm() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  async function discover() {
+    if (!token.trim()) {
+      setFlash({ kind: "err", text: "Najprv paste token do prvého poľa." });
+      return;
+    }
+    setDiscovering(true);
+    setFlash(null);
+    setDiscovered(null);
+    try {
+      const r = await fetch("/api/admin/meta-token/discover-pages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token.trim() }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        pages?: Array<{ id: string; name: string }>;
+        error?: string;
+        hint?: string;
+      };
+      if (!r.ok || !j.ok || !j.pages || j.pages.length === 0) {
+        setFlash({
+          kind: "err",
+          text: `${j.error ?? "Nepodarilo sa načítať Pages"}${j.hint ? ` — ${j.hint}` : ""}`,
+        });
+        return;
+      }
+      setDiscovered(j.pages);
+      // Auto-fillni všetky (99% adminov chce všetky, môže potom editovať)
+      setPageIds(j.pages.map((p) => p.id).join(","));
+      setFlash({
+        kind: "ok",
+        text: `✓ Nájdených ${j.pages.length} Pages — auto-fillnuté nižšie. Klik Uložiť.`,
+      });
+    } catch (e) {
+      setFlash({
+        kind: "err",
+        text: `Sieťová chyba: ${e instanceof Error ? e.message : "unknown"}`,
+      });
+    } finally {
+      setDiscovering(false);
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -128,16 +176,49 @@ export function MetaTokenForm() {
       </div>
 
       <div>
-        <label className="text-[10px] uppercase tracking-wider font-black text-slate-700 mb-1 block">
-          META_PAGE_IDS (comma-separated ak viac)
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-[10px] uppercase tracking-wider font-black text-slate-700">
+            META_PAGE_IDS (Facebook stránka ktorú sledovať)
+          </label>
+          <button
+            type="button"
+            onClick={discover}
+            disabled={discovering || !token.trim()}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black bg-sky-100 hover:bg-sky-200 text-sky-800 border border-sky-300 disabled:opacity-60"
+            title="Automaticky zistí Page IDs z tokenu (zavolá Graph API /me/accounts)"
+          >
+            {discovering ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Sparkles className="w-3 h-3" />
+            )}
+            Auto-fill z tokenu
+          </button>
+        </div>
         <input
           value={pageIds}
           onChange={(e) => setPageIds(e.target.value)}
-          placeholder="123456789012345"
+          placeholder='Klikni „Auto-fill" hore, alebo paste ID ručne'
           spellCheck={false}
           className="w-full h-10 px-3 rounded-lg border-2 border-slate-300 text-sm font-mono focus:outline-none focus:border-sky-400"
         />
+        {discovered && discovered.length > 0 && (
+          <ul className="mt-2 space-y-1 text-xs">
+            {discovered.map((p) => (
+              <li
+                key={p.id}
+                className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 flex items-center gap-2"
+              >
+                <span className="font-black text-emerald-900 truncate">
+                  {p.name}
+                </span>
+                <span className="text-emerald-700 font-mono ml-auto">
+                  {p.id}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {flash && (
