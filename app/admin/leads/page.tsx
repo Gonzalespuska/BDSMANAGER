@@ -291,7 +291,10 @@ export default async function AdminLeadsPage({
             <UserCircle className="w-3.5 h-3.5 text-sky-600" aria-hidden />
             <Link
               href={`/admin/agents/${agentId}`}
+              target="_blank"
+              rel="noopener"
               className="text-sky-700 hover:underline decoration-dotted"
+              title="Otvoriť profil obchodáka v novom okne"
             >
               {agentLeads[0].assigned_user_name ?? "Bez mena"}
             </Link>

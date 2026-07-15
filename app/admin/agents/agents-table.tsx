@@ -215,8 +215,10 @@ function AgentRow({
               <div className="inline-flex items-center gap-1.5 flex-wrap">
                 <Link
                   href={`/admin/agents/${agent.id}`}
+                  target="_blank"
+                  rel="noopener"
                   className="font-bold text-sm hover:underline decoration-dotted truncate max-w-[180px]"
-                  title="Otvoriť detail agenta"
+                  title="Otvoriť detail agenta v novom okne"
                 >
                   {agent.name || (
                     <span className="text-muted-foreground italic">bez mena</span>
@@ -321,7 +323,11 @@ function AgentRow({
               className="h-8 px-2"
               title="Editovať meno, tel., rolu, permissions"
             >
-              <Link href={`/admin/agents/${agent.id}`}>
+              <Link
+                href={`/admin/agents/${agent.id}`}
+                target="_blank"
+                rel="noopener"
+              >
                 <span className="text-xs font-bold">Upraviť</span>
               </Link>
             </Button>

@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 import { HomeCityEditor } from "./home-city-editor";
 import { PayoutEditor } from "./payout-editor";
+import { AgentNameEditor } from "./name-editor";
 import { ImpersonateButton } from "./impersonate-button";
 import { PermissionsCard } from "./permissions-card";
 import { PhoneEditor } from "./phone-editor";
@@ -272,13 +273,13 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
           {initials(agent.name || agent.email)}
         </div>
         <div className="flex-1 min-w-0 space-y-2">
-          {/* Riadok 1: meno + 24h badge + impersonate button */}
+          {/* Riadok 1: meno (editovateľné) + 24h badge + impersonate button */}
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-extrabold tracking-tight leading-none">
-              {agent.name || (
-                <span className="text-muted-foreground italic">bez mena</span>
-              )}
-            </h1>
+            <AgentNameEditor
+              agentId={agent.id as string}
+              initialName={(agent.name as string | null) ?? null}
+              fallbackEmail={agent.email as string}
+            />
             {inactive24h && (
               <span
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider"
