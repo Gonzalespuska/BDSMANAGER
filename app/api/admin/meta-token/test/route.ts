@@ -51,46 +51,73 @@ export async function POST() {
   }> = [];
 
   for (const pid of pageIds) {
-    // 1) Page name — základný check že token má prístup
-    const nameRes = await fetch(
-      `https://graph.facebook.com/v22.0/${pid}?fields=name&access_token=${encodeURIComponent(token)}`,
+    // 1) Získať Page Access Token — Meta vyžaduje aby leadgen_forms/leads
+    // endpointy boli volané s Page tokenom, nie System User tokenom.
+    // Skúsime cez /{page_id}?fields=name,access_token.
+    const infoRes = await fetch(
+      `https://graph.facebook.com/v22.0/${pid}?fields=name,access_token&access_token=${encodeURIComponent(token)}`,
     );
-    const nameJ = (await nameRes.json()) as {
+    const infoJ = (await infoRes.json()) as {
       name?: string;
+      access_token?: string;
       error?: { message?: string };
     };
-    if (!nameRes.ok || nameJ.error) {
+    if (!infoRes.ok || infoJ.error) {
       results.push({
         page_id: pid,
         page_name: null,
         accessible: false,
         lead_forms_count: 0,
-        error: nameJ.error?.message ?? `HTTP ${nameRes.status}`,
+        error: infoJ.error?.message ?? `HTTP ${infoRes.status}`,
       });
       continue;
     }
-    // 2) leadgen_forms — dôležitý test
-    const formsRes = await fetch(
-      `https://graph.facebook.com/v22.0/${pid}/leadgen_forms?fields=id,name,status&limit=5&access_token=${encodeURIComponent(token)}`,
-    );
-    const formsJ = (await formsRes.json()) as {
-      data?: Array<{ id: string }>;
-      error?: { message?: string };
-    };
-    if (!formsRes.ok || formsJ.error) {
+    if (!infoJ.access_token) {
       results.push({
         page_id: pid,
-        page_name: nameJ.name ?? pid,
+        page_name: infoJ.name ?? pid,
         accessible: true,
         lead_forms_count: 0,
         error:
-          `Chýba 'leads_retrieval' permission. ${formsJ.error?.message ?? `HTTP ${formsRes.status}`}`,
+          "Nepodarilo sa získať Page Access Token. V Meta Business Manager skontroluj že System User BDSMANAGER má priradenú Epoxidovo.sk Page s FULL access (nie iba View).",
+      });
+      continue;
+    }
+    const pageAccessToken = infoJ.access_token;
+    // 2) leadgen_forms — teraz s Page Access Tokenom
+    const formsRes = await fetch(
+      `https://graph.facebook.com/v22.0/${pid}/leadgen_forms?fields=id,name,status&limit=5&access_token=${encodeURIComponent(pageAccessToken)}`,
+    );
+    const formsJ = (await formsRes.json()) as {
+      data?: Array<{ id: string }>;
+      error?: { message?: string; code?: number };
+    };
+    if (!formsRes.ok || formsJ.error) {
+      const msg = formsJ.error?.message ?? `HTTP ${formsRes.status}`;
+      // Presná diagnostika podľa Meta error code
+      let friendly = msg;
+      if (msg.includes("pages_manage_ads")) {
+        friendly =
+          "Chýba 'pages_manage_ads' permission. Regeneruj token a zaškrtni túto permissiu.";
+      } else if (msg.includes("leads_retrieval")) {
+        friendly =
+          "Chýba 'leads_retrieval' permission. Regeneruj token a zaškrtni túto permissiu.";
+      } else if (formsJ.error?.code === 190) {
+        friendly =
+          "Token nie je Page Access Token. Skontroluj že System User má Full access k Page.";
+      }
+      results.push({
+        page_id: pid,
+        page_name: infoJ.name ?? pid,
+        accessible: true,
+        lead_forms_count: 0,
+        error: friendly,
       });
       continue;
     }
     results.push({
       page_id: pid,
-      page_name: nameJ.name ?? pid,
+      page_name: infoJ.name ?? pid,
       accessible: true,
       lead_forms_count: (formsJ.data ?? []).length,
       error: null,

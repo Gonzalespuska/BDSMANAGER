@@ -55,6 +55,7 @@ interface DiscoveredForm {
   page_name: string;
   form_id: string;
   form_name: string;
+  page_access_token: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -126,20 +127,37 @@ export async function POST(request: NextRequest) {
 
     if (hardcodedPageIds.length > 0) {
       results.mode = "hardcoded_pages";
-      // Voliteľne fetchneme meno každej Page (best-effort). Ak /
-      // {page_id}?fields=name padne, použijeme len ID.
+      // Pre každú Page vymeníme System User token → Page Access Token.
+      // Meta endpoint /{page_id}/leadgen_forms VYŽADUJE Page Access Token
+      // (chyba #190 „This method must be called with a Page Access Token").
+      // Získame ho cez GET /{page_id}?fields=access_token,name s System
+      // User tokenom (funguje ak System User má Page priradenú s Full access).
       for (const pageId of hardcodedPageIds) {
         try {
-          const nameRes = await fetch(
-            `https://graph.facebook.com/${META_GRAPH_VERSION}/${pageId}?fields=name&access_token=${pageToken}`,
+          const infoRes = await fetch(
+            `https://graph.facebook.com/${META_GRAPH_VERSION}/${pageId}?fields=name,access_token&access_token=${pageToken}`,
           );
-          if (nameRes.ok) {
-            const j = (await nameRes.json()) as { name?: string };
-            pages.push({ id: pageId, name: j.name ?? pageId });
+          if (infoRes.ok) {
+            const j = (await infoRes.json()) as {
+              name?: string;
+              access_token?: string;
+            };
+            pages.push({
+              id: pageId,
+              name: j.name ?? pageId,
+              access_token: j.access_token, // ← Page Access Token
+            });
           } else {
+            const errText = await infoRes.text().catch(() => "");
+            results.errors.push(
+              `Nepodarilo sa načítať Page Access Token pre ${pageId}: ${errText.slice(0, 200)}`,
+            );
             pages.push({ id: pageId, name: pageId });
           }
-        } catch {
+        } catch (e) {
+          results.errors.push(
+            `Page ${pageId} info fetch fail: ${e instanceof Error ? e.message : "unknown"}`,
+          );
           pages.push({ id: pageId, name: pageId });
         }
       }
@@ -167,7 +185,10 @@ export async function POST(request: NextRequest) {
       pages = pagesJson.data ?? [];
     }
 
-    // 2) Discover forms per page
+    // 2) Discover forms per page — MUSÍME použiť Page Access Token
+    // (nie System User) inak Meta hlási (#190) „must be called with a
+    // Page Access Token". `page.access_token` je Page token ktorý sme
+    // získali v kroku 1 cez /{page_id}?fields=access_token.
     const forms: DiscoveredForm[] = [];
     for (const page of pages) {
       const pageAccess = page.access_token ?? pageToken;
@@ -175,7 +196,10 @@ export async function POST(request: NextRequest) {
         `https://graph.facebook.com/${META_GRAPH_VERSION}/${page.id}/leadgen_forms?access_token=${pageAccess}&fields=id,name`,
       );
       if (!formsRes.ok) {
-        results.errors.push(`Forms fetch failed for page ${page.id}: HTTP ${formsRes.status}`);
+        const errText = await formsRes.text().catch(() => "");
+        results.errors.push(
+          `Forms fetch failed for page ${page.id}: HTTP ${formsRes.status} ${errText.slice(0, 200)}`,
+        );
         continue;
       }
       const formsJson = (await formsRes.json()) as {
@@ -187,6 +211,7 @@ export async function POST(request: NextRequest) {
           page_name: page.name,
           form_id: f.id,
           form_name: f.name ?? "Unnamed",
+          page_access_token: pageAccess,
         });
       }
     }
@@ -197,7 +222,8 @@ export async function POST(request: NextRequest) {
     const allLeads: Array<MetaFormLead & { _page_id: string; _form_id: string }> = [];
     for (const form of forms) {
       const url = new URL(`https://graph.facebook.com/${META_GRAPH_VERSION}/${form.form_id}/leads`);
-      url.searchParams.set("access_token", pageToken);
+      // Leads endpoint tiež vyžaduje Page Access Token.
+      url.searchParams.set("access_token", form.page_access_token);
       url.searchParams.set(
         "fields",
         "id,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,is_organic,platform,field_data",
