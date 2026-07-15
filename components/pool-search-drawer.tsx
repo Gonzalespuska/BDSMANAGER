@@ -570,11 +570,8 @@ export function PoolSearchDrawer({
         <div className="bg-gradient-to-br from-sky-500 to-indigo-600 text-white px-5 py-3 flex items-center gap-3 shrink-0">
           <Target className="w-5 h-5 shrink-0" aria-hidden />
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
-              Hľadať
-            </div>
             <div className="font-black text-lg leading-tight">
-              {ALL_MODES.find((m) => m.v === mode)?.label ?? "Leady"}
+              Hľadať v poole
             </div>
           </div>
           <button
