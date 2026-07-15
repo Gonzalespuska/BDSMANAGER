@@ -19,6 +19,8 @@ import { formatPhoneSK } from "@/lib/phone-format";
 import { DmButton } from "@/components/dm-button";
 import { ROLE_LABELS } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { PeerTransferPanel } from "@/components/peer-transfer-panel";
+import { VacationRequestForm } from "@/components/vacation-request-form";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -265,6 +267,37 @@ export default async function ProfilPage({
             />
           </div>
         </div>
+
+        {/* Peer transfer panel — iba na cudzom profile s rovnakou rolou.
+            User 2026-07-15: „potrebujem system medzi obchodakmi a
+            obhliadkarmi a realizatormi kedy by si mohli ako keby vymenit". */}
+        {!isMe &&
+          me.role === profile.role &&
+          ["obchod", "obhliadky", "realizacie"].includes(me.role) && (
+            <PeerTransferPanel
+              peerId={profile.id as string}
+              peerName={profile.name as string}
+              peerRole={
+                me.role as "obchod" | "obhliadky" | "realizacie"
+              }
+            />
+          )}
+
+        {/* Vacation request — iba na vlastnom profile. Admin nemá dovolenku
+            (vždy dostupný). Realizatori/obchodáci/obhliadkari si môžu žiadať. */}
+        {isMe && me.role !== "admin" && (
+          <div className="rounded-2xl border-2 bg-white shadow-sm p-5">
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+              Dovolenka
+            </h2>
+            <p className="text-sm text-slate-600 mb-3">
+              Zažiadaj admina o dovolenku (od–do). Po schválení sa v tom
+              období nebudú ti prideľovať nové úlohy a existujúce nedotknuté
+              sa presunú na aktívnych kolegov.
+            </p>
+            <VacationRequestForm />
+          </div>
+        )}
       </div>
     </AppShell>
   );

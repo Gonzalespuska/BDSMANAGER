@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Skús načítať aj kind (migrácia 44); fallback bez kind = 'push'.
+  // Načítaj aj kind + role_scope (migrácie 44 + 45).
   let req: {
     id: string;
     lead_id: string;
@@ -65,12 +65,13 @@ export async function POST(request: NextRequest) {
     requested_by: string;
     status: string;
     kind: "push" | "pull";
+    role_scope: "obchod" | "obhliadky" | "realizacie";
   } | null = null;
   {
     const { data, error } = await admin
       .from("lead_reassign_requests")
       .select(
-        "id, lead_id, to_user_id, from_user_id, requested_by, status, kind",
+        "id, lead_id, to_user_id, from_user_id, requested_by, status, kind, role_scope",
       )
       .eq("id", request_id)
       .maybeSingle();
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
             requested_by: fb.requested_by as string,
             status: fb.status as string,
             kind: "push",
+            role_scope: "obchod",
           }
         : null;
     } else if (data) {
@@ -100,6 +102,12 @@ export async function POST(request: NextRequest) {
         requested_by: data.requested_by as string,
         status: data.status as string,
         kind: ((data.kind as string) === "pull" ? "pull" : "push"),
+        role_scope:
+          (data.role_scope as string) === "obhliadky"
+            ? "obhliadky"
+            : (data.role_scope as string) === "realizacie"
+              ? "realizacie"
+              : "obchod",
       };
     }
   }
@@ -133,13 +141,23 @@ export async function POST(request: NextRequest) {
   const nowIso = new Date().toISOString();
 
   if (action === "accept") {
-    // Prepíš assigned_to → to_user_id (aj keď je lead otvorený).
+    // Prepíš príslušný stĺpec podľa role_scope.
+    //   obchod    → assigned_to
+    //   obhliadky → inspection_by
+    //   realizacie→ realization_by
+    const updateCol =
+      req.role_scope === "obhliadky"
+        ? "inspection_by"
+        : req.role_scope === "realizacie"
+          ? "realization_by"
+          : "assigned_to";
+    const updates: Record<string, unknown> = {
+      last_activity_at: nowIso,
+      [updateCol]: req.to_user_id,
+    };
     const { error: upErr } = await admin
       .from("leads")
-      .update({
-        assigned_to: req.to_user_id,
-        last_activity_at: nowIso,
-      })
+      .update(updates)
       .eq("id", req.lead_id);
     if (upErr) {
       return NextResponse.json(

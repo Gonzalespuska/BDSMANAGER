@@ -28,6 +28,7 @@ import { NotificationsBell } from "./notifications-bell";
 import { ImpersonationBanner } from "./impersonation-banner";
 import { ReassignRequestsBar } from "./reassign-requests-bar";
 import { PoolSearchDrawer } from "./pool-search-drawer";
+import { VacationApprovalsBar } from "./vacation-approvals-bar";
 import { Toaster } from "./ui/toast";
 import { RoleViewDropdown } from "./role-view-dropdown";
 
@@ -204,10 +205,14 @@ export async function AppShell({
       <Toaster />
       {/* Sticky top-right žiadosti o preradenie leadu — cvakot + ne-zmizne.
           User 2026-07-15: „nezmitne ak neodkliknes" + „nech mi ta skurvena
-          aplikacia cinka ked chce nieco potvrdit". */}
-      {user.role === "obchod" || user.role === "admin" ? (
+          aplikacia cinka ked chce nieco potvrdit".
+          Rozšírené na všetky rolí (obchod/obhliadky/realizacie/admin)
+          keďže cross-role transfery cez profil (PeerTransferPanel). */}
+      {["obchod", "obhliadky", "realizacie", "admin"].includes(user.role) ? (
         <ReassignRequestsBar />
       ) : null}
+      {/* Vacation approvals — iba admin. Sticky pod ReassignRequestsBar. */}
+      {user.role === "admin" ? <VacationApprovalsBar /> : null}
       {/* Sticky wrapper — banner + dev + header sa scroll-ujú ako jeden celok
           a zostávajú prilepené na hore. User 2026-07-14: „nech ked kukas ako
           niekto je to sticky ten bar". */}

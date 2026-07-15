@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
     to_user_id?: string;
     reason?: string;
     kind?: "push" | "pull";
+    role_scope?: "obchod" | "obhliadky" | "realizacie";
   };
   try {
     body = await request.json();
@@ -58,9 +59,17 @@ export async function POST(request: NextRequest) {
   }
 
   const kind = body.kind === "pull" ? "pull" : "push";
+  // role_scope: aká úloha sa presúva (default 'obchod' pre back-compat)
+  //   obchod    → leads.assigned_to
+  //   obhliadky → leads.inspection_by
+  //   realizacie→ leads.realization_by
+  const roleScope =
+    body.role_scope === "obhliadky"
+      ? "obhliadky"
+      : body.role_scope === "realizacie"
+        ? "realizacie"
+        : "obchod";
   const { lead_id, reason } = body;
-  // Pull auto-fills to_user_id = me (frontend often nevie svoje ID).
-  // Push vyžaduje explicitné to_user_id (target).
   const to_user_id =
     kind === "pull" ? (body.to_user_id ?? user.id) : body.to_user_id;
   if (!lead_id || !to_user_id) {
@@ -83,16 +92,19 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (target.role !== "obchod" && target.role !== "admin") {
+  // Target role musí sedieť s role_scope (obchod → obchod, obhliadky → obhliadky, atď.).
+  // Admin je fallback all-mighty (môže dostať/ponúknuť čokoľvek).
+  const requiredRole = roleScope; // 'obchod' | 'obhliadky' | 'realizacie'
+  if (target.role !== requiredRole && target.role !== "admin") {
     return NextResponse.json(
-      { ok: false, error: "target_not_obchod" },
+      { ok: false, error: "target_wrong_role", required: requiredRole },
       { status: 400 },
     );
   }
 
   const { data: lead } = await admin
     .from("leads")
-    .select("id, assigned_to, name")
+    .select("id, assigned_to, inspection_by, realization_by, name")
     .eq("id", lead_id)
     .maybeSingle();
   if (!lead) {
@@ -101,7 +113,13 @@ export async function POST(request: NextRequest) {
       { status: 404 },
     );
   }
-  if (lead.assigned_to === to_user_id) {
+  const currentOwner =
+    roleScope === "obhliadky"
+      ? (lead.inspection_by as string | null)
+      : roleScope === "realizacie"
+        ? (lead.realization_by as string | null)
+        : (lead.assigned_to as string | null);
+  if (currentOwner === to_user_id) {
     return NextResponse.json(
       { ok: false, error: "already_assigned_to_target" },
       { status: 400 },
@@ -110,23 +128,22 @@ export async function POST(request: NextRequest) {
 
   // AUTORIZÁCIA — kto smie kaký kind vytvoriť:
   if (kind === "push") {
-    // Push = ponúkam SVOJ lead. Musím byť owner (admin môže preskočiť).
-    if (user.role !== "admin" && lead.assigned_to !== user.id) {
+    // Push = ponúkam SVOJU úlohu. Musím byť owner (admin môže preskočiť).
+    if (user.role !== "admin" && currentOwner !== user.id) {
       return NextResponse.json(
         { ok: false, error: "push_only_by_owner" },
         { status: 403 },
       );
     }
   } else {
-    // Pull = prosím o cudzí lead. Ja musím byť to_user_id (kto ho chce).
+    // Pull = prosím o cudziu úlohu.
     if (to_user_id !== user.id) {
       return NextResponse.json(
         { ok: false, error: "pull_must_target_self" },
         { status: 403 },
       );
     }
-    // Nedá sa prosiť o unassigned lead — použi steal namiesto toho.
-    if (!lead.assigned_to) {
+    if (!currentOwner) {
       return NextResponse.json(
         { ok: false, error: "pull_lead_unassigned" },
         { status: 400 },
@@ -138,12 +155,13 @@ export async function POST(request: NextRequest) {
     .from("lead_reassign_requests")
     .insert({
       lead_id,
-      from_user_id: lead.assigned_to,
+      from_user_id: currentOwner,
       to_user_id,
       requested_by: user.id,
       reason: reason ?? null,
       status: "pending",
       kind,
+      role_scope: roleScope,
     })
     .select("id")
     .single();
@@ -168,10 +186,11 @@ export async function POST(request: NextRequest) {
       data: {
         to_user_id,
         to_user_name: target.name,
-        from_user_id: lead.assigned_to,
+        from_user_id: currentOwner,
         reason: reason ?? null,
         request_id: inserted.id,
         kind,
+        role_scope: roleScope,
       },
     });
   } catch (e) {
