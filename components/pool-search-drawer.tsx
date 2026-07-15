@@ -72,22 +72,83 @@ type UserItem = {
   phone: string | null;
 };
 
+type ViewerRole = "obchod" | "obhliadky" | "realizacie" | "admin";
+
 type SearchMode =
   | "leads"
+  | "obhliadky-tasks"
+  | "realizacie-tasks"
   | "obchod"
   | "obhliadky"
   | "realizacie"
   | "admin"
   | "all-users";
 
-const MODES: Array<{ v: SearchMode; label: string; icon: typeof User }> = [
-  { v: "leads", label: "Leady", icon: Target },
-  { v: "obchod", label: "Obchodníci", icon: Briefcase },
-  { v: "obhliadky", label: "Obhliadkari", icon: ClipboardList },
-  { v: "realizacie", label: "Realizátori", icon: Hammer },
-  { v: "admin", label: "Admini", icon: ShieldCheck },
-  { v: "all-users", label: "Všetci ľudia", icon: User },
+const ALL_MODES: Array<{
+  v: SearchMode;
+  label: string;
+  icon: typeof User;
+  category: "tasks" | "people";
+}> = [
+  { v: "leads", label: "Leady", icon: Target, category: "tasks" },
+  {
+    v: "obhliadky-tasks",
+    label: "Obhliadky",
+    icon: ClipboardList,
+    category: "tasks",
+  },
+  {
+    v: "realizacie-tasks",
+    label: "Realizácie",
+    icon: Hammer,
+    category: "tasks",
+  },
+  { v: "obchod", label: "Obchodníci", icon: Briefcase, category: "people" },
+  { v: "obhliadky", label: "Obhliadkari", icon: ClipboardList, category: "people" },
+  { v: "realizacie", label: "Realizátori", icon: Hammer, category: "people" },
+  { v: "admin", label: "Admini", icon: ShieldCheck, category: "people" },
+  { v: "all-users", label: "Všetci ľudia", icon: User, category: "people" },
 ];
+
+/**
+ * Podľa role viewera vráti dostupné search modes.
+ * User 2026-07-15: „obchodak leady, obhliadkar obhlaiky, relaizator
+ * realizacie, admin vsetko".
+ */
+function modesForRole(role: ViewerRole): SearchMode[] {
+  switch (role) {
+    case "admin":
+      return [
+        "leads",
+        "obhliadky-tasks",
+        "realizacie-tasks",
+        "obchod",
+        "obhliadky",
+        "realizacie",
+        "admin",
+        "all-users",
+      ];
+    case "obchod":
+      return ["leads", "obchod"];
+    case "obhliadky":
+      return ["obhliadky-tasks", "obhliadky"];
+    case "realizacie":
+      return ["realizacie-tasks", "realizacie"];
+  }
+}
+
+function defaultModeForRole(role: ViewerRole): SearchMode {
+  switch (role) {
+    case "admin":
+      return "leads";
+    case "obchod":
+      return "leads";
+    case "obhliadky":
+      return "obhliadky-tasks";
+    case "realizacie":
+      return "realizacie-tasks";
+  }
+}
 
 const CONFLICT_MSG: Record<string, string> = {
   already_yours: "Už si ho medzitým vzal iný request.",
@@ -99,10 +160,16 @@ const CONFLICT_MSG: Record<string, string> = {
   conflict_unknown: "Neznámy konflikt. Refreshni a skús znova.",
 };
 
-export function PoolSearchDrawer() {
+export function PoolSearchDrawer({
+  viewerRole,
+}: {
+  viewerRole: ViewerRole;
+}) {
   const [open, setOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
-  const [mode, setMode] = React.useState<SearchMode>("leads");
+  const [mode, setMode] = React.useState<SearchMode>(
+    defaultModeForRole(viewerRole),
+  );
   const [q, setQ] = React.useState("");
   const [items, setItems] = React.useState<PoolItem[]>([]);
   const [userItems, setUserItems] = React.useState<UserItem[]>([]);
@@ -113,6 +180,17 @@ export function PoolSearchDrawer() {
   >(null);
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const availableModes = React.useMemo(
+    () => modesForRole(viewerRole),
+    [viewerRole],
+  );
+  const isAdmin = viewerRole === "admin";
+  const isTaskMode =
+    mode === "leads" ||
+    mode === "obhliadky-tasks" ||
+    mode === "realizacie-tasks";
+  const isPeopleMode = !isTaskMode;
 
   React.useEffect(() => setMounted(true), []);
 
@@ -134,7 +212,7 @@ export function PoolSearchDrawer() {
   React.useEffect(() => {
     if (!open) return;
     const query = q.trim();
-    const minLen = mode === "leads" ? 2 : 1;
+    const minLen = isTaskMode ? 2 : 1;
     if (query.length < minLen) {
       setItems([]);
       setUserItems([]);
@@ -144,7 +222,10 @@ export function PoolSearchDrawer() {
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        if (mode === "leads") {
+        if (isTaskMode) {
+          // Tasks endpoint podľa scope. Zatiaľ máme iba leads endpoint —
+          // obhliadky/realizacie sa filtrujú client-side z výsledkov leads
+          // podľa status (needs_inspection alebo in_realization).
           const r = await fetch(
             `/api/agent/pool/search?q=${encodeURIComponent(query)}`,
             { cache: "no-store" },
@@ -153,7 +234,18 @@ export function PoolSearchDrawer() {
             ok?: boolean;
             items?: PoolItem[];
           };
-          setItems(j.ok && j.items ? j.items : []);
+          const all = j.ok && j.items ? j.items : [];
+          const filtered =
+            mode === "obhliadky-tasks"
+              ? all.filter(
+                  (l) =>
+                    l.status === "needs_inspection" ||
+                    l.status === "scheduled",
+                )
+              : mode === "realizacie-tasks"
+                ? all.filter((l) => l.status === "in_realization")
+                : all;
+          setItems(filtered);
           setUserItems([]);
         } else {
           const roleParam =
@@ -177,7 +269,7 @@ export function PoolSearchDrawer() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [q, open, mode]);
+  }, [q, open, mode, isTaskMode]);
 
   // Re-fetch aktuálnych výsledkov (napr. po ask/send/steal, aby sa
   // pending_transfer flag updatoval a zmizli akčné buttony).
@@ -195,6 +287,13 @@ export function PoolSearchDrawer() {
       /* ignore */
     }
   }, [q]);
+
+  // Admin-only: „Priradiť inému Agentovi" flow — otvorí picker so
+  // zoznamom obchodákov/obhliadkárov/realizátorov, admin klikne meno,
+  // /api/admin/lead/direct-assign priamo prepíše owner (bez confirm).
+  const [adminAssignFor, setAdminAssignFor] = React.useState<PoolItem | null>(
+    null,
+  );
 
   async function steal(it: PoolItem) {
     if (busyId) return;
@@ -311,7 +410,7 @@ export function PoolSearchDrawer() {
     null,
   );
   React.useEffect(() => {
-    if (!pushPickerFor || pickerAgents) return;
+    if ((!pushPickerFor && !adminAssignFor) || pickerAgents) return;
     (async () => {
       try {
         const r = await fetch("/api/admin/agents/list");
@@ -322,7 +421,7 @@ export function PoolSearchDrawer() {
         setPickerAgents([]);
       }
     })();
-  }, [pushPickerFor, pickerAgents]);
+  }, [pushPickerFor, adminAssignFor, pickerAgents]);
 
   async function sendLeadTo(it: PoolItem, targetId: string, targetName: string) {
     if (busyId) return;
@@ -361,6 +460,61 @@ export function PoolSearchDrawer() {
         text: `✓ Ponuka poslaná ${targetName}. Cink u neho zazvoní.`,
       });
       setPushPickerFor(null);
+      await refetch();
+    } catch (e) {
+      setFlash({
+        kind: "err",
+        text: `Sieťová chyba: ${e instanceof Error ? e.message : "unknown"}`,
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /**
+   * ADMIN direct assign — priradí lead priamo, bez potvrdenia druhej strany.
+   * User 2026-07-15: „ja som admin, musim mat Priradit inemu Agentovi
+   * iba proste rozkaz".
+   */
+  async function adminAssignTo(
+    it: PoolItem,
+    targetId: string,
+    targetName: string,
+  ) {
+    if (busyId) return;
+    setBusyId(it.id);
+    setFlash(null);
+    try {
+      // role_scope určíme podľa aktuálneho search mode
+      const roleScope =
+        mode === "obhliadky-tasks"
+          ? "obhliadky"
+          : mode === "realizacie-tasks"
+            ? "realizacie"
+            : "obchod";
+      const r = await fetch("/api/admin/lead/direct-assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: it.id,
+          to_user_id: targetId,
+          role_scope: roleScope,
+        }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!r.ok || !j.ok) {
+        setFlash({ kind: "err", text: `Chyba: ${j.error ?? "unknown"}` });
+        setBusyId(null);
+        return;
+      }
+      setFlash({
+        kind: "ok",
+        text: `✓ Priradené: „${it.name}" → ${targetName}`,
+      });
+      setAdminAssignFor(null);
       await refetch();
     } catch (e) {
       setFlash({
@@ -420,7 +574,7 @@ export function PoolSearchDrawer() {
               Hľadať
             </div>
             <div className="font-black text-lg leading-tight">
-              {MODES.find((m) => m.v === mode)?.label ?? "Leady"}
+              {ALL_MODES.find((m) => m.v === mode)?.label ?? "Leady"}
             </div>
           </div>
           <button
@@ -456,30 +610,56 @@ export function PoolSearchDrawer() {
                 <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-sky-500" />
               )}
             </div>
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as SearchMode)}
-              className="h-11 px-3 rounded-lg border-2 border-slate-300 text-sm font-black focus:outline-none focus:border-sky-400 bg-white shrink-0"
-              title="Zvoľ čo hľadať"
-            >
-              {MODES.map((m) => (
-                <option key={m.v} value={m.v}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            {availableModes.length > 1 && (
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as SearchMode)}
+                className="h-11 px-3 rounded-lg border-2 border-slate-300 text-sm font-black focus:outline-none focus:border-sky-400 bg-white shrink-0"
+                title="Zvoľ čo hľadať"
+              >
+                {(() => {
+                  const modes = ALL_MODES.filter((m) =>
+                    availableModes.includes(m.v),
+                  );
+                  const tasks = modes.filter((m) => m.category === "tasks");
+                  const people = modes.filter((m) => m.category === "people");
+                  return (
+                    <>
+                      {tasks.length > 0 && (
+                        <optgroup label="Úlohy">
+                          {tasks.map((m) => (
+                            <option key={m.v} value={m.v}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {people.length > 0 && (
+                        <optgroup label="Ľudia">
+                          {people.map((m) => (
+                            <option key={m.v} value={m.v}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </>
+                  );
+                })()}
+              </select>
+            )}
           </div>
-          {mode === "leads" && (
+          {isTaskMode && (
             <div className="text-[11px] text-slate-500">
-              Pool = leady u ktorých{" "}
-              <b className="text-slate-700">ešte nikto neodhalil číslo</b>. Ak
-              volá zákazník ktorý pisal na web, hľadaj tu a klikni „Vziať si".
+              {isAdmin
+                ? "Ako admin priradíš úlohu priamo rozkazom (bez potvrdenia druhou stranou)."
+                : "Klikni na meno → otvorí sa detail. Vziať si (atomický steal) alebo Poprosím druhú stranu."}
             </div>
           )}
-          {mode !== "leads" && (
+          {isPeopleMode && (
             <div className="text-[11px] text-slate-500">
-              Klik na osobu → otvorí sa jej profil v novom okne
-              (obchodníci → profil s permissiami, ostatní → základný profil).
+              Klik na osobu → otvorí sa jej profil v novom okne (admin agent
+              detail alebo bežný profil).
             </div>
           )}
         </div>
@@ -499,22 +679,21 @@ export function PoolSearchDrawer() {
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {q.trim().length < (mode === "leads" ? 2 : 1) ? (
+          {q.trim().length < (isTaskMode ? 2 : 1) ? (
             <div className="p-8 text-center text-slate-500">
               <Search
                 className="w-12 h-12 mx-auto mb-2 text-slate-300"
                 aria-hidden
               />
               <div className="text-sm">
-                Zadaj aspoň {mode === "leads" ? "2 znaky" : "1 znak"} pre
-                hľadanie.
+                Zadaj aspoň {isTaskMode ? "2 znaky" : "1 znak"} pre hľadanie.
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
                 Tip: stlač <kbd className="border rounded px-1">/</kbd>{" "}
                 hocikde v aplikácii pre rýchle otvorenie.
               </div>
             </div>
-          ) : mode !== "leads" ? (
+          ) : isPeopleMode ? (
             // ─── USERS RESULTS ────────────────────────────────────────
             loading && userItems.length === 0 ? (
               <div className="p-8 flex flex-col items-center gap-2 text-slate-500">
@@ -623,11 +802,8 @@ export function PoolSearchDrawer() {
                         </div>
                       )}
                     </div>
-                    <div className="shrink-0 flex flex-col items-end gap-1.5 min-w-[130px]">
-                      {/* Žltý PENDING TRANSFER badge — kým beží žiadosť,
-                          nechceme aby druhý obchodák tvoril kolidujúcu
-                          steal/pull akciu. User 2026-07-15: „zatial je
-                          nejaky zlty pending transfer". */}
+                    <div className="shrink-0 flex flex-col items-end gap-1.5 min-w-[140px]">
+                      {/* Žltý PENDING TRANSFER badge — kým beží žiadosť. */}
                       {it.pending_transfer ? (
                         <div className="w-full">
                           <div className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-100 border-2 border-amber-400 text-amber-900 text-[10px] font-black uppercase tracking-wider">
@@ -639,8 +815,22 @@ export function PoolSearchDrawer() {
                                 : "Prebieha transfer"}
                           </div>
                         </div>
+                      ) : isAdmin ? (
+                        // ADMIN — user 2026-07-15: „ja som admin, musim mat
+                        // Priradit inemu Agentovi iba proste rozkaz". Bez
+                        // potvrdenia druhou stranou, priamo prepíše owner.
+                        <button
+                          type="button"
+                          onClick={() => setAdminAssignFor(it)}
+                          disabled={busyId === it.id}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-sm disabled:opacity-60 w-full justify-center"
+                          title="Priradiť tento lead inému agentovi (rozkaz, bez potvrdenia)"
+                        >
+                          <Target className="w-3.5 h-3.5" aria-hidden />
+                          Priradiť
+                        </button>
                       ) : it.is_mine ? (
-                        // MÔJ lead → Otvoriť + Poslať niekomu
+                        // MÔJ lead → Otvoriť + Poslať niekomu (peer)
                         <>
                           <button
                             type="button"
@@ -656,15 +846,14 @@ export function PoolSearchDrawer() {
                             onClick={() => setPushPickerFor(it)}
                             disabled={busyId === it.id}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black bg-white border-2 border-indigo-300 hover:bg-indigo-50 text-indigo-800 disabled:opacity-60"
-                            title="Poslať tento lead niektorému kolegovi"
+                            title="Poslať tento lead kolegovi"
                           >
                             <Send className="w-3 h-3" aria-hidden />
-                            Poslať niekomu
+                            Poslať kolegovi
                           </button>
                         </>
                       ) : it.assigned_to ? (
-                        // CUDZÍ (má ownera) → Vziať si (steal, race-safe)
-                        //                  + Poprosím (pull request)
+                        // CUDZÍ (má ownera) → Vziať si + Poprosím
                         <>
                           <button
                             type="button"
@@ -687,14 +876,14 @@ export function PoolSearchDrawer() {
                             onClick={() => askForLead(it)}
                             disabled={busyId === it.id}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black bg-white border-2 border-rose-300 hover:bg-rose-50 text-rose-800 disabled:opacity-60"
-                            title={`Poprosiť ${it.assigned_to_name} aby ti ho poslal (potvrdí to on)`}
+                            title={`Vyžiadať pridelenie od ${it.assigned_to_name} (potvrdí to on)`}
                           >
                             <HandHeart className="w-3 h-3" aria-hidden />
-                            Poprosím
+                            Vyžiadať
                           </button>
                         </>
                       ) : (
-                        // UNASSIGNED (voľný v poole) → iba vziať
+                        // UNASSIGNED — voľný v poole → iba vziať
                         <button
                           type="button"
                           onClick={() => steal(it)}
@@ -800,11 +989,102 @@ export function PoolSearchDrawer() {
         )
       : null;
 
+  // Admin direct-assign picker — otvorí sa keď admin klikne „Priradiť"
+  // na lead karte. Zobrazí zoznam agentov (obchod/obhliadky/realizácie
+  // podľa role_scope), klik meno → priamo prepíše owner (bez confirmu).
+  const adminAssignPicker =
+    adminAssignFor && mounted && isAdmin
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setAdminAssignFor(null)}
+          >
+            <div
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[calc(100vh-2rem)] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-rose-500 to-rose-700 text-white px-5 py-3 flex items-center gap-3 shrink-0">
+                <Target className="w-5 h-5 shrink-0" aria-hidden />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
+                    Priradiť —{" "}
+                    {mode === "obhliadky-tasks"
+                      ? "obhliadkárovi"
+                      : mode === "realizacie-tasks"
+                        ? "realizátorovi"
+                        : "obchodníkovi"}
+                  </div>
+                  <div className="font-black text-lg leading-tight truncate">
+                    {adminAssignFor.name}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdminAssignFor(null)}
+                  className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1">
+                {pickerAgents === null ? (
+                  <div className="flex flex-col items-center gap-2 py-6 text-slate-500">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <div className="text-xs font-bold">Načítavam tím…</div>
+                  </div>
+                ) : pickerAgents.length === 0 ? (
+                  <div className="text-center text-slate-500 py-6 text-sm">
+                    Žiadni agenti k dispozícii.
+                  </div>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {pickerAgents.map((a) => (
+                      <li key={a.id}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            adminAssignTo(adminAssignFor, a.id, a.name)
+                          }
+                          disabled={busyId === adminAssignFor.id}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-slate-200 bg-white hover:border-rose-300 hover:bg-rose-50 text-slate-900 text-left disabled:opacity-60"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-black text-sm truncate">
+                              {a.name}
+                            </div>
+                            <div className="text-[11px] text-slate-500 truncate">
+                              {a.email}
+                            </div>
+                          </div>
+                          {busyId === adminAssignFor.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-rose-600" />
+                          ) : (
+                            <span className="text-[10px] font-black text-rose-700 uppercase tracking-wider shrink-0">
+                              Priradiť →
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-3 text-[11px] text-slate-500 italic">
+                  Rozkaz — bez potvrdenia druhou stranou. Prepíše owner-a
+                  okamžite. Audit log v lead activities.
+                </p>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <>
       {trigger}
       {mounted && drawer ? createPortal(drawer, document.body) : null}
       {pushPicker}
+      {adminAssignPicker}
     </>
   );
 }

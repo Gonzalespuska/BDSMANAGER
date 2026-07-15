@@ -240,11 +240,14 @@ export async function AppShell({
 
           <div className="flex items-center gap-1.5 md:gap-3">
             {isRealAdmin && <RoleViewDropdown currentViewAs={currentViewAs} />}
-            {/* Pool search — obchod + admin. „/" hotkey hocikde v app-ke.
-                User 2026-07-15: „ak potrebuje manualne podla mena si pridelit
-                lead a vie to meno tak chyti a vyhlada si to". */}
-            {(user.role === "obchod" || user.role === "admin") && (
-              <PoolSearchDrawer />
+            {/* Pool search — všetky rolí okrem office/skolenie.
+                Dropdown modes + akcie sa dynamicky menia podľa role
+                viewera (user 2026-07-15). */}
+            {(user.role === "obchod" ||
+              user.role === "obhliadky" ||
+              user.role === "realizacie" ||
+              user.role === "admin") && (
+              <PoolSearchDrawer viewerRole={user.role} />
             )}
             {/* Realizator nemá notifikácie — pracuje na stavbe, netreba mu je. */}
             {user.role !== "realizacie" && (
