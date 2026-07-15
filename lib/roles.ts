@@ -111,18 +111,12 @@ export function dashboardPathForRole(role: AppUserRole): string {
 export function navTabsForRole(role: AppUserRole): NavTabId[] {
   switch (role) {
     case "admin":
-      return [
-        "agent",
-        "obhliadky",
-        "obhliadnute",
-        "realizacie",
-        "calendar",
-        "generator",
-        "podklady",
-        "spravy",
-        "notifikacie",
-        "admin",
-      ];
+      // User 2026-07-15: „admin nemusi vidiet tu nic iba admin spravy
+      // a notifikacie, ked si chce pozriet ostatne da si to zobrazit
+      // ako obchod / obhliadka atd". Admin je supervisor — má vlastný
+      // dashboard, a ak chce zažiť UI iného rolí, prepne view-as
+      // dropdown v hornom pravo (RoleViewDropdown).
+      return ["admin", "spravy", "notifikacie"];
     case "obchod":
       // "Obhliadnuté" — obhliadka HOTOVÁ obhliadkárom, obchodák musí spraviť
       // ďalší krok (poslať CP, alebo označiť lost). Sedí medzi Leady a Kalendár.
