@@ -19,6 +19,8 @@ import {
 import { isTestLeadName } from "@/lib/test-account";
 import { cn } from "@/lib/utils";
 import { ReassignButton } from "@/components/admin/reassign-picker";
+import { LeadAdminControls } from "@/components/admin/lead-admin-controls";
+import { LeadsSearchInput } from "@/components/admin/leads-search-input";
 
 /** "pred 2h 15min" / "pred 3d" — kompaktný SK relative time. */
 function relTimeSK(iso: string): string {
@@ -198,8 +200,16 @@ export default async function AdminLeadsPage({
         />
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-2 grid-cols-3">
+      {/* Stats + Search — user 2026-07-15: „kde je akoze search button".
+          Persistent client-side filter (nemôdal) — matchuje priamo v už
+          načítaných 500 kartách naprieč menom/telefónom/mestom/m²/emailom. */}
+      <div className="grid gap-3 grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] items-end">
+        <div className="pb-1">
+          <div className="text-[10px] uppercase tracking-wider font-black text-sky-700 mb-1">
+            Filter (napr. „peter", „nitra", „50", „0915")
+          </div>
+          <LeadsSearchInput />
+        </div>
         <Stat label="Celkovo" value={rows.length} />
         <Stat label="Odhalené" value={revealedCount} accent="emerald" />
         <Stat label="Nepridelené" value={unassigned.length} accent="amber" />
@@ -207,7 +217,7 @@ export default async function AdminLeadsPage({
 
       {/* Nepriradené sekcia */}
       {unassigned.length > 0 && (
-        <section>
+        <section data-lead-search-section>
           <h2 className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2 inline-flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
             Nepridelené ({unassigned.length})
@@ -222,7 +232,7 @@ export default async function AdminLeadsPage({
 
       {/* Sekcie podľa agenta */}
       {Array.from(byAgent.entries()).map(([agentId, agentLeads]) => (
-        <section key={agentId}>
+        <section key={agentId} data-lead-search-section>
           <h2 className="text-xs font-bold uppercase tracking-wider mb-2 inline-flex items-center gap-1.5">
             <UserCircle className="w-3.5 h-3.5 text-sky-600" aria-hidden />
             <Link
@@ -248,8 +258,27 @@ export default async function AdminLeadsPage({
 
 // ────────────────────────────────────────────────────────────────────────
 function LeadCardMini({ lead }: { lead: AdminLeadRow }) {
+  // Hay string pre LeadsSearchInput — všetko searchable v jednom lowercase
+  // stringu. Client-side matching ~1 ms/karta pre 500 leadov.
+  const hay = [
+    lead.name,
+    lead.email,
+    lead.phone,
+    lead.assigned_user_name,
+    lead.status,
+    lead.source_type,
+    lead.source_campaign,
+    // digits-only variant telefónu (pre match "0915" bez formátu)
+    (lead.phone ?? "").replace(/[^0-9]/g, ""),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
   return (
-    <div className="relative rounded-lg border bg-background p-2.5 hover:border-sky-300 hover:bg-sky-50/30 transition-colors group">
+    <div
+      className="relative rounded-lg border bg-background p-2.5 hover:border-sky-300 hover:bg-sky-50/30 transition-colors group"
+      data-lead-search-hay={hay}
+    >
       <Link
         href={`/agent/leads/${lead.id}`}
         className="block"
@@ -292,14 +321,19 @@ function LeadCardMini({ lead }: { lead: AdminLeadRow }) {
           </span>
         </div>
       </Link>
-      {/* Admin: preraď — otvorí picker modal → pošle žiadosť inému obchodákovi.
-          User 2026-07-15: „preradit aj ak je otvoreny uz". Absolute pozícia
-          aby to nekolidovalo s Link parent. */}
-      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Admin akčné buttons — visible on hover.
+          User 2026-07-15: „preradit aj ak je otvoreny uz" + „daj mi moznost
+          ako adminovi ich mazat alebo menit aj status tu". */}
+      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
         <ReassignButton
           leadId={lead.id}
           leadName={lead.name || "Bez mena"}
           currentAssigneeId={lead.assigned_to}
+        />
+        <LeadAdminControls
+          leadId={lead.id}
+          leadName={lead.name || "Bez mena"}
+          currentStatus={lead.status}
         />
       </div>
     </div>
