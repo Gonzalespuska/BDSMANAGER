@@ -17,7 +17,6 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AdminHealthBanner } from "./admin-health-banner";
-import { LeadDistributionPanel } from "./lead-distribution-panel";
 import { SyncHealthWidget } from "./sync-health-widget";
 
 export const dynamic = "force-dynamic";
@@ -222,8 +221,6 @@ export default async function AdminDashboard() {
       <AdminHealthBanner />
 
       <SyncHealthWidget />
-
-      <LeadDistributionPanel />
 
       {/* TÍM — split podľa role. Klik na kartu → /admin/agents s
           role filtrom (obchod / obhliadky / realizacie). */}
