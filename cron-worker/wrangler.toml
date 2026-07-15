@@ -12,3 +12,10 @@ crons = ["*/5 * * * *"]
 # TARGET_URL fixed:
 [vars]
 TARGET_URL = "https://app.najcrm.sk/api/cron/sync-epoxidovo"
+NTFY_ALERT_TOPIC = "puska-claude-67d114"
+
+# KV namespace na tracking sync failure streak + last-alerted timestamps.
+# Bez neho by liveness alarm nemal state → nefungoval by rate-limit.
+[[kv_namespaces]]
+binding = "SYNC_STATE"
+id = "6d86431243884cc19bcd80a8302bb8a7"

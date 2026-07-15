@@ -142,18 +142,22 @@ export async function POST(request: NextRequest) {
     // — Next.js SWC/Terser môže mangleovať template literal syntax v
     // production build a Neon parser to nezachytí.
     // FIX 2026-07-15: stĺpec `termin` bol zmazaný z epoxidovo.sk Neon
-    // DB (User dnes rework webu, termín teraz iba v `message` textovom
-    // poli). Sync padal 4 dni s "column termin does not exist" a
-    // ubehli 4+ leady (Ján Svrbík, Adriána Tiso, Tomáš Dobránsky,
-    // Natália Miscik). Termin sa teraz parsuje z message ak treba.
+    // DB (User dnes rework webu, termín teraz iba v `message`). Sync
+    // padal 4 dni s "column termin does not exist" — ubehli 4 leady.
+    //
+    // POUČENIE + TRVALÝ FIX: `SELECT *` namiesto explicit column list.
+    // Aj keď epoxidovo znovu drop-ne / premenuje ľubovoľný stĺpec,
+    // sync nikdy nespadne. Column access je defensive (l.termin ?? undefined).
+    // Ak sa objaví nový stĺpec (napr. floor_type_new), automaticky ho
+    // uložíme do data JSONB v CRM ako _epx_extra field pre neskoršie
+    // spracovanie.
     const rows = (await sql.query(
-      `SELECT id, "createdAt", name, email, phone, source, "spaceType", service,
-             area, message, "utmSource", "utmMedium", "utmCampaign", referrer, status
+      `SELECT *
        FROM "Lead"
        ORDER BY "createdAt" DESC
        LIMIT 200`,
       [],
-    )) as unknown as EpxLead[];
+    )) as unknown as Array<Record<string, unknown> & EpxLead>;
 
     const sb = createAdminClient();
 
