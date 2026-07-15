@@ -1,18 +1,24 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
+  Briefcase,
+  ClipboardList,
   Clock,
   ExternalLink,
+  Hammer,
   HandHeart,
   Loader2,
   MapPin,
   Ruler,
   Search,
   Send,
+  ShieldCheck,
   Target,
+  User,
   X,
 } from "lucide-react";
 
@@ -56,6 +62,33 @@ type PoolItem = {
 
 type PickerAgent = { id: string; name: string; email: string };
 
+type UserItem = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  avatar_url: string | null;
+  phone: string | null;
+};
+
+type SearchMode =
+  | "leads"
+  | "obchod"
+  | "obhliadky"
+  | "realizacie"
+  | "admin"
+  | "all-users";
+
+const MODES: Array<{ v: SearchMode; label: string; icon: typeof User }> = [
+  { v: "leads", label: "Leady", icon: Target },
+  { v: "obchod", label: "Obchodníci", icon: Briefcase },
+  { v: "obhliadky", label: "Obhliadkari", icon: ClipboardList },
+  { v: "realizacie", label: "Realizátori", icon: Hammer },
+  { v: "admin", label: "Admini", icon: ShieldCheck },
+  { v: "all-users", label: "Všetci ľudia", icon: User },
+];
+
 const CONFLICT_MSG: Record<string, string> = {
   already_yours: "Už si ho medzitým vzal iný request.",
   already_touched:
@@ -69,8 +102,10 @@ const CONFLICT_MSG: Record<string, string> = {
 export function PoolSearchDrawer() {
   const [open, setOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const [mode, setMode] = React.useState<SearchMode>("leads");
   const [q, setQ] = React.useState("");
   const [items, setItems] = React.useState<PoolItem[]>([]);
+  const [userItems, setUserItems] = React.useState<UserItem[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [flash, setFlash] = React.useState<
@@ -93,39 +128,56 @@ export function PoolSearchDrawer() {
   }, [open]);
 
   // Debounced search — 300 ms po poslednom keystroke.
+  // Routing podľa mode: 'leads' → pool search endpoint,
+  //                     'obchod'/'obhliadky'/'realizacie'/'admin' → users search s role filter,
+  //                     'all-users' → users search bez filter.
   React.useEffect(() => {
     if (!open) return;
     const query = q.trim();
-    if (query.length < 2) {
+    const minLen = mode === "leads" ? 2 : 1;
+    if (query.length < minLen) {
       setItems([]);
+      setUserItems([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(
-          `/api/agent/pool/search?q=${encodeURIComponent(query)}`,
-          { cache: "no-store" },
-        );
-        const j = (await r.json()) as {
-          ok?: boolean;
-          items?: PoolItem[];
-          error?: string;
-        };
-        if (j.ok && j.items) {
-          setItems(j.items);
+        if (mode === "leads") {
+          const r = await fetch(
+            `/api/agent/pool/search?q=${encodeURIComponent(query)}`,
+            { cache: "no-store" },
+          );
+          const j = (await r.json()) as {
+            ok?: boolean;
+            items?: PoolItem[];
+          };
+          setItems(j.ok && j.items ? j.items : []);
+          setUserItems([]);
         } else {
+          const roleParam =
+            mode === "all-users" ? "" : `&role=${encodeURIComponent(mode)}`;
+          const r = await fetch(
+            `/api/agent/pool/search-users?q=${encodeURIComponent(query)}${roleParam}`,
+            { cache: "no-store" },
+          );
+          const j = (await r.json()) as {
+            ok?: boolean;
+            items?: UserItem[];
+          };
+          setUserItems(j.ok && j.items ? j.items : []);
           setItems([]);
         }
       } catch {
         setItems([]);
+        setUserItems([]);
       } finally {
         setLoading(false);
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [q, open]);
+  }, [q, open, mode]);
 
   // Re-fetch aktuálnych výsledkov (napr. po ask/send/steal, aby sa
   // pending_transfer flag updatoval a zmizli akčné buttony).
@@ -365,10 +417,10 @@ export function PoolSearchDrawer() {
           <Target className="w-5 h-5 shrink-0" aria-hidden />
           <div className="flex-1 min-w-0">
             <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
-              Hľadať v poole tímu
+              Hľadať
             </div>
             <div className="font-black text-lg leading-tight">
-              Nedotknuté leady všetkých obchodákov
+              {MODES.find((m) => m.v === mode)?.label ?? "Leady"}
             </div>
           </div>
           <button
@@ -381,29 +433,55 @@ export function PoolSearchDrawer() {
           </button>
         </div>
 
-        <div className="p-4 border-b bg-slate-50 shrink-0">
-          <div className="relative">
-            <Search
-              className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
-            <input
-              ref={inputRef}
-              type="text"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Napíš meno, email, mesto, m² alebo číslo…"
-              className="w-full h-11 pl-10 pr-10 rounded-lg border-2 border-slate-300 text-sm focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200"
-            />
-            {loading && (
-              <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-sky-500" />
-            )}
+        <div className="p-4 border-b bg-slate-50 shrink-0 space-y-2">
+          <div className="flex items-stretch gap-2">
+            <div className="relative flex-1">
+              <Search
+                className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                aria-hidden
+              />
+              <input
+                ref={inputRef}
+                type="text"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={
+                  mode === "leads"
+                    ? "Napíš meno, email, mesto, m² alebo číslo…"
+                    : "Napíš meno alebo email osoby…"
+                }
+                className="w-full h-11 pl-10 pr-10 rounded-lg border-2 border-slate-300 text-sm focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200"
+              />
+              {loading && (
+                <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-sky-500" />
+              )}
+            </div>
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as SearchMode)}
+              className="h-11 px-3 rounded-lg border-2 border-slate-300 text-sm font-black focus:outline-none focus:border-sky-400 bg-white shrink-0"
+              title="Zvoľ čo hľadať"
+            >
+              {MODES.map((m) => (
+                <option key={m.v} value={m.v}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="mt-2 text-[11px] text-slate-500">
-            Pool = leady u ktorých{" "}
-            <b className="text-slate-700">ešte nikto neodhalil číslo</b>. Ak
-            volá zákazník ktorý pisal na web, hľadaj tu a klikni „Vziať si".
-          </div>
+          {mode === "leads" && (
+            <div className="text-[11px] text-slate-500">
+              Pool = leady u ktorých{" "}
+              <b className="text-slate-700">ešte nikto neodhalil číslo</b>. Ak
+              volá zákazník ktorý pisal na web, hľadaj tu a klikni „Vziať si".
+            </div>
+          )}
+          {mode !== "leads" && (
+            <div className="text-[11px] text-slate-500">
+              Klik na osobu → otvorí sa jej profil v novom okne
+              (obchodníci → profil s permissiami, ostatní → základný profil).
+            </div>
+          )}
         </div>
 
         {flash && (
@@ -421,18 +499,51 @@ export function PoolSearchDrawer() {
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {q.trim().length < 2 ? (
+          {q.trim().length < (mode === "leads" ? 2 : 1) ? (
             <div className="p-8 text-center text-slate-500">
               <Search
                 className="w-12 h-12 mx-auto mb-2 text-slate-300"
                 aria-hidden
               />
-              <div className="text-sm">Zadaj aspoň 2 znaky pre hľadanie.</div>
+              <div className="text-sm">
+                Zadaj aspoň {mode === "leads" ? "2 znaky" : "1 znak"} pre
+                hľadanie.
+              </div>
               <div className="text-[11px] text-slate-400 mt-1">
                 Tip: stlač <kbd className="border rounded px-1">/</kbd>{" "}
                 hocikde v aplikácii pre rýchle otvorenie.
               </div>
             </div>
+          ) : mode !== "leads" ? (
+            // ─── USERS RESULTS ────────────────────────────────────────
+            loading && userItems.length === 0 ? (
+              <div className="p-8 flex flex-col items-center gap-2 text-slate-500">
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <div className="text-xs font-bold">Hľadám…</div>
+              </div>
+            ) : userItems.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                <div className="text-sm font-bold text-slate-700">
+                  Žiadny{" "}
+                  {mode === "obchod"
+                    ? "obchodník"
+                    : mode === "obhliadky"
+                      ? "obhliadkár"
+                      : mode === "realizacie"
+                        ? "realizátor"
+                        : mode === "admin"
+                          ? "admin"
+                          : "používateľ"}{" "}
+                  pre „{q.trim()}"
+                </div>
+              </div>
+            ) : (
+              <ul className="divide-y">
+                {userItems.map((u) => (
+                  <UserRow key={u.id} u={u} onNavigate={() => setOpen(false)} />
+                ))}
+              </ul>
+            )
           ) : loading && items.length === 0 ? (
             <div className="p-8 flex flex-col items-center gap-2 text-slate-500">
               <Loader2 className="w-6 h-6 animate-spin" />
@@ -451,17 +562,27 @@ export function PoolSearchDrawer() {
           ) : (
             <ul className="divide-y">
               {items.map((it) => (
-                <li key={it.id} className="p-3 hover:bg-slate-50">
+                <li
+                  key={it.id}
+                  className="p-3 hover:bg-sky-50/60 hover:shadow-inner border-l-4 border-transparent hover:border-sky-400 transition-all"
+                >
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="font-black text-sm text-slate-900 truncate">
+                        <Link
+                          href={`/agent/leads/${it.id}`}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-black text-sm text-slate-900 truncate hover:text-sky-700 hover:underline decoration-2 underline-offset-2"
+                          title="Otvoriť detail leadu v novom okne"
+                        >
                           {it.name || (
                             <span className="italic text-slate-500">
                               bez mena
                             </span>
                           )}
-                        </span>
+                        </Link>
                         <span
                           className={
                             "text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded " +
@@ -685,5 +806,102 @@ export function PoolSearchDrawer() {
       {mounted && drawer ? createPortal(drawer, document.body) : null}
       {pushPicker}
     </>
+  );
+}
+
+/**
+ * UserRow — jeden riadok v people search výsledkoch. Klik → otvorí
+ * profil v novom okne (admin agent detail alebo bežný profil).
+ */
+function UserRow({
+  u,
+  onNavigate,
+}: {
+  u: UserItem;
+  onNavigate: () => void;
+}) {
+  // Admin agenti majú detail na /admin/agents/[id]; ostatní na /profil/[id].
+  // Pre obchod/obhliadky/realizacie preferujeme admin agent detail (viac info).
+  const href =
+    u.role === "admin" ||
+    u.role === "obchod" ||
+    u.role === "obhliadky" ||
+    u.role === "realizacie"
+      ? `/admin/agents/${u.id}`
+      : `/profil/${u.id}`;
+
+  const roleTint =
+    u.role === "admin"
+      ? "bg-amber-100 text-amber-900 border-amber-300"
+      : u.role === "obchod"
+        ? "bg-sky-100 text-sky-900 border-sky-300"
+        : u.role === "obhliadky"
+          ? "bg-violet-100 text-violet-900 border-violet-300"
+          : u.role === "realizacie"
+            ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+            : "bg-slate-100 text-slate-800 border-slate-300";
+  const RoleIcon =
+    u.role === "admin"
+      ? ShieldCheck
+      : u.role === "obhliadky"
+        ? ClipboardList
+        : u.role === "realizacie"
+          ? Hammer
+          : Briefcase;
+
+  return (
+    <li>
+      <Link
+        href={href}
+        target="_blank"
+        rel="noopener"
+        onClick={onNavigate}
+        className="block p-3 hover:bg-sky-50/60 hover:shadow-inner border-l-4 border-transparent hover:border-sky-400 transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+            {u.avatar_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={u.avatar_url}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User className="w-5 h-5 text-slate-500" aria-hidden />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+              <span className="font-black text-sm text-slate-900 truncate">
+                {u.name}
+              </span>
+              <span
+                className={
+                  "inline-flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border " +
+                  roleTint
+                }
+              >
+                <RoleIcon className="w-2.5 h-2.5" aria-hidden />
+                {u.role}
+              </span>
+              {!u.active && (
+                <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300">
+                  neaktívny
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-slate-500 truncate">
+              {u.email}
+              {u.phone && <span className="ml-2 tabular-nums">· {u.phone}</span>}
+            </div>
+          </div>
+          <ExternalLink
+            className="w-4 h-4 text-slate-400 shrink-0"
+            aria-hidden
+          />
+        </div>
+      </Link>
+    </li>
   );
 }
