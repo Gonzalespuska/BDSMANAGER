@@ -67,15 +67,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  const pageToken = process.env.META_PAGE_ACCESS_TOKEN;
+  const sb = createAdminClient();
+
+  // ─── Načítaj token + Page IDs ──────────────────────────────────────
+  // Priorita: Supabase secure_config (admin ich zmení cez /admin/meta-setup
+  // form, bez redeploy) → CF Pages env (fallback pre backward-compat).
+  const { data: configRows } = await sb
+    .from("secure_config")
+    .select("key, value")
+    .in("key", ["META_PAGE_ACCESS_TOKEN", "META_PAGE_IDS"]);
+  const configMap = new Map(
+    (configRows ?? []).map((r) => [r.key as string, r.value as string]),
+  );
+  const pageToken =
+    configMap.get("META_PAGE_ACCESS_TOKEN") ??
+    process.env.META_PAGE_ACCESS_TOKEN;
+  const hardcodedPageIdsRaw =
+    configMap.get("META_PAGE_IDS") ?? process.env.META_PAGE_IDS ?? "";
   if (!pageToken) {
     return NextResponse.json(
-      { ok: false, error: "META_PAGE_ACCESS_TOKEN not set" },
+      {
+        ok: false,
+        error: "META_PAGE_ACCESS_TOKEN not set",
+        fix: "Otvor /admin/meta-setup a paste tam Never-expiring System User Access Token.",
+      },
       { status: 503 },
     );
   }
-
-  const sb = createAdminClient();
   const results: {
     forms_discovered: number;
     leads_checked: number;
@@ -101,7 +119,7 @@ export async function POST(request: NextRequest) {
     // ale to VYŽADUJE User Access Token, ktorý vyprší po ~60 dňoch a
     // user musí manuálne obnovovať (výsledok: Adriána-style incident).
     let pages: Array<{ id: string; name: string; access_token?: string }> = [];
-    const hardcodedPageIds = (process.env.META_PAGE_IDS ?? "")
+    const hardcodedPageIds = hardcodedPageIdsRaw
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
