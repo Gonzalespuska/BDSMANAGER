@@ -1,44 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, UserCheck, Shuffle } from "lucide-react";
+import { Loader2, Shuffle } from "lucide-react";
 
 /**
- * Admin panel na aktiváciu obchodákov + redistribúciu unassigned leadov.
- * User 2026-07-14: „urob z Denis Petrus a Alena Schronk normalnych
- * obchodakov idu uz volat aj tam ten system ze im to bude davat leady …
- * nove leady co chodia nech su automaticky pridelovane aktivnym".
+ * Admin panel — manuálna redistribúcia unassigned leadov na aktívnych
+ * obchodákov. Auto-assign každých 5 min beží cez cron (nie tu).
+ *
+ * User 2026-07-15: „co je kurva toto" — pôvodný panel mal aj stale
+ * one-shot „Aktivuj Denis + Alena" (dávno hotové), UI je teraz čistejší.
  */
 export function LeadDistributionPanel() {
-  const [activating, setActivating] = React.useState(false);
   const [redistributing, setRedistributing] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
-
-  async function activateDealers() {
-    setActivating(true);
-    setMsg(null);
-    try {
-      const r = await fetch("/api/admin/activate-dealers", { method: "POST" });
-      const j = (await r.json()) as {
-        ok: boolean;
-        matched?: Array<{ name: string; before: unknown; after: unknown }>;
-        not_found?: string[];
-        error?: string;
-      };
-      if (!j.ok) {
-        setMsg(`⚠ ${j.error}`);
-      } else {
-        const foundNames = (j.matched ?? []).map((m) => m.name).join(", ");
-        const missing = (j.not_found ?? []).join(", ");
-        setMsg(
-          `✓ Aktivovaní: ${foundNames || "nikto"}${missing ? ` · Neexistujú v DB: ${missing}` : ""}`,
-        );
-      }
-    } catch (e) {
-      setMsg(`⚠ ${e instanceof Error ? e.message : "network_error"}`);
-    }
-    setActivating(false);
-  }
 
   async function redistribute() {
     setRedistributing(true);
@@ -71,43 +45,28 @@ export function LeadDistributionPanel() {
     <section className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-4 space-y-3">
       <header>
         <div className="text-sm font-black text-sky-900 inline-flex items-center gap-2">
-          🔄 Distribúcia leadov obchodákom
+          🔄 Manuálna redistribúcia unassigned leadov
         </div>
         <div className="text-xs text-sky-800/80 mt-0.5">
-          Nové leady sa od teraz auto-priradia aktívnemu obchodákovi s najmenším
-          loadom (least-loaded round-robin). Tieto 2 akcie sú one-shot:
+          Nové leady sa auto-priradia každých 5 min cez cron (least-loaded round-robin).
+          Tu je záložné manuálne tlačidlo — použite ak vidíte veľa unassigned leadov
+          a cron ešte nezbehol.
         </div>
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={activateDealers}
-          disabled={activating}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-sm font-black disabled:opacity-50 shadow-sm"
-        >
-          {activating ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <UserCheck className="w-4 h-4" />
-          )}
-          Aktivuj Denis Petrus + Alena Schronk
-        </button>
-
-        <button
-          type="button"
-          onClick={redistribute}
-          disabled={redistributing}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 text-sm font-black disabled:opacity-50 shadow-sm"
-        >
-          {redistributing ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Shuffle className="w-4 h-4" />
-          )}
-          Rozdeľ unassigned leady
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={redistribute}
+        disabled={redistributing}
+        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 text-sm font-black disabled:opacity-50 shadow-sm"
+      >
+        {redistributing ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Shuffle className="w-4 h-4" />
+        )}
+        Rozdeľ unassigned leady teraz
+      </button>
 
       {msg && (
         <div
