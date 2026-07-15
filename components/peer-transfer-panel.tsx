@@ -1,7 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRightLeft, HandHeart, Loader2, Send } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowRightLeft, HandHeart, Loader2, Send, X } from "lucide-react";
+
+import { toast } from "@/components/ui/toast";
 
 /**
  * PeerTransferPanel — na profile INÉHO používateľa (rovnaká rola)
@@ -76,15 +79,22 @@ export function PeerTransferPanel({
     load();
   }, [load]);
 
-  async function request(kind: "pull" | "push", task: PeerTaskItem) {
-    if (busyId || !data) return;
-    const noun = kind === "pull" ? "prosím o" : "posielam";
-    const promptText =
-      kind === "pull"
-        ? `Prosba k ${peerName} o „${task.name}" (voliteľná poznámka)`
-        : `Poznámka pre ${peerName} k „${task.name}" (voliteľné)`;
-    const reason = window.prompt(promptText, "");
-    if (reason === null) return;
+  // Modal state — namiesto window.prompt (ktorý užívateľ mohol prehliadnuť).
+  // User 2026-07-15: „nech moze napisat poznamku ku tomu a zobrazi sa mu".
+  const [modalState, setModalState] = React.useState<{
+    kind: "push" | "pull";
+    task: PeerTaskItem;
+  } | null>(null);
+  const [modalReason, setModalReason] = React.useState("");
+
+  function openRequestModal(kind: "pull" | "push", task: PeerTaskItem) {
+    setModalReason("");
+    setModalState({ kind, task });
+  }
+
+  async function submitRequest() {
+    if (!modalState || !data || busyId) return;
+    const { kind, task } = modalState;
     setBusyId(task.id);
     setFlash(null);
     try {
@@ -92,7 +102,7 @@ export function PeerTransferPanel({
         lead_id: task.id,
         kind,
         role_scope: data.role_scope,
-        reason: reason.trim() || null,
+        reason: modalReason.trim() || null,
       };
       if (kind === "push") body.to_user_id = peerId;
       const r = await fetch("/api/lead/reassign", {
@@ -119,11 +129,12 @@ export function PeerTransferPanel({
         setBusyId(null);
         return;
       }
-      setFlash({
-        kind: "ok",
-        text: `✓ Žiadosť ${noun} „${task.name}" odoslaná ${peerName}. Cink u neho zazvoní.`,
-      });
-      // Refresh tasks (jeho task môže mať teraz pending badge)
+      const noun = kind === "pull" ? "prosba o" : "ponuka";
+      const successMsg = `✓ Žiadosť odoslaná: ${noun} „${task.name}" → ${peerName}. Kým ${peerName} neklikne Prijať, má žltý PENDING TRANSFER badge.`;
+      toast.success(successMsg);
+      setFlash({ kind: "ok", text: successMsg });
+      setModalState(null);
+      setModalReason("");
       await load();
     } catch (e) {
       setFlash({
@@ -146,6 +157,7 @@ export function PeerTransferPanel({
   if (!data) return null;
 
   return (
+    <>
     <div className="rounded-2xl border-2 bg-white shadow-sm overflow-hidden">
       <div className="bg-gradient-to-br from-slate-800 to-slate-950 text-white px-5 py-3 flex items-center gap-3">
         <ArrowRightLeft className="w-5 h-5" />
@@ -202,7 +214,7 @@ export function PeerTransferPanel({
                   </div>
                   <button
                     type="button"
-                    onClick={() => request("pull", t)}
+                    onClick={() => openRequestModal("pull", t)}
                     disabled={busyId === t.id}
                     className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-black bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 disabled:opacity-60"
                   >
@@ -248,7 +260,7 @@ export function PeerTransferPanel({
                   </div>
                   <button
                     type="button"
-                    onClick={() => request("push", t)}
+                    onClick={() => openRequestModal("push", t)}
                     disabled={busyId === t.id}
                     className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-black bg-indigo-100 hover:bg-indigo-200 text-indigo-800 border border-indigo-300 disabled:opacity-60"
                   >
@@ -266,5 +278,118 @@ export function PeerTransferPanel({
         </div>
       </div>
     </div>
+
+    {/* Note modal — user 2026-07-15: „nech moze napisat poznamku ku
+        tomu a zobrazi sa mu". Namiesto window.prompt (ktorý sa dá ľahko
+        prehliadnuť) máme dedikovaný modal s textareou + potvrdenie. */}
+    {modalState && typeof document !== "undefined" &&
+      createPortal(
+        <div
+          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !busyId && setModalState(null)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className={
+                "px-5 py-3 flex items-center gap-3 text-white " +
+                (modalState.kind === "pull"
+                  ? "bg-gradient-to-br from-rose-500 to-rose-700"
+                  : "bg-gradient-to-br from-indigo-500 to-violet-600")
+              }
+            >
+              {modalState.kind === "pull" ? (
+                <HandHeart className="w-5 h-5" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
+                  {modalState.kind === "pull"
+                    ? `Prosba k ${peerName}`
+                    : `Poslať ${peerName}`}
+                </div>
+                <div className="font-black text-lg leading-tight truncate">
+                  {modalState.task.name}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalState(null)}
+                disabled={!!busyId}
+                className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center disabled:opacity-60"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-black text-slate-700 mb-1 block">
+                  Poznámka (voliteľné — {peerName} ju uvidí)
+                </label>
+                <textarea
+                  value={modalReason}
+                  onChange={(e) => setModalReason(e.target.value.slice(0, 500))}
+                  placeholder={
+                    modalState.kind === "pull"
+                      ? "napr. Zákazník mi dnes volal, vysvetlil situáciu — mám kontext"
+                      : "napr. Peter, ideš do tej lokality, tak si to rovno vezmi"
+                  }
+                  rows={4}
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg border-2 border-slate-300 text-sm focus:outline-none focus:border-sky-400 resize-none"
+                />
+                <div className="text-[10px] text-slate-500 mt-1 text-right">
+                  {modalReason.length}/500
+                </div>
+              </div>
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-700">
+                {modalState.task.lokalita &&
+                  `📍 ${modalState.task.lokalita} · `}
+                {modalState.task.plocha && `📐 ${modalState.task.plocha} m²`}
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setModalState(null)}
+                  disabled={!!busyId}
+                  className="flex-1 px-3 py-2 rounded-lg bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-800 text-sm font-black disabled:opacity-60"
+                >
+                  Zrušiť
+                </button>
+                <button
+                  type="button"
+                  onClick={submitRequest}
+                  disabled={!!busyId}
+                  className={
+                    "flex-1 px-3 py-2 rounded-lg text-white text-sm font-black shadow-sm inline-flex items-center justify-center gap-1.5 disabled:opacity-60 " +
+                    (modalState.kind === "pull"
+                      ? "bg-rose-600 hover:bg-rose-700"
+                      : "bg-indigo-600 hover:bg-indigo-700")
+                  }
+                >
+                  {busyId ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : modalState.kind === "pull" ? (
+                    <>
+                      <HandHeart className="w-4 h-4" />
+                      Poslať prosbu
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Poslať lead
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

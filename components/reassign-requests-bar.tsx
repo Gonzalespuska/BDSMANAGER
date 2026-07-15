@@ -128,26 +128,25 @@ export function ReassignRequestsBar() {
       role="alert"
       aria-live="assertive"
     >
-      <div className="rounded-2xl border-2 border-red-400 bg-white shadow-2xl overflow-hidden animate-[reassignPulse_1.6s_ease-in-out_infinite]">
-        {/* Header — pulsujúci červený pás, ktorý nezmizne. */}
+      {/* Žltá karta — user 2026-07-15: „nech je zlta farba toho".
+          Predtým bola červená; žltá lepšie sedí s významom „pending / na
+          rozhodnutie" (červená = fatal / error). */}
+      <div className="rounded-2xl border-2 border-amber-400 bg-white shadow-2xl overflow-hidden animate-[reassignPulse_1.6s_ease-in-out_infinite]">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="w-full flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white text-left"
-          title={expanded ? "Skryť detail (neodkliká sa)" : "Zobraziť detail"}
+          className="w-full flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-900 text-left"
+          title={expanded ? "Skryť detail" : "Zobraziť detail"}
         >
           <AlertCircle className="w-5 h-5 shrink-0 animate-pulse" aria-hidden />
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest font-black opacity-90">
-              Žiadosť o preradenie leadu
-            </div>
             <div className="text-sm font-black leading-tight">
               {items.length === 1
-                ? `${items[0].lead_name} — musíš potvrdiť`
-                : `${items.length} nových žiadostí — potvrď / odmietni`}
+                ? `Žiadosť o preradenie leadu — ${items[0].lead_name}`
+                : `${items.length} žiadostí o preradenie leadu`}
             </div>
           </div>
-          <span className="shrink-0 rounded-full bg-white/25 border border-white/40 w-6 h-6 flex items-center justify-center text-xs font-black">
+          <span className="shrink-0 rounded-full bg-slate-900/15 border border-slate-900/30 w-6 h-6 flex items-center justify-center text-xs font-black text-slate-900">
             {items.length}
           </span>
         </button>
@@ -196,10 +195,15 @@ export function ReassignRequestsBar() {
                       {it.reason && (
                         <div
                           className={
-                            "text-xs text-slate-800 mt-1 italic border-l-2 pl-2 " +
-                            (isPull ? "border-amber-300" : "border-emerald-300")
+                            "mt-2 rounded-lg p-2 text-xs font-semibold text-slate-800 border-l-4 " +
+                            (isPull
+                              ? "bg-amber-100 border-amber-500"
+                              : "bg-emerald-100 border-emerald-500")
                           }
                         >
+                          <div className="text-[9px] uppercase tracking-widest font-black text-slate-500 mb-0.5">
+                            💬 Poznámka od {it.requested_by_name}
+                          </div>
                           „{it.reason}"
                         </div>
                       )}
@@ -254,12 +258,12 @@ export function ReassignRequestsBar() {
           100% {
             box-shadow:
               0 10px 25px -5px rgba(0, 0, 0, 0.15),
-              0 0 0 0 rgba(239, 68, 68, 0.55);
+              0 0 0 0 rgba(251, 191, 36, 0.6);
           }
           50% {
             box-shadow:
               0 10px 25px -5px rgba(0, 0, 0, 0.15),
-              0 0 0 12px rgba(239, 68, 68, 0);
+              0 0 0 12px rgba(251, 191, 36, 0);
           }
         }
       `}</style>

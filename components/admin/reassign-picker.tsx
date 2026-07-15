@@ -122,13 +122,15 @@ function ReassignModal({
     setBusyId(toUserId);
     setError(null);
     try {
-      const r = await fetch("/api/admin/lead/reassign", {
+      const r = await fetch("/api/lead/reassign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: leadId,
           to_user_id: toUserId,
           reason: reason.trim() || null,
+          kind: "push",
+          role_scope: "obchod",
         }),
       });
       const j = (await r.json().catch(() => ({}))) as {
@@ -146,19 +148,28 @@ function ReassignModal({
         setBusyId(null);
         return;
       }
-      // Confirm toast + persist "Adriána" na "Leo" wording pre admina.
-      // Yellow PENDING TRANSFER badge sa objaví na karte cez refresh.
+      // Confirm — toast + inline OK banner + refresh badge.
+      // User 2026-07-15: „neurobilo to ani ziaden efekt ani mi to
+      // neukazalo ze sa to poslalo". Preto teraz máme 3 zdroje feedback:
+      //   1) toast top-right (visible aj po zatvorení modalu)
+      //   2) big green banner v modaly (visible kým je open)
+      //   3) router.refresh() → yellow PENDING TRANSFER badge na karte
       const fromName = currentAssigneeId
-        ? (agents?.find((a) => a.id === currentAssigneeId)?.name ?? "aktuálny owner")
-        : "pool (voľný)";
+        ? (agents?.find((a) => a.id === currentAssigneeId)?.name ??
+          "aktuálny owner")
+        : "voľný (bez ownera)";
       toast.success(
-        `⏳ Žiadosť poslaná: „${leadName}" od ${fromName} → ${toUserName}. Karta má žltý PENDING TRANSFER badge kým ${toUserName} neklikne Prijať.`,
+        `✓ Žiadosť poslaná: „${leadName}" → ${toUserName}. Kým neprijme, karta má žltý badge.`,
       );
-      setOk(`✓ Žiadosť poslaná ${toUserName}.`);
+      setOk(
+        `Žiadosť odoslaná ${toUserName}. Karta má žltý PENDING TRANSFER badge.`,
+      );
       setBusyId(null);
-      // Refresh aby sa pridal yellow badge okamžite.
+      // Trigger refresh cez router aby sa yellow badge objavil na karte.
       router.refresh();
-      setTimeout(() => onClose(), 1200);
+      // Necháme modal 2s otvorený s green bannerom aby user videl OK stav.
+      setTimeout(() => onClose(), 2000);
+      void fromName; // used inline above
     } catch (e) {
       setError(e instanceof Error ? e.message : "network");
       setBusyId(null);
@@ -219,8 +230,9 @@ function ReassignModal({
             </div>
           )}
           {ok && (
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm p-3 mb-3 font-bold">
-              {ok}
+            <div className="rounded-xl bg-emerald-600 border-2 border-emerald-700 text-white text-base p-4 mb-3 font-black shadow-lg flex items-center gap-3">
+              <div className="text-3xl">✓</div>
+              <div>{ok}</div>
             </div>
           )}
           {agents && (

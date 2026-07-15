@@ -156,23 +156,8 @@ export function LeadAdminControls({
               );
             })}
           </ul>
-          <div className="border-t bg-slate-50 flex flex-col divide-y">
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Vrátiť „${leadName}" do POOLU (bez ownera)?\n\nLead ostane v DB, ale nebude priradený nikomu — auto-assign ho pri ďalšom cron behu (5 min) pridelí najmenej vyťaženému obchodákovi. Aktuálny owner ho stratí zo svojho zoznamu.`,
-                  )
-                )
-                  call("unassign");
-              }}
-              disabled={busy}
-              className="px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-50 text-left"
-              title="Odoberie current owner-a. Lead sa pošle späť do poolu → auto-assign ho pridelí najmenej vyťaženému."
-            >
-              🔓 Vrátiť do poolu (bez ownera)
-            </button>
+          <div className="border-t bg-slate-50">
+            {/* „Vrátiť do poolu" preč — user 2026-07-15: „nonsen daj to prec". */}
             <button
               type="button"
               onClick={() => {
@@ -187,7 +172,7 @@ export function LeadAdminControls({
                   call("delete");
               }}
               disabled={busy}
-              className="px-3 py-2 text-xs font-black text-rose-800 hover:bg-rose-50 text-left inline-flex items-center gap-1.5"
+              className="w-full px-3 py-2 text-xs font-black text-rose-800 hover:bg-rose-50 text-left inline-flex items-center gap-1.5"
             >
               <Trash2 className="w-3 h-3" />
               Zmazať NATRVALO
