@@ -17,6 +17,7 @@ import {
 
 import { CallbackReminder } from "./callback-reminder";
 import { CallscriptButton } from "./callscript-button";
+import { SmsCopyButton } from "./sms-copy-button";
 import { HandoffActions } from "./handoff-actions";
 import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
@@ -166,10 +167,11 @@ export function LeadCard({
     );
     if (!result.ok) {
       setLeaving(false);
-      toast.error(`Chyba: ${result.error}`);
+      console.error("[missed_call] failed", result.error, { lead_id: lead.id });
+      toast.error(`Chyba pri Nedvíha: ${result.error}`);
     } else {
       toast.success(
-        `📵 ${lead.name || "Lead"} → Nezdvíhali${reminderHours ? ` (pripomienka o ${reminderHours}h)` : ""}`,
+        `📵 ${lead.name || "Lead"} → Nezdvíhali${reminderHours ? ` (pripomienka o ${reminderHours}h)` : " (pripomienka o 4h)"}`,
         { href: "/agent?tab=nedovolany" },
       );
       router.refresh();
@@ -221,6 +223,36 @@ export function LeadCard({
       toast.error(`Chyba: ${result.error}`);
     } else {
       toast.success(`🗑 ${lead.name || "Lead"} → Kôš`, {
+        href: "/agent?tab=kos",
+      });
+      router.refresh();
+    }
+  }
+
+  /**
+   * „Neexistujúce číslo" — obchodák volal a operátor oznámil ze číslo neexistuje.
+   * User 2026-07-16: „volal som ako obchodak a dalo mi ze volane cislo
+   * neexistuje, email nemame a chcel som to dat do toho kosa co sme sa
+   * bavili ale neni tam ta moznost". Rovnaká akcia ako trash, ale iný
+   * confirm + iný toast (obchodák vidí prečo lead skončil v koši).
+   */
+  async function handleInvalidPhone() {
+    if (
+      !confirm(
+        `Označiť "${lead.name || "lead"}" ako neexistujúce číslo?\n\n` +
+          `📞 ${lead.phone ?? "—"}\n\n` +
+          "Lead pôjde do Koša (neplatné číslo, žiadny follow-up). " +
+          "Nebude sa už auto-priradzovať obchodákom.",
+      )
+    )
+      return;
+    setLeaving(true);
+    const result = await callLeadAction("trash", { reason: "invalid_phone" });
+    if (!result.ok) {
+      setLeaving(false);
+      toast.error(`Chyba: ${result.error}`);
+    } else {
+      toast.success(`❌ ${lead.name || "Lead"} → Neexistujúce číslo (Kôš)`, {
         href: "/agent?tab=kos",
       });
       router.refresh();
@@ -523,22 +555,33 @@ export function LeadCard({
                 pokus 2./3. ide tlačidlom Nedvíha v bottom alebo
                 Archivovať banner) */}
           {isRevealed && lead.status === "new" && (
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <Button
+            <>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <Button
+                  type="button"
+                  onClick={handleContact}
+                  disabled={busy}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
+                  title="Zdvihla → presunie do Kontakt tabu"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
+                  Kontakt
+                </Button>
+                <MissedCallDropdown
+                  busy={busy}
+                  onPick={(hrs) => handleMissedCall(hrs)}
+                />
+              </div>
+              <button
                 type="button"
-                onClick={handleContact}
+                onClick={handleInvalidPhone}
                 disabled={busy}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
-                title="Zdvihla → presunie do Kontakt tabu"
+                className="w-full mb-2 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 disabled:opacity-50 transition-colors"
+                title="Operátor oznámil že číslo neexistuje → do Koša"
               >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
-                Kontakt
-              </Button>
-              <MissedCallDropdown
-                busy={busy}
-                onPick={(hrs) => handleMissedCall(hrs)}
-              />
-            </div>
+                ❌ Neexistujúce číslo — do koša
+              </button>
+            </>
           )}
 
           {/* Kontakt tab — veľký Ponuka button + Nedvíha (druhý pokus).
@@ -569,6 +612,37 @@ export function LeadCard({
                 busy={busy}
                 onPick={(hrs) => handleMissedCall(hrs)}
               />
+              <button
+                type="button"
+                onClick={handleInvalidPhone}
+                disabled={busy}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 disabled:opacity-50 transition-colors"
+                title="Operátor oznámil že číslo neexistuje → do Koša"
+              >
+                ❌ Neexistujúce číslo — do koša
+              </button>
+            </div>
+          )}
+
+          {/* Nedvíha tab — SMS copy + prípadný ďalší pokus nezdvihal */}
+          {lead.status === "no_answer" && (
+            <div className="mb-2 space-y-2">
+              <div className="rounded-lg border border-violet-200 bg-violet-50 p-2.5 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-violet-800 flex items-center gap-1.5">
+                  📱 Pošli SMS aby zákazník zavolal späť
+                </div>
+                <SmsCopyButton leadName={lead.name} phone={lead.phone} />
+                <p className="text-[10px] text-violet-700/80 leading-snug">
+                  Skopíruje pripravený text — vlož v SMS aplikácii a odošli z
+                  tvojho čísla. Auto-SMS z čísla obchodáka dorobíme neskôr.
+                </p>
+              </div>
+              {lead.call_attempts < 3 && (
+                <MissedCallDropdown
+                  busy={busy}
+                  onPick={(hrs) => handleMissedCall(hrs)}
+                />
+              )}
             </div>
           )}
 

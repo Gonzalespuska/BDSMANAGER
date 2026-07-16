@@ -1,13 +1,21 @@
 "use client";
 
 import * as React from "react";
-import { PhoneOff } from "lucide-react";
+import { PhoneOff, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Dropdown s možnosťami pripomienky pri Nedvíha.
- * Používa FIXED pozíciu (nie absolute), aby ho nezrezal parent card overflow.
- * Backdrop klikom → close.
+ * Split-button pre "Nedvíha".
+ *
+ * Ľavá časť ("Nedvíha") — klik = okamžite označí ako nedvíha (default 4h
+ * pripomienka), lead ide do tabu Nezdvíhali.
+ *
+ * Pravá časť (▾ caret) — otvorí dropdown s možnosťami pripomienky
+ * (1h / 3h / 6h / bez pripomienky).
+ *
+ * User 2026-07-16: „stlacil som nezdvihal nic sa nestalo" — pôvodná verzia
+ * bola len dropdown a user musel dodatočne kliknúť option, čo pôsobilo že
+ * button „nič neurobil". Teraz primary klik = priama akcia.
  */
 export function MissedCallDropdown({
   busy,
@@ -17,14 +25,14 @@ export function MissedCallDropdown({
   onPick: (hours: number | undefined) => void;
 }) {
   const [open, setOpen] = React.useState(false);
-  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const caretRef = React.useRef<HTMLButtonElement>(null);
   const [coord, setCoord] = React.useState<{ top: number; right: number } | null>(
     null,
   );
 
   React.useEffect(() => {
     if (!open) return;
-    const rect = btnRef.current?.getBoundingClientRect();
+    const rect = caretRef.current?.getBoundingClientRect();
     if (rect) {
       setCoord({
         top: rect.bottom + 6,
@@ -40,24 +48,38 @@ export function MissedCallDropdown({
 
   return (
     <>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        disabled={busy}
-        className={cn(
-          "inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white font-bold h-11 px-3 text-sm transition-colors",
-          busy && "opacity-50 pointer-events-none",
-        )}
-      >
-        <PhoneOff className="w-4 h-4" aria-hidden />
-        Nedvíha
-        <span className="text-xs opacity-80">▾</span>
-      </button>
+      <div className="flex w-full">
+        <button
+          type="button"
+          onClick={() => onPick(undefined)}
+          disabled={busy}
+          className={cn(
+            "flex-1 inline-flex items-center justify-center gap-1.5 rounded-l-md bg-amber-500 hover:bg-amber-600 text-white font-bold h-11 px-3 text-sm transition-colors border-r border-amber-600/50",
+            busy && "opacity-50 pointer-events-none",
+          )}
+          title="Označiť ako Nedvíha (default pripomienka o 4h)"
+        >
+          <PhoneOff className="w-4 h-4" aria-hidden />
+          Nedvíha
+        </button>
+        <button
+          ref={caretRef}
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          disabled={busy}
+          className={cn(
+            "shrink-0 inline-flex items-center justify-center rounded-r-md bg-amber-500 hover:bg-amber-600 text-white h-11 w-9 transition-colors",
+            busy && "opacity-50 pointer-events-none",
+          )}
+          title="Vlastný čas pripomienky"
+          aria-label="Vlastný čas pripomienky"
+        >
+          <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} aria-hidden />
+        </button>
+      </div>
 
       {open && coord && (
         <>
-          {/* Backdrop na close klikom mimo */}
           <div
             className="fixed inset-0 z-40"
             onClick={() => setOpen(false)}
