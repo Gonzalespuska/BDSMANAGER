@@ -28,6 +28,14 @@ type ViewAsRole =
   | "realizacie"
   | "office";
 
+type TeamMember = {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string;
+  active: boolean;
+};
+
 export function RoleViewDropdown({
   currentViewAs,
 }: {
@@ -37,6 +45,21 @@ export function RoleViewDropdown({
   const [busy, setBusy] = React.useState<string | null>(null);
   const ref = React.useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+
+  // Zoznam tímu — načíta sa raz keď admin otvorí dropdown; použité pre
+  // hover-submenu (Obchod → konkrétni obchodáci).
+  const [team, setTeam] = React.useState<TeamMember[] | null>(null);
+  React.useEffect(() => {
+    if (!open || team !== null) return;
+    fetch("/api/admin/team")
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; users?: TeamMember[] }) => {
+        if (j.ok && j.users) setTeam(j.users);
+      })
+      .catch(() => {
+        /* silent — submenu proste neukáže users */
+      });
+  }, [open, team]);
 
   // User 2026-07-12: „tu zobrazit ako by bolo tiez fajn ked som na leo
   // hrisko" — ak sme na `/admin/agents/<uuid>`, ponúkni „Zobraziť ako
@@ -225,6 +248,8 @@ export function RoleViewDropdown({
             current={currentViewAs}
             busy={busy}
             onClick={switchTo}
+            onImpersonate={impersonateUser}
+            team={team}
             icon={<Phone className="w-4 h-4" />}
             iconBg="bg-sky-100 text-sky-700"
             hover="hover:bg-sky-50"
@@ -236,6 +261,8 @@ export function RoleViewDropdown({
             current={currentViewAs}
             busy={busy}
             onClick={switchTo}
+            onImpersonate={impersonateUser}
+            team={team}
             icon={<Hammer className="w-4 h-4" />}
             iconBg="bg-emerald-100 text-emerald-700"
             hover="hover:bg-emerald-50"
@@ -247,6 +274,8 @@ export function RoleViewDropdown({
             current={currentViewAs}
             busy={busy}
             onClick={switchTo}
+            onImpersonate={impersonateUser}
+            team={team}
             icon={<ClipboardList className="w-4 h-4" />}
             iconBg="bg-violet-100 text-violet-700"
             hover="hover:bg-violet-50"
@@ -273,6 +302,8 @@ function RoleButton({
   current,
   busy,
   onClick,
+  onImpersonate,
+  team,
   icon,
   iconBg,
   hover,
@@ -284,6 +315,8 @@ function RoleButton({
   current?: string | null;
   busy: string | null;
   onClick: (role: ViewAsRole) => void;
+  onImpersonate: (userId: string) => void;
+  team: TeamMember[] | null;
   icon: React.ReactNode;
   iconBg: string;
   hover: string;
@@ -293,38 +326,114 @@ function RoleButton({
 }) {
   const isCurrent = current === role;
   const isBusy = busy === role;
+  // Hover-timer pre submenu (800 ms držanie → otvorí konkrétnych userov).
+  // User 2026-07-16: „ked podrzim na obchod neviem sekundu a pol tak mi
+  // ukaze konkretnych obchodakov".
+  const [subOpen, setSubOpen] = React.useState(false);
+  const hoverTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+
+  function scheduleOpen() {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setSubOpen(true), 800);
+  }
+  function cancelOpen() {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+  }
+  function scheduleClose() {
+    cancelOpen();
+    hoverTimer.current = setTimeout(() => setSubOpen(false), 200);
+  }
+
+  const usersInRole = (team ?? []).filter(
+    (u) => u.role === role && u.active,
+  );
+
   return (
-    <button
-      type="button"
-      onClick={() => !isCurrent && !isBusy && onClick(role)}
-      disabled={isCurrent || !!busy}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${hover} disabled:opacity-50 disabled:cursor-not-allowed`}
+    <div
+      ref={wrapRef}
+      className="relative"
+      onMouseEnter={scheduleOpen}
+      onMouseLeave={scheduleClose}
     >
-      <div
-        className={`w-8 h-8 rounded-full ${iconBg} inline-flex items-center justify-center shrink-0`}
+      <button
+        type="button"
+        onClick={() => !isCurrent && !isBusy && onClick(role)}
+        disabled={isCurrent || !!busy}
+        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${hover} disabled:opacity-50 disabled:cursor-not-allowed`}
       >
-        {isBusy ? (
-          <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-        ) : (
-          icon
-        )}
-      </div>
-      <div className="flex-1 min-w-0 text-left">
-        <div className="font-bold text-sm inline-flex items-center gap-1.5">
-          {title}
-          {isCurrent && (
-            <span className="text-[9px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-800 px-1 py-0.5 rounded">
-              aktívne
-            </span>
-          )}
-          {badge && !isCurrent && (
-            <span className="text-[9px] uppercase tracking-wider font-bold bg-amber-200 text-amber-800 px-1 py-0.5 rounded">
-              {badge}
-            </span>
+        <div
+          className={`w-8 h-8 rounded-full ${iconBg} inline-flex items-center justify-center shrink-0`}
+        >
+          {isBusy ? (
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+          ) : (
+            icon
           )}
         </div>
-        <div className="text-[11px] text-muted-foreground">{desc}</div>
-      </div>
-    </button>
+        <div className="flex-1 min-w-0 text-left">
+          <div className="font-bold text-sm inline-flex items-center gap-1.5">
+            {title}
+            {isCurrent && (
+              <span className="text-[9px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-800 px-1 py-0.5 rounded">
+                aktívne
+              </span>
+            )}
+            {badge && !isCurrent && (
+              <span className="text-[9px] uppercase tracking-wider font-bold bg-amber-200 text-amber-800 px-1 py-0.5 rounded">
+                {badge}
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-muted-foreground">{desc}</div>
+        </div>
+        {usersInRole.length > 0 && (
+          <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            {usersInRole.length}
+          </span>
+        )}
+      </button>
+
+      {/* Submenu — konkrétni ľudia tejto role. */}
+      {subOpen && usersInRole.length > 0 && (
+        <div
+          onMouseEnter={cancelOpen}
+          onMouseLeave={scheduleClose}
+          className="absolute right-full top-0 mr-1 w-56 rounded-xl border bg-background shadow-2xl p-1.5 z-50"
+        >
+          <div className="px-2 py-1 border-b mb-1">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              {title} — konkrétny človek
+            </div>
+          </div>
+          {usersInRole.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => onImpersonate(u.id)}
+              disabled={!!busy}
+              className="w-full text-left px-2 py-1.5 rounded-md hover:bg-muted disabled:opacity-40 flex items-center gap-2"
+            >
+              <div
+                className={`w-6 h-6 rounded-full ${iconBg} inline-flex items-center justify-center shrink-0 text-[10px] font-black`}
+              >
+                {((u.name || u.email)[0] || "?").toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold truncate">
+                  {u.name || u.email}
+                </div>
+                {u.name && (
+                  <div className="text-[10px] text-muted-foreground truncate">
+                    {u.email}
+                  </div>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

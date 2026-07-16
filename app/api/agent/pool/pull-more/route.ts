@@ -78,8 +78,13 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // 2) Filter — iba od AKTÍVNYCH (nie paused, nie deaktivovaných) obchod
-  //    role userov. Ostatné roly (admin/obhliadky/realizacie) preskočíme.
+  // 2) Metadáta ownerov (kvôli breakdown názvom).
+  // User 2026-07-16: „ked stlacim tak to nefunguje... napise ze niesu
+  // zaidni aktivny kolegovia oprav to nech to dovoli". Pôvodne sme
+  // vyžadovali active=true + role=obchod. Teraz iba blokujeme realizatori
+  // (ich leady sú vo fáze realizácie, nesmú sa kradnúť) a paused (vacation
+  // = respekt). Deaktivovaní / admin-owned / obhliadkári — všetci ok
+  // na prevzatie ich untouched leadov.
   const ownerIds = Array.from(
     new Set(candidates.map((c) => c.assigned_to as string)),
   );
@@ -88,25 +93,27 @@ export async function POST(request: NextRequest) {
     .select("id, name, email, role, active, paused_until")
     .in("id", ownerIds);
   const nowIso = new Date().toISOString();
-  const activeOwners = new Map<string, { name: string }>();
+  const eligibleOwners = new Map<string, { name: string }>();
   for (const o of owners ?? []) {
     const paused =
       o.paused_until && (o.paused_until as string) > nowIso;
-    if (o.active && !paused && o.role === "obchod") {
-      activeOwners.set(o.id as string, {
-        name: (o.name as string) || (o.email as string) || "obchodník",
-      });
-    }
+    // Realizator je na stavbe — jeho leady zostávajú v pipeline.
+    // Paused (vacation) — nesahať.
+    if (o.role === "realizacie" || paused) continue;
+    eligibleOwners.set(o.id as string, {
+      name: (o.name as string) || (o.email as string) || "kolega",
+    });
   }
   const eligible = candidates.filter((c) =>
-    activeOwners.has(c.assigned_to as string),
+    eligibleOwners.has(c.assigned_to as string),
   );
   if (eligible.length === 0) {
     return NextResponse.json({
       ok: true,
       transferred: 0,
       breakdown: [],
-      message: "Žiadni aktívni kolegovia s nedotknutými leadmi.",
+      message:
+        "Žiadne nedotknuté leady k prevzatiu (všetky sú u realizátorov alebo obchodákov na dovolenke).",
     });
   }
 
@@ -196,7 +203,7 @@ export async function POST(request: NextRequest) {
     perOwner.set(p.from_id, (perOwner.get(p.from_id) ?? 0) + 1);
   }
   const breakdown = Array.from(perOwner.entries()).map(([oid, cnt]) => ({
-    from_name: activeOwners.get(oid)?.name ?? "obchodník",
+    from_name: eligibleOwners.get(oid)?.name ?? "kolega",
     count: cnt,
   }));
 
