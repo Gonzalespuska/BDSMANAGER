@@ -21,7 +21,13 @@ type Script = {
   updated_at: string | null;
 };
 
-export function CallscriptsTable({ initial }: { initial: Script[] }) {
+export function CallscriptsTable({
+  initial,
+  role = "obchod",
+}: {
+  initial: Script[];
+  role?: "obchod" | "obhliadky";
+}) {
   const router = useRouter();
   const [scripts, setScripts] = React.useState(initial);
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -70,6 +76,7 @@ export function CallscriptsTable({ initial }: { initial: Script[] }) {
         steps: s.steps,
         sort_order: (s.sort_order ?? 100) + 1,
         active: false,
+        target_role: role,
       }),
     });
     const j = await r.json();
@@ -81,17 +88,27 @@ export function CallscriptsTable({ initial }: { initial: Script[] }) {
   }
 
   if (scripts.length === 0) {
+    const isObhliadky = role === "obhliadky";
     return (
       <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-        <div className="font-black text-slate-700 text-lg mb-1">Zatiaľ žiadny script</div>
+        <div className="font-black text-slate-700 text-lg mb-1">
+          Zatiaľ žiadny {isObhliadky ? "obhliadka postup" : "call script"}
+        </div>
         <div className="text-sm text-muted-foreground mb-4">
-          Klikni „Nový script" a vytvor scenár pre obchodákov.
+          {isObhliadky
+            ? "Klikni „Nový obhliadka postup" a vytvor scenár pre obhliadkárov."
+            : "Klikni „Nový script" a vytvor scenár pre obchodákov."}
         </div>
         <Link
-          href="/admin/callscripts/new"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-black px-3 py-2"
+          href={`/admin/callscripts/new?role=${role}`}
+          className={
+            "inline-flex items-center gap-1.5 rounded-lg text-white text-sm font-black px-3 py-2 " +
+            (isObhliadky
+              ? "bg-violet-600 hover:bg-violet-700"
+              : "bg-rose-600 hover:bg-rose-700")
+          }
         >
-          + Nový script
+          + Nový {isObhliadky ? "obhliadka postup" : "script"}
         </Link>
       </div>
     );

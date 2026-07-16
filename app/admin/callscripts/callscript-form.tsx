@@ -34,6 +34,7 @@ type LooseStep = {
   required?: boolean;
 };
 
+type TargetRole = "obchod" | "obhliadky";
 type Script = {
   id?: string;
   label: string;
@@ -44,7 +45,13 @@ type Script = {
   steps: Step[] | null;
   sort_order: number;
   active: boolean;
+  target_role: TargetRole;
 };
+
+const TARGET_ROLES: Array<{ value: TargetRole; label: string }> = [
+  { value: "obchod", label: "📞 Obchod (telefonát obchodáka)" },
+  { value: "obhliadky", label: "🔍 Obhliadka (postup obhliadkára u klienta)" },
+];
 
 const FLOOR_TYPES = [
   { value: "", label: "— žiadny (fallback pre všetky) —" },
@@ -156,6 +163,7 @@ export function CallscriptForm({ initial }: { initial: Script }) {
       steps: steps.length > 0 ? steps : null,
       sort_order: form.sort_order || 100,
       active: form.active,
+      target_role: form.target_role,
     };
     const r = await fetch("/api/admin/call-scripts", {
       method: isEdit ? "PATCH" : "POST",
@@ -200,6 +208,20 @@ export function CallscriptForm({ initial }: { initial: Script }) {
       <div className="space-y-5">
       {/* Základné */}
       <section className="rounded-xl border-2 border-slate-200 bg-white p-4 space-y-3">
+        <label className="block">
+          <span className="text-[11px] font-black uppercase text-slate-600">
+            Pre koho je script
+          </span>
+          <select
+            value={form.target_role}
+            onChange={(e) => patch("target_role", e.target.value as TargetRole)}
+            className="w-full rounded-md border-2 border-rose-300 bg-rose-50 px-2 py-2 mt-1 text-sm font-black"
+          >
+            {TARGET_ROLES.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="block">
             <span className="text-[11px] font-black uppercase text-slate-600">Label</span>
