@@ -370,16 +370,41 @@ export function LeadCard({
           {/* Phone + email vľavo, callback pripomienka vpravo */}
           <div className="px-5 pt-3 flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0 flex-1">
-            {isRevealed && lead.phone ? (
-              <a
-                href={`tel:${lead.phone}`}
-                className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight tabular-nums"
-              >
-                <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
-                {formatPhoneSK(lead.phone)}
-              </a>
-            ) : null}
-            {!lead.phone && (
+            {/* Phone slot — vždy rovnaká veľkosť & pozícia:
+                • revealed → tel: link s číslom
+                • unrevealed + phone → maskovaný button „🔒 Odhaliť číslo"
+                  (klik = handleCall → API + UI switch na revealed).
+                • bez phone → info text.
+                User 2026-07-16: „vidis ake rozdiely su medzi tym ked je
+                odhalene icslo a ked neni musi to byt rovnake pekne
+                zarovnane vsetko a iba ked dam odhlait sa to posunie". */}
+            {lead.phone ? (
+              isRevealed ? (
+                <a
+                  href={`tel:${lead.phone}`}
+                  className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight tabular-nums"
+                >
+                  <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
+                  {formatPhoneSK(lead.phone)}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleCall}
+                  disabled={busy}
+                  className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight tabular-nums disabled:opacity-50 group"
+                  title="Kliknutím odhalíš číslo a začneš volať"
+                >
+                  <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
+                  <span className="border-b-2 border-dashed border-emerald-400 group-hover:border-solid">
+                    +421 •• ••• •••
+                  </span>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">
+                    odhaliť
+                  </span>
+                </button>
+              )
+            ) : (
               <div className="text-sm text-muted-foreground">
                 Telefón nie je k dispozícii. Kontaktuj cez email.
               </div>
@@ -716,43 +741,20 @@ export function LeadCard({
                 Email
               </Button>
             )}
-            {lead.phone ? (
-              isRevealed ? (
-                // Po odhalení: priamy tel: link (user gesture → browser
-                // dovolí dial bez warningu). Na desktope skryté —
-                // tel: link na PC otvorí FaceTime / dialer čo obchodák
-                // typicky nechce.
-                <Button
-                  asChild
-                  size="sm"
-                  className="md:hidden h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
-                >
-                  <a href={`tel:${lead.phone}`} title="Vytočiť">
-                    <Phone className="w-4 h-4 mr-1.5" aria-hidden />
-                    Zavolať
-                  </a>
-                </Button>
-              ) : (
-                // Pred odhalením: reveal action, žiadny dial.
-                // OSTÁVA na desktope aj mobile — je to samostatná akcia
-                // (odhalí + zaloguje phone_revealed_at, obchodák potom
-                // volá z iného zariadenia).
-                <Button
-                  type="button"
-                  onClick={handleCall}
-                  disabled={busy}
-                  size="sm"
-                  className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
-                >
+            {/* „Odhaliť číslo" / „Zavolať" button v spodnom rade odstránený —
+                phone slot v hlavičke ho už obsahuje (revealed = tel: link,
+                unrevealed = maskovaný button „odhaliť"). User 2026-07-16:
+                unified layout, žiadne skoky pri odhalení. */}
+            {lead.phone && isRevealed && (
+              <Button
+                asChild
+                size="sm"
+                className="md:hidden h-10 bg-green-600 hover:bg-green-700 text-white font-bold shadow-[0_3px_10px_rgba(22,163,74,0.3)]"
+              >
+                <a href={`tel:${lead.phone}`} title="Vytočiť">
                   <Phone className="w-4 h-4 mr-1.5" aria-hidden />
-                  Odhaliť číslo
-                </Button>
-              )
-            ) : (
-              // Bez telefónu — disabled Zavolať. Na desktope zbytočný, skryť.
-              <Button variant="outline" size="sm" className="md:hidden h-10" disabled>
-                <Phone className="w-4 h-4 mr-1.5" aria-hidden />
-                Zavolať
+                  Zavolať
+                </a>
               </Button>
             )}
             {/* Malý Ponuka button — len v stavoch mimo CP tabu.
