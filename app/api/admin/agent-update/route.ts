@@ -40,6 +40,8 @@ export async function POST(request: NextRequest) {
 
     let body: {
       id?: string;
+      /** Špeciálne akcie — deactivate/activate/delete. Ak set, ignoruj ostatné fields. */
+      action?: "deactivate" | "activate" | "delete";
       name?: string;
       phone?: string | null;
       role?: string;
@@ -55,6 +57,65 @@ export async function POST(request: NextRequest) {
 
     if (!body.id) {
       return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+
+    // ── Special actions: deactivate / activate / delete ──────────────────
+    if (body.action) {
+      if (body.id === me.id && (body.action === "deactivate" || body.action === "delete")) {
+        return NextResponse.json(
+          { ok: false, error: "Nemôžeš sám seba deaktivovať / zmazať." },
+          { status: 400 },
+        );
+      }
+      if (body.action === "deactivate") {
+        const { error } = await admin
+          .from("users")
+          .update({ active: false, capacity: 0 })
+          .eq("id", body.id);
+        if (error) {
+          return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ ok: true, action: "deactivate" });
+      }
+      if (body.action === "activate") {
+        const { error } = await admin
+          .from("users")
+          .update({ active: true, capacity: 5 })
+          .eq("id", body.id);
+        if (error) {
+          return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ ok: true, action: "activate" });
+      }
+      if (body.action === "delete") {
+        // Unassign leads od tohto usera + delete user
+        const { data: user } = await admin
+          .from("users")
+          .select("auth_id")
+          .eq("id", body.id)
+          .maybeSingle();
+        // Unassign
+        await admin
+          .from("leads")
+          .update({ assigned_to: null })
+          .eq("assigned_to", body.id);
+        // Delete DB row
+        const { error: delErr } = await admin.from("users").delete().eq("id", body.id);
+        if (delErr) {
+          return NextResponse.json({ ok: false, error: delErr.message }, { status: 500 });
+        }
+        // Auth delete (best-effort — ignoruj chyby)
+        if (user?.auth_id) {
+          try {
+            await admin.auth.admin.deleteUser(user.auth_id as string);
+          } catch {
+            /* silent — už zmazal DB row */
+          }
+        }
+        return NextResponse.json({ ok: true, action: "delete" });
+      }
     }
 
     const update: Record<string, unknown> = {};
@@ -104,7 +165,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "nothing_to_update" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
     const { error } = await admin.from("users").update(update).eq("id", body.id);
     if (error) {
       console.error("[agent-update] db error:", error);

@@ -171,20 +171,37 @@ function AgentRow({
     setBusy(true);
     setError(null);
     const willActivate = !agent.active;
-    const res = agent.active
-      ? await deactivateAgentAction(agent.id)
-      : await activateAgentAction(agent.id);
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      toast.error(`Chyba: ${res.error}`);
-    } else {
-      toast.success(
-        willActivate
-          ? `✅ ${agent.name || agent.email} aktivovaný`
-          : `⏸ ${agent.name || agent.email} deaktivovaný`,
-      );
-      onChanged();
+    try {
+      const r = await fetch("/api/admin/agent-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: agent.id,
+          action: willActivate ? "activate" : "deactivate",
+        }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      setBusy(false);
+      if (!r.ok || !j.ok) {
+        const err = j.error ?? `HTTP ${r.status}`;
+        setError(err);
+        toast.error(`Chyba: ${err}`);
+      } else {
+        toast.success(
+          willActivate
+            ? `✅ ${agent.name || agent.email} aktivovaný`
+            : `⏸ ${agent.name || agent.email} deaktivovaný`,
+        );
+        onChanged();
+      }
+    } catch (e) {
+      setBusy(false);
+      const msg = e instanceof Error ? e.message : "network";
+      setError(msg);
+      toast.error(`Chyba: ${msg}`);
     }
   }
 
@@ -213,11 +230,27 @@ function AgentRow({
     if (!ok) return;
     setBusy(true);
     setError(null);
-    const res = await deleteAgentAction(agent.id);
+    let ok = false;
+    let errMsg = "";
+    try {
+      const r = await fetch("/api/admin/agent-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: agent.id, action: "delete" }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      ok = !!(r.ok && j.ok);
+      errMsg = j.error ?? `HTTP ${r.status}`;
+    } catch (e) {
+      errMsg = e instanceof Error ? e.message : "network";
+    }
     setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      toast.error(`Chyba: ${res.error}`);
+    if (!ok) {
+      setError(errMsg);
+      toast.error(`Chyba: ${errMsg}`);
     } else {
       toast.success(`🗑 Prístup pre ${agent.name || agent.email} odobratý`);
       onChanged();
@@ -467,25 +500,38 @@ function AddAgentModal({
     setBusy(true);
     // Primárna rola = prvá v poli; ostatné pošleme ako secondary_roles.
     const [primary, ...secondary] = roles;
-    const res = await createAgentAction({
-      name,
-      email,
-      phone,
-      role: primary,
-      secondary_roles: secondary,
-      capacity: 5,
-    });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
+    try {
+      const r = await fetch("/api/admin/agent-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          role: primary,
+          secondary_roles: secondary,
+          capacity: 5,
+        }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      setBusy(false);
+      if (!r.ok || !j.ok) {
+        const err = j.error ?? `HTTP ${r.status}`;
+        setError(err);
+        toast.error(`Chyba: ${err}`);
+        return;
+      }
+      toast.success(`✅ Agent ${name} vytvorený`);
+      onCreated();
+    } catch (e) {
+      setBusy(false);
+      const msg = e instanceof Error ? e.message : "network";
+      setError(msg);
+      toast.error(`Chyba: ${msg}`);
     }
-    // User 2026-07-16: „zaidny efekt nic iba sa to zatocilo na sekundu a
-    // prestalo sa tocit nic, pravdepodobne ho pridalo ale musim dat refresh
-    // takze prosim urob to tak ze na kazdej akcii bude success button ze
-    // sa to stalo".
-    toast.success(`✅ Agent ${name} vytvorený`);
-    onCreated();
   }
 
   return (
