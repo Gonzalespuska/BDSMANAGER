@@ -86,25 +86,11 @@ export default async function NastaveniaAdminPage() {
             tint="emerald"
           />
           <SubmoduleTile
-            href="/admin/callscripts"
-            title="Call scripty"
-            desc="Interaktívne scenáre hovorov — text s placeholder-mi ({priezvisko}, {plocha}…) + otázky pre obchodákov s odpoveďami uloženými k leadu."
-            Icon={GraduationCap}
-            tint="violet"
-          />
-          <SubmoduleTile
             href="/admin/podklady"
-            title="Podklady (knowledge)"
-            desc="Sales tips, obhliadka protokoly, product info, cenníky. Priradíš podklad k role → člen tímu ho uvidí v svojej sekcii Podklady. Markdown."
+            title="Podklady"
+            desc="Všetky materiály pre tím — Call scripty (interaktívne scenáre), Kontent shotlist (foto/video), Sales tips, protokoly, cenníky. Rozdeľujú sa podľa role."
             Icon={GraduationCap}
             tint="violet"
-          />
-          <SubmoduleTile
-            href="/admin/kontent"
-            title="Kontent shotlist"
-            desc="Čo majú realizatori fotiť/nakrúcať pred/počas/po realizácii."
-            Icon={Share2}
-            tint="fuchsia"
           />
           <SubmoduleTile
             href="/admin/teams"

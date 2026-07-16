@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  Camera,
+  FileText,
+  Hammer,
+  Phone,
+  Plus,
+} from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -12,12 +20,17 @@ export default async function AdminPodkladyPage() {
   const { unstable_noStore: noStore } = await import("next/cache");
   noStore();
   const sb = createAdminClient();
-  const { data } = await sb
-    .from("training_docs")
-    .select("*")
-    .order("sort_order", { ascending: true });
 
-  const docs = (data ?? []) as Array<{
+  const [docsRes, callscriptsRes, systemsRes, kontentRes] = await Promise.all([
+    sb.from("training_docs").select("*").order("sort_order", { ascending: true }),
+    sb.from("call_scripts").select("id", { count: "exact", head: true }),
+    sb.from("realization_systems").select("id", { count: "exact", head: true }),
+    sb
+      .from("content_shotlist_templates")
+      .select("id", { count: "exact", head: true }),
+  ]);
+
+  const docs = (docsRes.data ?? []) as Array<{
     id: string;
     title: string;
     body_md: string;
@@ -27,6 +40,10 @@ export default async function AdminPodkladyPage() {
     active: boolean;
     created_at: string;
   }>;
+
+  const callscriptsCount = callscriptsRes.count ?? 0;
+  const systemsCount = systemsRes.count ?? 0;
+  const kontentCount = kontentRes.count ?? 0;
 
   return (
     <div className="space-y-6">
@@ -38,18 +55,58 @@ export default async function AdminPodkladyPage() {
           <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
           Späť na Nastavenia CRM
         </Link>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
+          <BookOpen className="w-6 h-6 text-violet-500" aria-hidden />
+          Podklady
+        </h1>
+        <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+          Všetky materiály pre tím na jednom mieste — Call scripty, Realizačné
+          systémy, Kontent shotlist a voľné podklady (sales tips, protokoly,
+          cenníky). Rozdeľujú sa podľa role.
+        </p>
+      </header>
+
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <SubTile
+          href="/admin/callscripts"
+          title="Call scripty"
+          count={callscriptsCount}
+          desc="Interaktívne scenáre hovorov s placeholder-mi ({priezvisko}, {plocha}…) a otázkami."
+          Icon={Phone}
+          tint="sky"
+        />
+        <SubTile
+          href="/admin/systems"
+          title="Realizačné systémy"
+          count={systemsCount}
+          desc="264, 3000, TopStone… + spotreba kg/m² + postup krokov pre realizátorov."
+          Icon={Hammer}
+          tint="emerald"
+        />
+        <SubTile
+          href="/admin/kontent"
+          title="Kontent shotlist"
+          count={kontentCount}
+          desc="Čo majú realizatori fotiť/nakrúcať pred/počas/po realizácii."
+          Icon={Camera}
+          tint="fuchsia"
+        />
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3 flex-wrap border-t pt-5">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight inline-flex items-center gap-2">
-              <BookOpen className="w-6 h-6 text-violet-500" aria-hidden />
-              Podklady{" "}
-              <span className="text-violet-500 tabular-nums">({docs.length})</span>
-            </h1>
-            <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-              General knowledge base — sales tips, obhliadka protokoly, product
-              info, cenníky, atď. Priraď dokument k role (obchod / obhliadky /
-              realizacie / vsetci) a člen tímu ho uvidí v svojej sekcii Podklady.
-              Text podporuje jednoduchý Markdown (nadpisy, zoznamy, tučný text).
+            <h2 className="text-lg font-extrabold tracking-tight inline-flex items-center gap-2">
+              <FileText className="w-5 h-5 text-violet-500" aria-hidden />
+              Voľné podklady{" "}
+              <span className="text-violet-500 tabular-nums text-base">
+                ({docs.length})
+              </span>
+            </h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5 max-w-2xl">
+              Markdown dokumenty — sales tips, obhliadka protokoly, product info,
+              cenníky. Priraď k role (obchod / obhliadky / realizacie / vsetci) →
+              člen tímu to uvidí vo svojej sekcii Podklady.
             </p>
           </div>
           <Link
@@ -60,26 +117,52 @@ export default async function AdminPodkladyPage() {
             Nový podklad
           </Link>
         </div>
-      </header>
 
-      <PodkladyTable initial={docs} />
-
-      <div className="text-xs text-muted-foreground pt-4 border-t">
-        <strong>Rozdiel oproti iným moduulom:</strong> Call scripty (interaktívne
-        scenáre) sú v samostatnom module{" "}
-        <Link href="/admin/callscripts" className="text-sky-700 hover:underline">
-          /admin/callscripts
-        </Link>
-        . Realizačné systémy (postup krokov) v{" "}
-        <Link href="/admin/systems" className="text-sky-700 hover:underline">
-          /admin/systems
-        </Link>
-        . Kontent (foto/video shotlist) v{" "}
-        <Link href="/admin/kontent" className="text-sky-700 hover:underline">
-          /admin/kontent
-        </Link>
-        . Tu ide o ostatné voľné podklady.
-      </div>
+        <PodkladyTable initial={docs} />
+      </section>
     </div>
+  );
+}
+
+function SubTile({
+  href,
+  title,
+  count,
+  desc,
+  Icon,
+  tint,
+}: {
+  href: string;
+  title: string;
+  count: number;
+  desc: string;
+  Icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  tint: "sky" | "emerald" | "fuchsia";
+}) {
+  const tintMap = {
+    sky: "border-sky-300 hover:border-sky-500 bg-sky-50/40 dark:bg-sky-950/20 text-sky-700 dark:text-sky-300",
+    emerald:
+      "border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300",
+    fuchsia:
+      "border-fuchsia-300 hover:border-fuchsia-500 bg-fuchsia-50/40 dark:bg-fuchsia-950/20 text-fuchsia-700 dark:text-fuchsia-300",
+  } as const;
+  return (
+    <Link
+      href={href}
+      className={
+        "block rounded-xl border-2 p-3 transition-colors " + tintMap[tint]
+      }
+    >
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4" aria-hidden />
+        <div className="font-black tracking-tight flex-1">{title}</div>
+        <span className="text-xs font-black tabular-nums opacity-70">
+          {count}
+        </span>
+      </div>
+      <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1.5">
+        {desc}
+      </div>
+    </Link>
   );
 }
