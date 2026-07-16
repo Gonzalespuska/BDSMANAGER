@@ -69,7 +69,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="sk" className={inter.variable}>
+    <html lang="sk" className={inter.variable} suppressHydrationWarning>
+      <head>
+        {/* Skorý theme init — pred hydration nastaví dark class podľa
+            localStorage / systemu, aby nedošlo k FOUC (flash of unstyled). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="antialiased font-sans">{children}</body>
     </html>
   );

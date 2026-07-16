@@ -33,6 +33,7 @@ import { VacationApprovalsBar } from "./vacation-approvals-bar";
 import { Toaster } from "./ui/toast";
 import { RoleViewDropdown } from "./role-view-dropdown";
 import { MackoLogo } from "./macko-logo";
+import { ThemeToggle } from "./theme-toggle";
 
 /** Definícia každej navigačnej dlaždice — href, label, ikona. */
 const NAV_TAB_DEFS: Record<
@@ -228,23 +229,23 @@ export async function AppShell({
         <header className="border-b bg-background">
         {/* Header — kompaktnejší na mobile (menšia logika + hidden CRM subtitle). */}
         <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-3 sm:px-6 py-2 md:py-4 flex items-center justify-between gap-2 md:gap-3">
-          <Link
-            href={homeHref}
-            className="hover:opacity-80 transition-opacity min-w-0 flex items-center gap-2 md:gap-3"
-          >
-            {/* Macko maskot — client komponent (onError fallback vyžaduje
-                event handler → nesmie byť v RSC). Predtým crashoval /admin
-                s digest 1227445453. */}
-            <MackoLogo />
-            <div className="min-w-0">
+          {/* Macko + názov — Link je vnútri MackoLogo (klik = refresh
+              animácia), názov vpravo je bez Linku aby sa animácia
+              nespúšťala pri hover na texte. */}
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+            <MackoLogo homeHref={homeHref} />
+            <Link
+              href={homeHref}
+              className="hover:opacity-80 transition-opacity min-w-0"
+            >
               <div className="text-lg md:text-3xl font-extrabold tracking-tight leading-none whitespace-nowrap">
                 Epoxidovo<span className="text-sky-500"> Manager</span>
               </div>
               <div className="hidden md:block mt-1 text-[11px] md:text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 CRM
               </div>
-            </div>
-          </Link>
+            </Link>
+          </div>
 
           <div className="flex items-center gap-1.5 md:gap-3">
             {isRealAdmin && <RoleViewDropdown currentViewAs={currentViewAs} />}
@@ -266,6 +267,9 @@ export async function AppShell({
             {user.role !== "realizacie" && (
               <NotificationsBell initial={notifications} />
             )}
+            {/* Dark / light theme switch — user 2026-07-16 „a kde je ten
+                switch co sme sa bavili na dark theme a white theme". */}
+            <ThemeToggle />
             <ProfileMenu
               user={user}
               realRole={realRole ?? user.role}
