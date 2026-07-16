@@ -1498,104 +1498,109 @@ ${signatureLines.join("\n")}`;
           </div>
         </div>
 
-        {/* Variant A chip — ak obchodák uložil prvú variantu (napr. epoxid),
-            zobrazíme fialovú kartičku s totalom + „X" na zrušenie. User
-            2026-07-15: „jednu plusko a druhu manualne vyklikas". */}
+        {/* Variant A saved — big instruction card explaining what to do next.
+            User 2026-07-16: „ked vyplnim jednu dam subnit a bude tam plusko
+            ktore mi dovoli pridat 2. cp a potom to poslat naraz".
+            Predtým bol iba malý chip → user nevedel čo má robiť. */}
         {variantASnapshot && (
-          <div className="mt-2 flex items-center gap-2 rounded-lg border-2 border-violet-300 bg-violet-50 px-3 py-2">
-            <div className="text-lg">💾</div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-wider font-black text-violet-700">
-                Variant A uložený
+          <div className="mt-2 rounded-xl border-2 border-violet-400 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <div className="text-2xl leading-none">✅</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] uppercase tracking-wider font-black text-violet-700">
+                  1. Varianta pripravená (uložená v pamäti)
+                </div>
+                <div className="text-base font-black text-violet-900 truncate">
+                  {variantASnapshot.label} ·{" "}
+                  <span className="tabular-nums">
+                    {variantASnapshot.total.toFixed(0)} €
+                  </span>
+                </div>
               </div>
-              <div className="text-sm font-bold text-violet-900 truncate">
-                {variantASnapshot.label} ·{" "}
-                <span className="tabular-nums">
-                  {variantASnapshot.total.toFixed(0)} €
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={() => setVariantASnapshot(null)}
+                className="shrink-0 text-[10px] font-bold text-violet-700 hover:text-violet-900 underline"
+                title="Zrušiť 1. variantu, vrátim sa k odoslaniu iba 1 CP"
+              >
+                × zrušiť
+              </button>
             </div>
-            <div className="text-[10px] text-violet-700 hidden sm:block">
-              Prestav generátor na druhú variantu →
+            <div className="text-xs text-violet-900 font-semibold bg-white/60 rounded-lg px-2.5 py-1.5 border border-violet-200">
+              💡 Teraz uprav formulár na <strong>2. variantu</strong> (napr. iný
+              typ podlahy, iný systém, iná plocha) — keď budeš mať aj druhú
+              hotovú, klikni <strong>„📧 Odoslať 2 varianty"</strong>.
             </div>
-            <button
-              type="button"
-              onClick={() => setVariantASnapshot(null)}
-              className="shrink-0 w-7 h-7 rounded-md bg-violet-200 hover:bg-violet-300 text-violet-900 font-black text-sm flex items-center justify-center"
-              title="Zrušiť uloženú variantu A"
-              aria-label="Zrušiť uloženú variantu A"
-            >
-              ×
-            </button>
           </div>
         )}
 
-        {/* User 2026-07-12: „ta ceruzka je random proste vyrovnaj sama dole".
-            Ceruzka teraz drží pevnú pozíciu vpravo pri „Pošli email", oba
-            buttons rovnaká výška, žiadny wrap-out do samostatného riadku. */}
-        <div className="flex items-stretch gap-2 pt-2 mt-2 border-t border-sky-200 flex-wrap">
-          <Button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={busy || total <= 0}
-            variant="outline"
-            className="flex-1 min-w-[140px]"
-            title="Vygeneruje presne to isté PDF čo posielaš emailom. Meno a email sú voliteľné pri sťahovaní."
-          >
-            <Download className="w-4 h-4 mr-1.5" aria-hidden />
-            <FileText className="w-4 h-4 mr-1" aria-hidden />
-            Stiahnuť PDF
-          </Button>
-          {/* „Uložiť ako variant A" — iba ak ešte nie je uložená. Po uložení
-              chip vyššie preberá informáciu + krížik na zrušenie. */}
-          {!variantASnapshot && (
+        <div className="pt-2 mt-2 border-t border-sky-200 space-y-2">
+          {/* Sekundárne akcie — Stiahnuť PDF + prípadne Uložiť ako 1. variantu */}
+          <div className="flex items-stretch gap-2 flex-wrap">
             <Button
               type="button"
-              onClick={handleSaveVariantA}
+              onClick={handleDownloadPdf}
               disabled={busy || total <= 0}
               variant="outline"
-              className="flex-1 min-w-[160px] border-violet-300 text-violet-800 hover:bg-violet-50"
-              title="Ulož aktuálnu CP ako variant A. Potom prestav generátor na druhú variantu a pošli obidve naraz."
+              className="flex-1 min-w-[140px]"
+              title="Vygeneruje presne to isté PDF čo posielaš emailom. Meno a email sú voliteľné pri sťahovaní."
             >
-              💾 Uložiť ako variant A
+              <Download className="w-4 h-4 mr-1.5" aria-hidden />
+              <FileText className="w-4 h-4 mr-1" aria-hidden />
+              Stiahnuť PDF
             </Button>
-          )}
-          <div className="flex-1 min-w-[200px] flex items-stretch gap-1.5">
-            <Button
-              type="button"
-              onClick={handleSendEmail}
-              disabled={
-                busy ||
-                total <= 0 ||
-                !customerEmail.trim() ||
-                !customerEmail.includes("@")
-              }
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-            >
-              <Mail className="w-4 h-4 mr-1.5" aria-hidden />
-              {variantASnapshot
-                ? "Pošli 2 varianty naraz"
-                : isResend
-                  ? "Preposlať upravenú ponuku"
-                  : "Pošli email s ponukou"}
-            </Button>
-            <Button
-              type="button"
-              onClick={handleOpenEditor}
-              disabled={
-                busy ||
-                total <= 0 ||
-                !customerEmail.trim() ||
-                !customerEmail.includes("@")
-              }
-              variant="outline"
-              className="shrink-0 w-12 px-0 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
-              title="Upraviť text pred odoslaním"
-              aria-label="Upraviť text pred odoslaním"
-            >
-              ✏️
-            </Button>
+            {!variantASnapshot && (
+              <Button
+                type="button"
+                onClick={handleSaveVariantA}
+                disabled={busy || total <= 0}
+                variant="outline"
+                className="flex-1 min-w-[200px] border-violet-400 text-violet-900 hover:bg-violet-50 font-black"
+                title="Uloží aktuálnu CP ako 1. variantu. Potom uprav formulár na 2. variantu a klikni Odoslať 2 varianty naraz."
+              >
+                ➕ Chcem pridať 2. variantu
+              </Button>
+            )}
           </div>
+
+          {/* Primárna akcia — Odoslať (veľký button na celý riadok, jasný CTA) */}
+          <Button
+            type="button"
+            onClick={handleSendEmail}
+            disabled={
+              busy ||
+              total <= 0 ||
+              !customerEmail.trim() ||
+              !customerEmail.includes("@")
+            }
+            className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-base font-black shadow-md"
+          >
+            <Mail className="w-5 h-5 mr-2" aria-hidden />
+            {variantASnapshot
+              ? "📧 Odoslať 2 varianty naraz (A + B)"
+              : isResend
+                ? "Preposlať upravenú ponuku"
+                : "📧 Odoslať cenovú ponuku"}
+          </Button>
+
+          {/* Editovanie textu emailu — sekundárna možnosť pod primárnym CTA.
+              User 2026-07-16: „ceruzka ktora robi to ze ti dovoli editnut
+              text este cize moze nastat aj situacia kedy chcem poslat 2cp
+              naraz a zaroven editnut text v maily ale musi to byt inak
+              urobene". Textový link namiesto icon-only tlačidla — jasnejšie. */}
+          <button
+            type="button"
+            onClick={handleOpenEditor}
+            disabled={
+              busy ||
+              total <= 0 ||
+              !customerEmail.trim() ||
+              !customerEmail.includes("@")
+            }
+            className="w-full text-center text-xs font-bold text-emerald-800 hover:text-emerald-900 underline disabled:opacity-40 disabled:no-underline"
+          >
+            ✏️ Chcem najprv upraviť text emailu pred odoslaním
+          </button>
         </div>
       </div>
       )}
