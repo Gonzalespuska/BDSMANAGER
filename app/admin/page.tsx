@@ -72,17 +72,9 @@ export default async function AdminDashboard() {
     {
       href: "/admin/nastavenia",
       title: "Nastavenia CRM",
-      desc: "Všetko na jednom mieste: Realizačné systémy · Podklady/Call skripty · Kontent shotlist · Tímy · Objednávky · Sklad · Realne dáta · firemné údaje · doprava · mestá · Sika katalóg · zľavy.",
+      desc: "Všetko na jednom mieste: Realizačné systémy · Podklady/Call skripty · Kontent shotlist · Tímy · Objednávky · Sklad · Realne dáta · Meta OAuth setup · firemné údaje · doprava · mestá · Sika katalóg · zľavy.",
       icon: Settings,
       tint: "sky",
-    },
-    {
-      href: "/admin/meta-setup",
-      title: "Meta OAuth setup",
-      desc: "Step-by-step: nastavenie System User Access Token pre Meta (FB/IG) tak aby NIKDY nevypršal. Fix pre 'graph_me_accounts_failed' + META_PAGE_IDS bypass.",
-      icon: Settings,
-      badge: "🔧 fix",
-      tint: "violet",
     },
   ];
 

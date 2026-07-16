@@ -6,6 +6,7 @@ import {
   GraduationCap,
   Package,
   Settings2,
+  Share2,
   Warehouse,
 } from "lucide-react";
 
@@ -112,6 +113,14 @@ export default async function NastaveniaAdminPage() {
             Icon={BarChart3}
             tint="amber"
             badge="🚧 In build"
+          />
+          <SubmoduleTile
+            href="/admin/meta-setup"
+            title="Meta OAuth setup"
+            desc="Step-by-step: nastavenie System User Access Token pre Meta (FB/IG) tak aby nikdy nevypršal. Fix pre 'graph_me_accounts_failed' + META_PAGE_IDS bypass."
+            Icon={Share2}
+            tint="violet"
+            badge="🔧 fix"
           />
         </div>
       </section>

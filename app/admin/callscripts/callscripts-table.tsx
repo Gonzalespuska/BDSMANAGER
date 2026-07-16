@@ -3,9 +3,15 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, Edit, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Copy, Edit, Eye, Power, Trash2, X } from "lucide-react";
 
 import { toast } from "@/components/ui/toast";
+import {
+  ScriptStepper,
+  type Answer,
+  type Step as StepperStep,
+} from "@/components/leads/callscript-stepper";
+import { renderCallscript } from "@/lib/callscript-render";
 
 type Script = {
   id: string;
@@ -31,6 +37,8 @@ export function CallscriptsTable({
   const router = useRouter();
   const [scripts, setScripts] = React.useState(initial);
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [previewId, setPreviewId] = React.useState<string | null>(null);
+  const preview = scripts.find((s) => s.id === previewId) ?? null;
 
   async function toggleActive(s: Script) {
     setBusy(s.id);
@@ -158,12 +166,24 @@ export function CallscriptsTable({
             <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
+                onClick={() => setPreviewId(s.id)}
+                className="w-8 h-8 rounded-md hover:bg-sky-50 flex items-center justify-center"
+                title="Preview — takto to uvidí obchodák/obhliadkár"
+              >
+                <Eye className="w-4 h-4 text-sky-600" />
+              </button>
+              <button
+                type="button"
                 onClick={() => toggleActive(s)}
                 disabled={busy === s.id}
                 className="w-8 h-8 rounded-md hover:bg-slate-100 flex items-center justify-center disabled:opacity-40"
-                title={s.active ? "Deaktivovať" : "Aktivovať"}
+                title={s.active ? "Deaktivovať (skryť)" : "Aktivovať (znova zobraziť)"}
               >
-                {s.active ? <Eye className="w-4 h-4 text-emerald-600" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
+                <Power
+                  className={
+                    "w-4 h-4 " + (s.active ? "text-emerald-600" : "text-slate-400")
+                  }
+                />
               </button>
               <button
                 type="button"
@@ -194,6 +214,156 @@ export function CallscriptsTable({
           </div>
         );
       })}
+      {preview && (
+        <PreviewModal
+          script={preview}
+          role={role}
+          onClose={() => setPreviewId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function PreviewModal({
+  script,
+  role,
+  onClose,
+}: {
+  script: Script;
+  role: "obchod" | "obhliadky";
+  onClose: () => void;
+}) {
+  const [stepIdx, setStepIdx] = React.useState(0);
+  const [answers, setAnswers] = React.useState<Record<string, Answer>>({});
+  const [pendingNote, setPendingNote] = React.useState("");
+  const [otherText, setOtherText] = React.useState("");
+  const steps = (script.steps ?? []) as StepperStep[];
+  const ctx = {
+    leadName: "Ján Novák",
+    plocha: "150",
+    lokalita: "Prešov",
+    typPodlahy: script.floor_type,
+    priestor: script.space,
+  };
+  const isObhliadky = role === "obhliadky";
+
+  React.useEffect(() => {
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[85vh] w-full max-w-lg flex flex-col border border-black/10"
+      >
+        <div
+          className={
+            "text-white shrink-0 bg-gradient-to-br " +
+            (isObhliadky
+              ? "from-violet-500 to-violet-700"
+              : "from-rose-500 to-rose-700")
+          }
+        >
+          <div className="px-5 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wider opacity-90">
+            👤 {ctx.leadName} — mock lead
+          </div>
+          <div className="px-5 pb-3 flex items-center gap-3">
+            <div className="w-5 h-5 shrink-0">
+              {isObhliadky ? "🔍" : "📞"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
+                {isObhliadky ? "Obhliadka postup" : "Scenár hovoru"}
+              </div>
+              <div className="font-black text-lg leading-tight truncate">
+                {script.label || "(bez názvu)"}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 text-white flex items-center justify-center shrink-0"
+              title="Zavrieť (Esc)"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        {(script.floor_type || script.space) && (
+          <div className="px-5 py-2 border-b bg-slate-50 flex items-center gap-1.5 shrink-0 flex-wrap">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+              Tagy:
+            </span>
+            {script.floor_type && (
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                🎨 {script.floor_type}
+              </span>
+            )}
+            {script.space && (
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">
+                📍 {script.space}
+              </span>
+            )}
+          </div>
+        )}
+        <div className="p-5 overflow-y-auto flex-1">
+          {script.description && (
+            <div className="text-xs italic text-slate-500 mb-3">
+              {script.description}
+            </div>
+          )}
+          {steps.length > 0 ? (
+            <ScriptStepper
+              steps={steps}
+              stepIdx={stepIdx}
+              setStepIdx={setStepIdx}
+              answers={answers}
+              pendingNote={pendingNote}
+              setPendingNote={setPendingNote}
+              otherText={otherText}
+              setOtherText={setOtherText}
+              ctx={ctx}
+              onAnswer={(id, value, note) => {
+                setAnswers((p) => ({
+                  ...p,
+                  [id]: { value, note: note?.trim() || undefined, at: "preview" },
+                }));
+                setPendingNote("");
+                setOtherText("");
+              }}
+            />
+          ) : script.body ? (
+            <pre className="text-sm font-semibold text-slate-900 whitespace-pre-wrap font-sans leading-relaxed">
+              {renderCallscript(script.body, ctx)}
+            </pre>
+          ) : (
+            <div className="text-center text-xs text-slate-400 italic py-8">
+              Prázdne — script nemá kroky ani body text.
+            </div>
+          )}
+        </div>
+        <div className="border-t px-5 py-3 bg-slate-50 flex items-center justify-between gap-2 shrink-0">
+          <span className="text-[10px] text-slate-500 italic">
+            Preview — odpovede sa nikam neukladajú
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 text-sm font-black"
+          >
+            Zavrieť
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
