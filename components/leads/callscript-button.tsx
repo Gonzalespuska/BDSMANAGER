@@ -135,20 +135,19 @@ export function CallscriptButton({
 
   const selected = scripts?.find((s) => s.id === selectedId) ?? null;
 
-  // User 2026-07-16: „daj in build nech sa na to neda kliknut". Zatiaľ
-  // disabled — call skripty sa musia najprv rozšíriť + otestovať.
+  // User 2026-07-16: „ten callscript nech funguje ale s tym co proste
+  // som ti posielal" — reaktivované, používa existujúce scripty v DB
+  // (migrácia 31, tagované floor_type + space).
   const trigger = (
-    <span
-      aria-disabled="true"
-      title="V príprave"
-      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-black bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none pointer-events-none opacity-70"
+    <button
+      type="button"
+      onClick={openModal}
+      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-black bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-200 transition-colors"
+      title="Otvoriť call skript pre tento typ podlahy + priestor"
     >
       <Phone className="w-3 h-3" />
       Callscript
-      <span className="text-[8px] uppercase tracking-wider bg-slate-200 text-slate-500 px-1 py-0.5 rounded ml-0.5">
-        🚧 in build
-      </span>
-    </span>
+    </button>
   );
 
   const modal = open ? (
