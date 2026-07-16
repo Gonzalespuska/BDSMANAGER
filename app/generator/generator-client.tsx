@@ -706,7 +706,7 @@ export function GeneratorClient({
       const pdfBase64 = btoa(binary);
       // Prípona -variant-A pred .pdf, aby v Gmaili obchodák hneď videl
       // rozdiel medzi prílohami.
-      const filenameA = filename.replace(/\.pdf$/i, "") + "-variant-A.pdf";
+      const filenameA = filename.replace(/\.pdf$/i, "") + "-1-varianta.pdf";
       setVariantASnapshot({
         pdfBase64,
         filename: filenameA,
@@ -714,11 +714,11 @@ export function GeneratorClient({
         label: input.floor_type_label,
       });
       toast.success(
-        `💾 Variant A uložený (${input.floor_type_label} · ${total.toFixed(0)} €). Prestav generátor na druhú variantu a pošli obidve naraz.`,
+        `💾 1. varianta uložená (${input.floor_type_label} · ${total.toFixed(0)} €). Prestav generátor na druhú variantu a pošli obidve naraz.`,
       );
     } catch (e) {
       toast.error(
-        `Variant A chyba: ${e instanceof Error ? e.message : "unknown"}`,
+        `1. varianta chyba: ${e instanceof Error ? e.message : "unknown"}`,
       );
     } finally {
       setBusy(false);
@@ -934,11 +934,13 @@ ${signatureLines.join("\n")}`;
         input.agent_email,
         "www.epoxidovo.sk",
       ].filter(Boolean);
-      // Ak máme uloženú variantu A — v texte upozorníme že sú 2 varianty
-      // v prílohe (A = uložená, B = aktuálna). User 2026-07-15.
+      // 2 varianty — user 2026-07-16: „ked posielas dve cp tak v tele emailu
+      // to meni text tiez ze posielam cp na toto: a das tam ze 1. a druha 2".
+      // Prepis:  „Variant A/B" → „1. varianta / 2. varianta"
+      //          Intro spomeňme DVE ponuky namiesto jednej.
       const hasVariantA = !!variantASnapshot;
-      const variantsNote = hasVariantA
-        ? `\n\nV prílohe sú DVE varianty cenovej ponuky:\n  • Variant A — ${variantASnapshot!.label} (${variantASnapshot!.total.toFixed(0)} €)\n  • Variant B — ${input.floor_type_label} (${total.toFixed(0)} €)\n\nPorovnajte si prosím obe možnosti a dajte mi vedieť ktorá Vám vyhovuje viac.`
+      const variantsListing = hasVariantA
+        ? `\n\n  1. varianta — ${variantASnapshot!.label} · ${variantASnapshot!.total.toFixed(0)} €\n  2. varianta — ${input.floor_type_label} · ${total.toFixed(0)} €\n\nPorovnajte si prosím obe možnosti a dajte mi vedieť ktorá Vám vyhovuje viac.`
         : "";
 
       const bodyText = isFinal
@@ -948,7 +950,7 @@ ${signatureLines.join("\n")}`;
           // podlahu" a "Ponuka je vypracovaná..." odsek.
           `Dobrý deň prajeme,
 
-Ďakujeme za obhliadku. V prílohe Vám posielam finálnu cenovú ponuku.${variantsNote}
+Ďakujeme za obhliadku. V prílohe Vám posielam ${hasVariantA ? "2 finálne cenové ponuky" : "finálnu cenovú ponuku"}.${variantsListing}
 
 V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
 
@@ -956,7 +958,7 @@ S pozdravom,
 ${signatureLinesFinal.join("\n")}`
         : `Dobrý deň prajeme,
 
-Na základe nášho telefonátu Vám v prílohe posielam ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu.${variantsNote}
+Na základe nášho telefonátu Vám v prílohe posielam ${hasVariantA ? `2 ORIENTAČNÉ cenové ponuky` : `ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu`}.${variantsListing}
 
 Upozorňujeme, že ide o orientačné ceny — presná cenová ponuka bude vyčíslená až po obhliadke. V závislosti od stavu podkladu sa cena môže líšiť o niekoľko percent (viac alebo menej).
 
@@ -1018,7 +1020,7 @@ ${signatureLines.join("\n")}`;
             ? pdfBase64
             : undefined,
           pdf_filename_2: variantASnapshot
-            ? filename.replace(/\.pdf$/i, "") + "-variant-B.pdf"
+            ? filename.replace(/\.pdf$/i, "") + "-2-varianta.pdf"
             : undefined,
           agent_email: input.agent_email,
           agent_name: input.agent_name,

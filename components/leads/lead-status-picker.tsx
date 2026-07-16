@@ -161,10 +161,19 @@ export function LeadStatusPicker({
         const newMeta = STATUS_META[newStatus];
         const namePart = leadName?.trim() || "Lead";
         const tab = STATUS_TO_TAB[newStatus];
-        const href = tab ? `/agent?tab=${tab}` : undefined;
-        toast.success(`${namePart} → ${newMeta.label}`, { href });
-        if (href) router.push(href);
-        else router.refresh();
+        toast.success(`${namePart} → ${newMeta.label}`, {
+          href: tab ? `/agent?tab=${tab}` : undefined,
+        });
+        // HARD NAV — router.push() občas nechá starú kartu vidnu v pôvodnom
+        // tabe kým sa RSC cache neinvaliduje. window.location zaručene
+        // pretiahne middleware + server re-render.
+        // User 2026-07-16: „musel som refresh aby som ho videl v tom stave
+        // v ktorom som chcel". Hard nav = žiadny refresh nutný.
+        if (tab && typeof window !== "undefined") {
+          window.location.href = `/agent?tab=${tab}`;
+        } else {
+          router.refresh();
+        }
       }
     } catch (e) {
       setCurrent(prev);
