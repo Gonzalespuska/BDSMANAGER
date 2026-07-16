@@ -283,10 +283,15 @@ export function ProfileMenu({
             </a>
           )}
 
-          {/* Self-pause / obnoviť príjem — nie pre admina + realizátora.
-              User 2026-07-16: „neni tam ta pause option ze ked sa pauznem
-              vsetko prechadza na inych obchodakov alebo realizartorov". */}
-          {realRole !== "admin" && realRole !== "realizacie" && (
+          {/* Self-pause / obnoviť príjem — pre role ktoré prijímajú leady.
+              User 2026-07-16 (2×): „neni tam ta pause option ze ked sa
+              pauznem vsetko prechadza na inych obchodakov alebo
+              realizartorov" + „pod ucet ked kliknem na mail tak nech sa
+              mi zobrazi moznost pauznut sa bavili sme sa uz o tom".
+              Používame user.role (effective, po view-as override) — keď
+              admin robí view-as ako obchod, uvidí Pauza option a pauzne
+              tú konkrétnu view-as identitu. */}
+          {user.role !== "admin" && user.role !== "realizacie" && (
             <button
               type="button"
               onClick={async () => {

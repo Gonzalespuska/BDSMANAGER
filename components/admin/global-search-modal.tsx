@@ -321,14 +321,20 @@ export function GlobalSearchTrigger() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 h-9 px-3 rounded-full bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/30 dark:hover:bg-sky-900/40 border border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-200 text-xs font-black transition-colors"
+        className="group inline-flex items-center gap-2.5 h-9 pl-3 pr-2 rounded-lg bg-muted/60 hover:bg-muted border border-input hover:border-sky-400 transition-colors"
         title="Hľadať leady + tím (Cmd+K)"
+        aria-label="Hľadať"
       >
-        <Search className="w-3.5 h-3.5" />
-        <span>Hľadať</span>
-        <span className="hidden sm:inline text-[10px] font-mono bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 px-1.5 py-0.5 rounded">
-          ⌘K
+        <Search
+          className="w-4 h-4 text-muted-foreground group-hover:text-sky-600 transition-colors"
+          aria-hidden
+        />
+        <span className="hidden sm:inline text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+          Hľadať leady, tím…
         </span>
+        <kbd className="hidden sm:inline-flex items-center h-5 px-1.5 text-[10px] font-mono font-bold text-muted-foreground bg-background border border-input rounded">
+          ⌘K
+        </kbd>
       </button>
       <GlobalSearchModal open={open} onClose={() => setOpen(false)} />
     </>
