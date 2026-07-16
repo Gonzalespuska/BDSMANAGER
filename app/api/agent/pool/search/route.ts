@@ -76,16 +76,26 @@ export async function GET(request: NextRequest) {
     orParts.push(`phone_digits.ilike.%${phoneSearch}%`);
   }
 
-  const { data: rows, error } = await admin
+  // ADMIN — nezáleží na state, admin musí vidieť všetky leady.
+  // User 2026-07-16: „nevyhladava to furt ako ma som admin chcem
+  // pozriet lead". Predtým sme filtrovali .is(phone_revealed_at, null)
+  // + status NOT IN (won,lost,archived) → Miško Lukačko (interested,
+  // odhalené číslo) sa nenašiel.
+  const isAdmin = user.role === "admin";
+  let query = admin
     .from("leads")
     .select(
       "id, name, phone, email, status, source_type, assigned_to, phone_revealed_at, created_at, data",
-    )
-    .is("phone_revealed_at", null)
-    .not("status", "in", "(won,lost,archived)")
+    );
+  if (!isAdmin) {
+    query = query
+      .is("phone_revealed_at", null)
+      .not("status", "in", "(won,lost,archived)");
+  }
+  const { data: rows, error } = await query
     .or(orParts.join(","))
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(isAdmin ? 60 : 30);
 
   if (error) {
     return NextResponse.json(
