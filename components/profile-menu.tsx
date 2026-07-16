@@ -297,7 +297,7 @@ export function ProfileMenu({
                     "Pauznúť príjem nových leadov?\n\n" +
                       "• Prestaneš dostávať nové leady z automatického rozdelenia.\n" +
                       "• Tvoje netknuté leady sa presunú aktívnym kolegom.\n" +
-                      "• Kedykoľvek si obnov príjem klikom „▶ Obnoviť príjem".",
+                      "• Kedykoľvek si obnov príjem klikom Obnoviť príjem.",
                   )
                 )
                   return;
