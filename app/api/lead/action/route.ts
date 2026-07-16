@@ -327,11 +327,31 @@ export async function POST(request: NextRequest) {
             { status: 403 },
           );
         }
+        // Načítaj starý status aby sme mohli zalogovať prechod (from → to)
+        const { data: prevRow } = await admin
+          .from("leads")
+          .select("status")
+          .eq("id", body.lead_id)
+          .maybeSingle();
+        const prevStatus = (prevRow?.status as string | undefined) ?? null;
         const { error } = await admin
           .from("leads")
           .update({ status: body.new_status, last_activity_at: nowIso })
           .eq("id", body.lead_id);
         if (error) throw new Error(error.message);
+        // Zalogui do lead_activities aby admin videl kto kedy zmenil status
+        // (predtým change_status túto stopu neopúšťal → Miško Lukačko sa
+        //  akoby „ocitol" v CP tabe bez activity záznamu).
+        try {
+          await admin.from("lead_activities").insert({
+            lead_id: body.lead_id,
+            user_id: user.id,
+            type: "status_changed",
+            data: { from: prevStatus, to: body.new_status },
+          });
+        } catch {
+          // Non-blocking — activity log failure nesmie zablokovať status change
+        }
         return NextResponse.json({ ok: true });
       }
 

@@ -879,6 +879,25 @@ ${signatureLines.join("\n")}`;
       );
       return;
     }
+    // User 2026-07-16: „andrej kolar posielal cenovu ponuku marcel stoff,
+    // tak dal poslat dve cp, a poslalo mu dve cp rovnake proste aj v tele
+    // mailu text ze rovnake cp aj tie cp v prilohe boli rovnake".
+    // Ak je uložená variant A ale user NIČ nezmenil v formulári → posiela
+    // 2× rovnaké PDF. Blokni to explicitne + vysvetli.
+    if (
+      variantASnapshot &&
+      Math.round(variantASnapshot.total) === Math.round(total)
+    ) {
+      const ok = confirm(
+        "⚠ POZOR — 2. varianta má IDENTICKÚ cenu ako 1. varianta\n\n" +
+          `Obidve: ${total.toFixed(0)} €\n\n` +
+          "Pravdepodobne si zabudol upraviť formulár po uložení 1. variantu " +
+          "(napr. zmeniť typ podlahy, systém, alebo plochu). Ak pošleš, " +
+          "zákazník dostane 2× takmer rovnaké PDF a bude to pôsobiť neprofesionálne.\n\n" +
+          "Chceš aj tak poslať 2 rovnaké CP?",
+      );
+      if (!ok) return;
+    }
     setBusy(true);
     try {
       const { generator, input } = await buildPdfInput();

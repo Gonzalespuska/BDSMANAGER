@@ -44,6 +44,7 @@ interface Activity {
   id: string;
   lead_id: string;
   user_id: string | null;
+  user_name?: string | null;
   type: string;
   data: Record<string, unknown>;
   created_at: string;
@@ -118,13 +119,35 @@ export default async function LeadDetailPage({
       .select("*")
       .eq("lead_id", id)
       .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(100),
   ]);
 
   if (leadRes.error || !leadRes.data) notFound();
 
   const lead = leadRes.data as Lead;
-  const activities = (activitiesRes.data ?? []) as Activity[];
+  const rawActivities = (activitiesRes.data ?? []) as Activity[];
+
+  // Batch fetch mien users pre všetky user_id v activities (single query)
+  const userIds = Array.from(
+    new Set(rawActivities.map((a) => a.user_id).filter(Boolean) as string[]),
+  );
+  const userMap = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: usersData } = await supabase
+      .from("users")
+      .select("id, name, email")
+      .in("id", userIds);
+    for (const u of usersData ?? []) {
+      const uid = (u as { id: string }).id;
+      const name = (u as { name: string | null; email: string }).name;
+      const email = (u as { email: string }).email;
+      userMap.set(uid, name || email);
+    }
+  }
+  const activities: Activity[] = rawActivities.map((a) => ({
+    ...a,
+    user_name: a.user_id ? userMap.get(a.user_id) ?? null : null,
+  }));
   const dataFields = lead.data as Record<string, string | number>;
 
   return (
@@ -329,23 +352,77 @@ export default async function LeadDetailPage({
                 Žiadne aktivity zatiaľ.
               </li>
             )}
-            {activities.map((act) => (
-              <li
-                key={act.id}
-                className="rounded-lg border bg-background p-3 text-sm"
-              >
-                <div className="font-semibold">
-                  {ACTIVITY_LABELS[act.type] ?? act.type}
-                </div>
-                <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-0.5 tabular-nums">
-                  <Clock className="w-3 h-3" aria-hidden />
-                  <span>{timeAgo(act.created_at)}</span>
-                  <span className="text-muted-foreground/70">
-                    · {formatAbsolute(act.created_at)}
-                  </span>
-                </div>
-              </li>
-            ))}
+            {activities.map((act) => {
+              // Rozšírené detaily podľa typu — status_changed vidieť from→to,
+              // field_updated vidieť aký field sa menil, atď.
+              const d = act.data ?? {};
+              let extra: React.ReactNode = null;
+              if (act.type === "status_changed") {
+                const from = d.from as string | undefined;
+                const to = d.to as string | undefined;
+                extra = (
+                  <div className="text-xs text-slate-600 mt-1">
+                    <span className="font-mono bg-slate-100 px-1 rounded">
+                      {from ?? "—"}
+                    </span>{" "}
+                    →{" "}
+                    <span className="font-mono bg-emerald-100 px-1 rounded font-bold">
+                      {to ?? "—"}
+                    </span>
+                  </div>
+                );
+              } else if (act.type === "field_updated") {
+                extra = (
+                  <div className="text-xs text-slate-600 mt-1">
+                    <span className="font-mono bg-slate-100 px-1 rounded">
+                      {String(d.field ?? "")}
+                    </span>{" "}
+                    ={" "}
+                    <span className="font-semibold">
+                      {String(d.value ?? "").slice(0, 80)}
+                    </span>
+                  </div>
+                );
+              } else if (act.type === "call_missed") {
+                extra = (
+                  <div className="text-xs text-slate-600 mt-1">
+                    Pokus <strong>#{String(d.attempts ?? "?")}</strong>
+                    {d.reminder_in_hours != null && (
+                      <>
+                        {" "}
+                        · pripomienka o{" "}
+                        <strong>{String(d.reminder_in_hours)}h</strong>
+                      </>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <li
+                  key={act.id}
+                  className="rounded-lg border bg-background p-3 text-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-semibold flex-1 min-w-0">
+                      {ACTIVITY_LABELS[act.type] ?? act.type}
+                    </div>
+                    {act.user_name && (
+                      <span className="shrink-0 text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                        {act.user_name}
+                      </span>
+                    )}
+                  </div>
+                  {extra}
+                  <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-1 tabular-nums">
+                    <Clock className="w-3 h-3" aria-hidden />
+                    <span>{timeAgo(act.created_at)}</span>
+                    <span className="text-muted-foreground/70">
+                      · {formatAbsolute(act.created_at)}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         </aside>
       </div>
