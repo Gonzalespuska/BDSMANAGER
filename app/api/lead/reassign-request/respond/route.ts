@@ -151,10 +151,17 @@ export async function POST(request: NextRequest) {
         : req.role_scope === "realizacie"
           ? "realization_by"
           : "assigned_to";
+    // stolen_at + stolen_from — používame ako unified marker „nedávno
+    // preradené na teba" pre notification bell (loadNotifications).
+    // Iba pri obchod scope — obhliadky/realizacie majú vlastnú logiku.
     const updates: Record<string, unknown> = {
       last_activity_at: nowIso,
       [updateCol]: req.to_user_id,
     };
+    if (req.role_scope === "obchod") {
+      updates.stolen_at = nowIso;
+      updates.stolen_from = req.from_user_id;
+    }
     const { error: upErr } = await admin
       .from("leads")
       .update(updates)

@@ -22,12 +22,15 @@ export type Notification = {
     | "callback_overdue"
     | "new_lead"
     | "admin_task"
-    | "inspection_ready";
+    | "inspection_ready"
+    | "reassigned_lead";
   lead_id: string;
   lead_name: string;
   lead_phone: string | null;
   when_ts: string;
   message: string;
+  /** Aktuálny status leadu — user vidí do ktorého tabu má ísť. */
+  status?: string;
 };
 
 export async function loadNotifications(
@@ -110,6 +113,43 @@ export async function loadNotifications(
       lead_phone: l.phone,
       when_ts: (l.last_activity_at as string) ?? new Date().toISOString(),
       message: "Obhliadka hotová — pošli cenovú ponuku",
+    });
+  }
+
+  // 2c. REASSIGNED LEAD — lead bol nedávno preradený na tohto agenta
+  //     (stolen_at v posledných 24h). User 2026-07-16: „ked si obchodaci
+  //     medzi sebou prehodia lead... nech mu pride v tom statuse v ktorom
+  //     je... ale standardne pride notifikacia".
+  //
+  //     Statusy new + phone_revealed už chytáme v „new_lead" resp. iných
+  //     špecifických kategóriách — reassigned pokrýva zvyšné stavy
+  //     (kontakt/nezdvíhali/scheduled/CP/atď.) aby receiver nezmeškal
+  //     nový lead v inom status ako new.
+  const reassignCutoff = new Date(
+    Date.now() - 24 * 3600_000,
+  ).toISOString();
+  const { data: reassigned } = await admin
+    .from("leads")
+    .select("id, name, phone, status, stolen_at, stolen_from")
+    .eq("assigned_to", userId)
+    .not("stolen_at", "is", null)
+    .gte("stolen_at", reassignCutoff)
+    // Ak je stále status=new bez phone_revealed, chytí to „new_lead"
+    // kategória vyššie — nechceme duplicitu. Filtrujeme na statusy kde
+    // reassign nastal už v aktívnom flow.
+    .not("status", "in", "(new,won,lost,archived)")
+    .order("stolen_at", { ascending: false })
+    .limit(20);
+  for (const l of reassigned ?? []) {
+    notifs.push({
+      id: `reassign-${l.id}`,
+      type: "reassigned_lead",
+      lead_id: l.id,
+      lead_name: l.name,
+      lead_phone: l.phone,
+      status: l.status as string,
+      when_ts: l.stolen_at as string,
+      message: "Preradené na teba",
     });
   }
 

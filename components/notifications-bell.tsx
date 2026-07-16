@@ -7,7 +7,7 @@ import { Bell, BellRing, ChevronDown, ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/lib/notifications";
-import { timeAgo } from "@/lib/types/lead";
+import { STATUS_META, timeAgo, type LeadStatus } from "@/lib/types/lead";
 
 /**
  * Bell s počtom notifikácií v header bare.
@@ -223,6 +223,34 @@ export function NotificationsBell({
               );
             })()}
 
+            {/* Sekcia 1c: Preradený lead na teba (v akomkoľvek statuse).
+                User 2026-07-16: „ked si obchodaci medzi sebou prehodia lead
+                alebo ja im ho predelim manualne ako admin tak nech mu pride
+                v tom statuse v ktorom je... standardne pride notifikacia". */}
+            {(() => {
+              const reassigns = items.filter(
+                (n) => n.type === "reassigned_lead",
+              );
+              if (reassigns.length === 0) return null;
+              return (
+                <div>
+                  <div className="px-4 py-2 bg-sky-50/60 border-t border-b text-[11px] font-bold uppercase tracking-wider text-sky-800 inline-flex items-center gap-1.5 w-full">
+                    <span className="inline-block w-2 h-2 rounded-full bg-sky-500" />
+                    Preradené na teba ({reassigns.length})
+                  </div>
+                  <ul className="divide-y">
+                    {reassigns.map((n) => (
+                      <NotifRow
+                        key={n.id}
+                        n={n}
+                        onClick={() => setOpen(false)}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+
             {/* Sekcia 2: Nový lead pridelený — collapsed by default, klik na header rozbalí */}
             {(() => {
               const news = items.filter((n) => n.type === "new_lead");
@@ -310,13 +338,26 @@ function NotifRow({
             </div>
             <div
               className={cn(
-                "text-xs",
+                "text-xs flex items-center gap-1.5 flex-wrap",
                 isReminder
                   ? "text-red-700 dark:text-red-300 font-bold uppercase tracking-wider"
                   : "text-muted-foreground",
               )}
             >
               {n.message}
+              {/* Status pill — user 2026-07-16: „nech mu pride v tom
+                  statuse v ktorom je ze ak je v kontakt pojde do kontakt". */}
+              {n.type === "reassigned_lead" && n.status && (
+                <span
+                  className={cn(
+                    "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider",
+                    STATUS_META[n.status as LeadStatus]?.pill ??
+                      "bg-slate-400 text-white",
+                  )}
+                >
+                  {STATUS_META[n.status as LeadStatus]?.label ?? n.status}
+                </span>
+              )}
             </div>
             {n.lead_phone && (
               <div

@@ -88,9 +88,28 @@ export async function POST(request: NextRequest) {
         : "assigned_to";
 
   const nowIso = new Date().toISOString();
+  // stolen_at pre obchod scope — trigger notifikácie pre receivera
+  // v bell (loadNotifications má reassigned_lead type).
+  const previousOwnerCol = updateCol;
+  const { data: leadBefore } = await admin
+    .from("leads")
+    .select(previousOwnerCol)
+    .eq("id", lead_id)
+    .maybeSingle();
+  const prevOwner =
+    leadBefore && (leadBefore as Record<string, unknown>)[previousOwnerCol];
+
+  const updatePayload: Record<string, unknown> = {
+    [updateCol]: to_user_id,
+    last_activity_at: nowIso,
+  };
+  if (roleScope === "obchod") {
+    updatePayload.stolen_at = nowIso;
+    updatePayload.stolen_from = prevOwner ?? null;
+  }
   const { data: updated, error } = await admin
     .from("leads")
-    .update({ [updateCol]: to_user_id, last_activity_at: nowIso })
+    .update(updatePayload)
     .eq("id", lead_id)
     .select("id, name")
     .maybeSingle();
