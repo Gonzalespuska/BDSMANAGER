@@ -76,12 +76,20 @@ export async function createAgentAction(input: {
   // Existuje už user s týmto emailom?
   const { data: existing } = await sb
     .from("users")
-    .select("id")
+    .select("id, name, role, active")
     .eq("email", email)
     .maybeSingle();
 
   if (existing) {
-    return { ok: false, error: "User s týmto emailom už existuje" };
+    const name = (existing.name as string) || email;
+    const role = (existing.role as string) || "user";
+    const inactive = !existing.active;
+    return {
+      ok: false,
+      error: `User „${name}" už existuje (rola: ${role}${
+        inactive ? ", neaktívny" : ""
+      }). Otvor jeho profil na /admin/agents a upravi rolu/permissions tam.`,
+    };
   }
 
   // 1. Vytvor Supabase auth user — bez hesla, prihlasovanie cez OTP magic link.

@@ -7,7 +7,7 @@ import { Check, Phone, X } from "lucide-react";
 import { updateAgentAction } from "@/app/admin/agents/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { autoFormatPhoneWhileTyping } from "@/lib/phone-format";
 
 /**
  * Editovateľné phone pole v admin/agents/[id] detaile.
@@ -65,7 +65,7 @@ export function PhoneEditor({
           <Input
             type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => setPhone(autoFormatPhoneWhileTyping(e.target.value))}
             placeholder="+421 905 123 456"
             autoFocus
             disabled={busy}

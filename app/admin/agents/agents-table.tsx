@@ -23,6 +23,7 @@ import { EmailAutocomplete } from "@/components/ui/email-autocomplete";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { autoFormatPhoneWhileTyping } from "@/lib/phone-format";
 import {
   ROLE_BADGE_CLASSES,
   ROLE_LABELS,
@@ -573,8 +574,10 @@ function AddAgentModal({
                 id="agent-phone"
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+421 905 123 456"
+                onChange={(e) =>
+                  setPhone(autoFormatPhoneWhileTyping(e.target.value))
+                }
+                placeholder="+421 950 890 098 alebo 0950 890 098"
               />
             </div>
 

@@ -31,14 +31,15 @@ export default async function AdminAgentsPage() {
   noStore();
   const sb = createAdminClient();
 
-  // 1) Všetci členovia tímu okrem admina (obchod / obhliadky / realizácie).
-  // Admin permissions sa upravujú v users [id] detaile cez permissions-card.
+  // 1) Všetci členovia tímu — vrátane adminov.
+  // User 2026-07-16: „vravi ze tento user uz existuje ale nevidim ho tam".
+  // Predtým sme filtrovali .neq('role','admin') a admini boli neviditeľní
+  // pre admin list → error „User existuje" pri pokuse ho znova vytvoriť.
   const { data: usersRaw } = await sb
     .from("users")
     .select(
       "id, email, name, role, active, capacity, auth_id, last_active_at, created_at",
     )
-    .neq("role", "admin")
     .order("created_at", { ascending: true });
 
   const users = (usersRaw ?? []) as Omit<

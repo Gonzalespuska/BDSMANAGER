@@ -35,6 +35,46 @@ export function formatPhoneSK(raw: string | null | undefined): string {
 }
 
 /**
+ * Auto-format počas písania — vhodný pre input onChange.
+ * User 2026-07-16: „nech to automaticky upracuje ten format cislo na
+ * +421 950 890 s medzerami presne tak ako som ti to poslal kurva".
+ *
+ * Postup:
+ *   • Ak user má už kompletný SK/CZ formát → normalizuje na
+ *     „+421 950 890 098" alebo „+420 605 123 456".
+ *   • Neúplný vstup (napr. „0950") → vráti pôvodný — nešahá počas písania.
+ *
+ * Vhodné pre onChange handler v input poliach (New agent modal,
+ * lead phone editor, atď).
+ */
+export function autoFormatPhoneWhileTyping(raw: string): string {
+  if (!raw) return "";
+  const cleaned = raw.replace(/[^\d+]/g, "");
+  let digits = cleaned;
+  let country: "+421" | "+420" = "+421";
+  if (digits.startsWith("+421")) {
+    digits = "0" + digits.slice(4);
+    country = "+421";
+  } else if (digits.startsWith("+420")) {
+    digits = "0" + digits.slice(4);
+    country = "+420";
+  } else if (digits.startsWith("421") && digits.length >= 12) {
+    digits = "0" + digits.slice(3);
+    country = "+421";
+  } else if (digits.startsWith("420") && digits.length >= 12) {
+    digits = "0" + digits.slice(3);
+    country = "+420";
+  }
+  // Iba ak máme kompletné 10-cif SK/CZ číslo, sformátujeme.
+  if (/^0\d{9}$/.test(digits)) {
+    const rest = digits.slice(1);
+    return `${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6, 9)}`;
+  }
+  // Neúplné číslo — nechaj tak, user ešte píše.
+  return raw;
+}
+
+/**
  * Medzinárodný formát: "+421 950 890 098" (SK) / "+420 605 123 456" (CZ).
  * Používa sa v email signatúre + PDF footer — profesionálnejší vzhľad
  * ako lokálne "0950 890 098".
