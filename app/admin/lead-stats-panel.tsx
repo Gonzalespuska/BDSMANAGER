@@ -105,6 +105,7 @@ export function LeadStatsPanel() {
           Icon={Search}
           tint="rose"
           loading={loading}
+          inBuild
         />
       </div>
     </section>
@@ -151,36 +152,54 @@ function Breakdown({
   Icon,
   tint,
   loading,
+  inBuild,
 }: {
   label: string;
   value: number;
   Icon: typeof TrendingUp;
   tint: "indigo" | "sky" | "rose";
   loading: boolean;
+  inBuild?: boolean;
 }) {
-  const cls =
-    tint === "indigo"
+  const cls = inBuild
+    ? "border-slate-200 bg-slate-50 text-slate-400"
+    : tint === "indigo"
       ? "border-indigo-200 bg-white text-indigo-900"
       : tint === "sky"
         ? "border-sky-200 bg-white text-sky-900"
         : "border-rose-200 bg-white text-rose-900";
-  const iconCls =
-    tint === "indigo"
+  const iconCls = inBuild
+    ? "text-slate-400"
+    : tint === "indigo"
       ? "text-indigo-500"
       : tint === "sky"
         ? "text-sky-500"
         : "text-rose-500";
   return (
     <div
-      className={"rounded-xl border-2 " + cls + " p-3 flex items-center gap-3"}
+      className={
+        "rounded-xl border-2 " +
+        cls +
+        " p-3 flex items-center gap-3 " +
+        (inBuild ? "opacity-70 cursor-not-allowed select-none" : "")
+      }
+      aria-disabled={inBuild}
+      title={inBuild ? "V príprave" : undefined}
     >
       <Icon className={"w-5 h-5 shrink-0 " + iconCls} aria-hidden />
       <div className="min-w-0">
-        <div className="text-[9px] uppercase tracking-wider font-black opacity-70">
+        <div className="text-[9px] uppercase tracking-wider font-black opacity-70 inline-flex items-center gap-1">
           {label}
+          {inBuild && (
+            <span className="text-[8px] bg-slate-200 text-slate-500 px-1 py-0.5 rounded">
+              🚧 in build
+            </span>
+          )}
         </div>
         <div className="text-2xl font-black tabular-nums leading-tight">
-          {loading ? (
+          {inBuild ? (
+            <span className="text-slate-400 text-lg">—</span>
+          ) : loading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             value

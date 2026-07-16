@@ -291,7 +291,7 @@ export async function AppShell({
             // „In building" — VŠETCI (aj admin) vidia iba blanknuté disabled
             // políčko. Nedá sa klikať, žiadny hover state, žiadny link.
             const inBuilding =
-              tabId === "team" || tabId === "notifikacie";
+              tabId === "team" || tabId === "notifikacie" || tabId === "podklady";
             if (inBuilding) {
               return (
                 <span
