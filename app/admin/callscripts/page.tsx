@@ -50,14 +50,6 @@ export default async function AdminCallscriptsPage() {
                 ({scripts.length})
               </span>
             </h1>
-            <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-              Scenáre telefonátu pre obchodákov — každý má tagy (typ podlahy +
-              priestor), text + interaktívne otázky. Placeholder-y{" "}
-              <code className="bg-slate-100 px-1 rounded">{"{priezvisko}"}</code>{" "}
-              alebo{" "}
-              <code className="bg-slate-100 px-1 rounded">{"{plocha}"}</code>{" "}
-              sa automaticky nahrádzajú.
-            </p>
           </div>
           <Link
             href="/admin/callscripts/new"

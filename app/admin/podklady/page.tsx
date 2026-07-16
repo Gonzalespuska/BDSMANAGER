@@ -39,10 +39,6 @@ export default async function AdminPodkladyPage() {
           <BookOpen className="w-6 h-6 text-violet-500" aria-hidden />
           Podklady
         </h1>
-        <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-          Všetky materiály pre tím na jednom mieste — rozdeľujú sa podľa
-          kategórie a role.
-        </p>
       </header>
 
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -50,7 +46,6 @@ export default async function AdminPodkladyPage() {
           href="/admin/callscripts"
           title="Call scripty"
           count={callscriptsCount}
-          desc="Telefonáty pre obchodákov — placeholdery ({priezvisko}, {plocha}…), interaktívne otázky, uzavretie leadu."
           Icon={Phone}
           tint="sky"
         />
@@ -58,7 +53,6 @@ export default async function AdminPodkladyPage() {
           href="/admin/systems"
           title="Realizačné systémy — postup"
           count={systemsCount}
-          desc="Ako sa robí každý systém (264, 3000, TopStone…) — postup krokov + spotreba kg/m². Realizátor si to prečíta v Podkladoch a naučí sa všetky systémy."
           Icon={Hammer}
           tint="emerald"
         />
@@ -66,7 +60,6 @@ export default async function AdminPodkladyPage() {
           href="/admin/kontent"
           title="Kontent shotlist"
           count={kontentCount}
-          desc="Čo majú realizatori fotiť/nakrúcať pred/počas/po realizácii."
           Icon={Camera}
           tint="fuchsia"
         />
@@ -79,14 +72,12 @@ function SubTile({
   href,
   title,
   count,
-  desc,
   Icon,
   tint,
 }: {
   href: string;
   title: string;
   count: number;
-  desc: string;
   Icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   tint: "sky" | "emerald" | "fuchsia";
 }) {
@@ -110,9 +101,6 @@ function SubTile({
         <span className="text-xs font-black tabular-nums opacity-70">
           {count}
         </span>
-      </div>
-      <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1.5">
-        {desc}
       </div>
     </Link>
   );

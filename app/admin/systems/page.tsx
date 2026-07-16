@@ -69,13 +69,6 @@ export default async function SystemsAdminPage() {
           <h1 className="text-2xl font-black leading-tight">
             Realizačné systémy
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Definuj systémy (264, 1590, 3000, TopStopne METALIC…),
-            ich komponenty (primer, hlavná živica, lak) so spotrebou
-            v kg/m² a veľkosťou balenia. Podľa toho sa počíta inventúra
-            automaticky pri obhliadke. Tiež uprav postup krokov ktoré
-            realizator uvidí na stavbe.
-          </p>
         </div>
       </header>
 

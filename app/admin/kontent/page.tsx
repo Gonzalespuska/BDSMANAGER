@@ -45,11 +45,6 @@ export default async function KontentAdminPage() {
           <h1 className="text-2xl font-black leading-tight">
             Kontent shotlist
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Definuj čo majú realizatori fotiť/nakrúcať pred / počas / po
-            realizácii. Ich uploady dostane marketing tím pre Instagram
-            Stories, reels a denné príspevky.
-          </p>
         </div>
       </header>
 
