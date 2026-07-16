@@ -52,16 +52,21 @@ interface Activity {
 
 const ACTIVITY_LABELS: Record<string, string> = {
   created: "📝 Lead vytvorený",
-  phone_revealed: "👁️ Zobrazil číslo",
+  phone_revealed: "👁️ Odhalil číslo",
   call_attempted: "📞 Hovor pokus",
   call_answered: "✅ Zdvihla",
   call_missed: "📵 Nedvíha",
   status_changed: "🔄 Zmena statusu",
-  note_added: "💬 Poznámka",
+  note_added: "💬 Poznámka obchodáka",
   assigned: "👤 Pridelené",
+  lead_stolen: "🔄 Prevzatý od kolegu",
+  pool_pull_more: "➕ Pull-more z poolu",
+  field_updated: "✏️ Doplnené pole",
+  status_changed_manual: "🔄 Zmena statusu (manuálne)",
   scheduled_callback: "📅 Naplánovaný callback",
   sla_breached: "🔴 SLA breach",
   email_sent: "📧 Email odoslaný",
+  call_missed_sms_sent: "📱 SMS po nezdvíhaní",
 };
 
 /** "27.06.2026 o 14:23:05" — explicitné DD.MM.YYYY o HH:MM:SS */
@@ -127,9 +132,26 @@ export default async function LeadDetailPage({
   const lead = leadRes.data as Lead;
   const rawActivities = (activitiesRes.data ?? []) as Activity[];
 
-  // Batch fetch mien users pre všetky user_id v activities (single query)
+  // Batch fetch mien users pre všetky user_id v activities + synthetic
+  // events (phone_revealed_by, stolen_from, assigned_to).
+  const dataFields = lead.data as Record<string, string | number>;
+  const leadAny = lead as unknown as {
+    phone_revealed_at?: string | null;
+    phone_revealed_by?: string | null;
+    stolen_at?: string | null;
+    stolen_from?: string | null;
+    assigned_to?: string | null;
+    data?: Record<string, unknown> | null;
+  };
   const userIds = Array.from(
-    new Set(rawActivities.map((a) => a.user_id).filter(Boolean) as string[]),
+    new Set(
+      [
+        ...rawActivities.map((a) => a.user_id).filter(Boolean),
+        leadAny.phone_revealed_by,
+        leadAny.stolen_from,
+        leadAny.assigned_to,
+      ].filter(Boolean) as string[],
+    ),
   );
   const userMap = new Map<string, string>();
   if (userIds.length > 0) {
@@ -144,11 +166,95 @@ export default async function LeadDetailPage({
       userMap.set(uid, name || email);
     }
   }
-  const activities: Activity[] = rawActivities.map((a) => ({
-    ...a,
-    user_name: a.user_id ? userMap.get(a.user_id) ?? null : null,
-  }));
-  const dataFields = lead.data as Record<string, string | number>;
+
+  // Synthetic events z lead columns (historické záznamy pred aktivity logom).
+  // User 2026-07-16: „andrej kolar ho mal v cp poslana a poznamku v nom
+  // takze toto vsetko tam musi byt". Timeline musí ukázať aj:
+  //   - odhalenie čísla (phone_revealed_at)
+  //   - stolen (stolen_at + stolen_from)
+  //   - poznámku obchodáka (data.agent_note)
+  // Ak už tie eventy máme v lead_activities (pre novšie leady), synthetic
+  // sa vynechá (deduplikácia podľa typu).
+  const existingTypes = new Set(rawActivities.map((a) => a.type));
+  const synthetic: Activity[] = [];
+
+  if (leadAny.phone_revealed_at && !existingTypes.has("phone_revealed")) {
+    synthetic.push({
+      id: `synth-phone-${lead.id}`,
+      lead_id: lead.id,
+      user_id: leadAny.phone_revealed_by ?? null,
+      user_name: leadAny.phone_revealed_by
+        ? userMap.get(leadAny.phone_revealed_by) ?? null
+        : null,
+      type: "phone_revealed",
+      data: { synthetic: true },
+      created_at: leadAny.phone_revealed_at,
+    });
+  }
+
+  if (
+    leadAny.stolen_at &&
+    leadAny.stolen_from &&
+    !existingTypes.has("lead_stolen")
+  ) {
+    synthetic.push({
+      id: `synth-steal-${lead.id}`,
+      lead_id: lead.id,
+      user_id: leadAny.assigned_to ?? null,
+      user_name: leadAny.assigned_to
+        ? userMap.get(leadAny.assigned_to) ?? null
+        : null,
+      type: "lead_stolen",
+      data: {
+        synthetic: true,
+        from_name: leadAny.stolen_from
+          ? userMap.get(leadAny.stolen_from) ?? "?"
+          : "?",
+      },
+      created_at: leadAny.stolen_at,
+    });
+  }
+
+  // Agent note — časovo nemáme timestamp, použijeme last_activity_at ako
+  // best-guess. Ukazuje sa ako info riadok "poznámka obchodáka: …".
+  const agentNote = (leadAny.data as Record<string, unknown> | null | undefined)
+    ?.agent_note;
+  if (typeof agentNote === "string" && agentNote.trim().length > 0) {
+    synthetic.push({
+      id: `synth-note-${lead.id}`,
+      lead_id: lead.id,
+      user_id: leadAny.assigned_to ?? null,
+      user_name: leadAny.assigned_to
+        ? userMap.get(leadAny.assigned_to) ?? null
+        : null,
+      type: "note_added",
+      data: { note: agentNote.trim(), synthetic: true },
+      created_at:
+        (lead as unknown as { last_activity_at?: string })
+          .last_activity_at ?? lead.created_at,
+    });
+  }
+
+  // Aktuálne priradenie ako info (pre historický kontext).
+  if (leadAny.assigned_to && !existingTypes.has("assigned")) {
+    synthetic.push({
+      id: `synth-assign-${lead.id}`,
+      lead_id: lead.id,
+      user_id: leadAny.assigned_to,
+      user_name: userMap.get(leadAny.assigned_to) ?? null,
+      type: "assigned",
+      data: { synthetic: true },
+      created_at: lead.created_at,
+    });
+  }
+
+  const activities: Activity[] = [
+    ...rawActivities.map((a) => ({
+      ...a,
+      user_name: a.user_id ? userMap.get(a.user_id) ?? null : null,
+    })),
+    ...synthetic,
+  ].sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
 
   return (
     <div className="space-y-6">
@@ -394,6 +500,22 @@ export default async function LeadDetailPage({
                         <strong>{String(d.reminder_in_hours)}h</strong>
                       </>
                     )}
+                  </div>
+                );
+              } else if (act.type === "note_added") {
+                const note = String(d.note ?? "").trim();
+                if (note) {
+                  extra = (
+                    <div className="text-xs text-slate-700 mt-1 italic bg-amber-50 border border-amber-200 rounded p-2">
+                      „{note}"
+                    </div>
+                  );
+                }
+              } else if (act.type === "lead_stolen") {
+                const from = String(d.from_name ?? "?");
+                extra = (
+                  <div className="text-xs text-slate-600 mt-1">
+                    Prevzatý od <strong>{from}</strong>
                   </div>
                 );
               }
