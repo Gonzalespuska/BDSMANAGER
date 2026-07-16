@@ -590,7 +590,7 @@ function AddAgentModal({
                     setPhone(autoFormatPhoneWhileTyping(text));
                   }
                 }}
-                placeholder="+421 950 890 098 alebo 0950 890 098"
+                placeholder="0950 890 098"
               />
             </div>
 
