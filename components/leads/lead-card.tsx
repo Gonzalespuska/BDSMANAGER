@@ -174,7 +174,7 @@ export function LeadCard({
         `📵 ${lead.name || "Lead"} → Nezdvíhali${reminderHours ? ` (pripomienka o ${reminderHours}h)` : " (pripomienka o 4h)"}`,
         { href: "/agent?tab=nedovolany" },
       );
-      router.refresh();
+      router.push("/agent?tab=nedovolany");
     }
   }
 
@@ -196,7 +196,7 @@ export function LeadCard({
       toast.success(`📦 ${lead.name || "Lead"} → Archivované`, {
         href: "/agent?tab=archivovane",
       });
-      router.refresh();
+      router.push("/agent?tab=archivovane");
     }
   }
 
@@ -225,7 +225,7 @@ export function LeadCard({
       toast.success(`🗑 ${lead.name || "Lead"} → Kôš`, {
         href: "/agent?tab=kos",
       });
-      router.refresh();
+      router.push("/agent?tab=kos");
     }
   }
 
@@ -255,7 +255,7 @@ export function LeadCard({
       toast.success(`❌ ${lead.name || "Lead"} → Neexistujúce číslo (Kôš)`, {
         href: "/agent?tab=kos",
       });
-      router.refresh();
+      router.push("/agent?tab=kos");
     }
   }
 
@@ -270,10 +270,14 @@ export function LeadCard({
       setLeaving(false);
       toast.error(`Chyba: ${result.error}`);
     } else {
+      // User 2026-07-16: „ked zmenim stav napriklad na kontakt z noveho, tak
+      // nech ma hodi na ten stav dany priklad do kontakt ked hodim po
+      // telefonate tak som v kontakt a mozem pokracovat s nejakou akciou
+      // poslat mu cp".
       toast.success(`✅ ${lead.name || "Lead"} → Kontakt`, {
         href: "/agent?tab=kontakt",
       });
-      router.refresh();
+      router.push("/agent?tab=kontakt");
     }
   }
 

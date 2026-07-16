@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -98,6 +99,7 @@ export function LeadStatusPicker({
   /** Meno leadu — použije sa v toaste ("František Pavlík → NOVÉ"). */
   leadName?: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [current, setCurrent] = React.useState<LeadStatus>(status);
@@ -152,12 +154,17 @@ export function LeadStatusPicker({
         onChange?.(prev);
         toast.error(`Chyba: ${json.error ?? `HTTP ${r.status}`}`);
       } else {
-        // Toast: "František Pavlík → 🆕 NOVÉ" (klik ide na tab)
+        // Toast: "František Pavlík → 🆕 NOVÉ" + auto-jump do cieľového tabu
+        // User 2026-07-16: „ked zmenim stav napriklad na kontakt z noveho,
+        // tak nech ma hodi na ten stav dany priklad do kontakt ked hodim
+        // po telefonate tak som v kontakt a mozem pokracovat".
         const newMeta = STATUS_META[newStatus];
         const namePart = leadName?.trim() || "Lead";
         const tab = STATUS_TO_TAB[newStatus];
         const href = tab ? `/agent?tab=${tab}` : undefined;
         toast.success(`${namePart} → ${newMeta.label}`, { href });
+        if (href) router.push(href);
+        else router.refresh();
       }
     } catch (e) {
       setCurrent(prev);
