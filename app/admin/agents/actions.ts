@@ -195,9 +195,36 @@ export async function updateAgentAction(
     payout_percent?: number | null;
   },
 ): Promise<ActionResult> {
+  try {
+    return await updateAgentActionInternal(id, patch);
+  } catch (e) {
+    console.error("[updateAgentAction] unhandled:", e);
+    return {
+      ok: false,
+      error: `Server error: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+}
+
+async function updateAgentActionInternal(
+  id: string,
+  patchAny: unknown,
+): Promise<ActionResult> {
   const me = await requireAdmin();
   if (!me) return { ok: false, error: "forbidden" };
 
+  const patch = (patchAny ?? {}) as {
+    name?: string;
+    role?: "admin" | "obchod" | "obhliadky" | "realizacie" | "office" | "skolenie";
+    secondary_roles?: Array<
+      "admin" | "obchod" | "obhliadky" | "realizacie" | "office" | "skolenie"
+    >;
+    capacity?: number;
+    active?: boolean;
+    phone?: string | null;
+    home_city?: string | null;
+    payout_percent?: number | null;
+  };
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) {
     const n = patch.name.trim();
