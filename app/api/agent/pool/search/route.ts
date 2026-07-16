@@ -56,13 +56,20 @@ export async function GET(request: NextRequest) {
     ? "421" + digits.slice(1)
     : digits;
 
-  // Rôzne OR podmienky spájame v jedinom `.or()` query. Escapujeme
-  // percentá a čiarky (PostgREST .or() delimiter je čiarka).
+  // Diakritika-insensitive search cez generated columns name_norm/email_norm.
+  // User 2026-07-16: „nevyhladava to furt ako ma som admin chcem pozriet
+  // lead". ILIKE '%lukacko%' nenájde 'Lukačko' — Postgres nie je unaccent-friendly.
+  // Fix: name_norm = lower(unaccent(name)) generated column (migrácia).
   const escaped = q.replace(/[,%]/g, " ").trim();
+  const escapedNorm = escaped
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, ""); // strip client-side diacritics
   const orParts = [
-    `name.ilike.%${escaped}%`,
-    `email.ilike.%${escaped}%`,
-    // JSONB path: data->>lokalita (postgREST syntax)
+    `name_norm.ilike.%${escapedNorm}%`,
+    `email_norm.ilike.%${escapedNorm}%`,
+    // JSONB path: data->>lokalita (postgREST syntax) — bez diakritika-fix
+    // (lokalita tag typicky bez diakritika: "Presov" nie "Prešov")
     `data->>lokalita.ilike.%${escaped}%`,
   ];
   // Ak q obsahuje čísla (napr. "12" alebo "50"), pridaj match aj na

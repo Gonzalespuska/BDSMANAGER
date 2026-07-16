@@ -33,12 +33,16 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  // ilike pattern — case insensitive substring match. Postgres nezvládne
-  // diakritiku bez extension → aspoň lowercase pre email.
-  const q = raw.toLowerCase();
-  const like = `%${q}%`;
+  // Diakritika-insensitive cez generated columns name_norm/email_norm.
+  // Client-side normalize query (strip háčiky/dĺžne) + porovnaj s normalized DB.
+  const qNorm = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+  const likeNorm = `%${qNorm}%`;
+  const likeRaw = `%${raw}%`; // pre phone kde diakritika neexistuje
 
-  // 1) Leady — podľa mena / emailu / telefónu / lokality / poznámky
+  // 1) Leady — podľa mena / emailu / telefónu / lokality
   const { data: leadsRaw } = await admin
     .from("leads")
     .select(
@@ -46,9 +50,9 @@ export async function GET(request: NextRequest) {
     )
     .or(
       [
-        `name.ilike.${like}`,
-        `email.ilike.${like}`,
-        `phone.ilike.${like}`,
+        `name_norm.ilike.${likeNorm}`,
+        `email_norm.ilike.${likeNorm}`,
+        `phone.ilike.${likeRaw}`,
       ].join(","),
     )
     .order("last_activity_at", { ascending: false, nullsFirst: false })
@@ -94,12 +98,23 @@ export async function GET(request: NextRequest) {
         : null,
   }));
 
-  // 2) Users — obchodáci / admini
-  const { data: usersRaw } = await admin
+  // 2) Users — obchodáci / admini (users tabuľka nemá name_norm zatiaľ,
+  // ilike + normalize JS-side na výsledky. Fallback: substring bez diakritika.)
+  const { data: usersAll } = await admin
     .from("users")
     .select("id, name, email, role, active, capacity")
-    .or([`name.ilike.${like}`, `email.ilike.${like}`].join(","))
-    .limit(15);
+    .limit(200);
+  const usersRaw = (usersAll ?? []).filter((u) => {
+    const nameN = (((u as { name: string | null }).name) ?? "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "");
+    const emailN = (u as { email: string }).email
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "");
+    return nameN.includes(qNorm) || emailN.includes(qNorm);
+  }).slice(0, 15);
 
   const users = (usersRaw ?? []).map((u) => ({
     id: (u as { id: string }).id,
