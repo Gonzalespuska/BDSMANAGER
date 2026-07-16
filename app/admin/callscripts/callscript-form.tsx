@@ -265,15 +265,6 @@ export function CallscriptForm({ initial }: { initial: Script }) {
               ))}
             </select>
           </label>
-          <label className="block">
-            <span className="text-[11px] font-black uppercase text-slate-600">Sort order</span>
-            <input
-              type="number"
-              value={form.sort_order}
-              onChange={(e) => patch("sort_order", Number(e.target.value))}
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5 mt-1 text-sm"
-            />
-          </label>
           <label className="flex items-center gap-2 mt-6">
             <input
               type="checkbox"
@@ -488,40 +479,6 @@ export function CallscriptForm({ initial }: { initial: Script }) {
           </div>
         </div>
 
-        {/* Preview data — nastavovanie mock leadu */}
-        <details className="rounded-lg border border-slate-200 bg-slate-50 text-xs">
-          <summary className="cursor-pointer px-3 py-2 font-black text-slate-700 select-none">
-            🧪 Testovací lead pre preview
-          </summary>
-          <div className="p-3 pt-1 space-y-2">
-            <label className="block">
-              <span className="text-[10px] font-bold uppercase text-slate-500">Meno + priezvisko</span>
-              <input
-                value={previewCtx.leadName ?? ""}
-                onChange={(e) => setPreviewCtx({ ...previewCtx, leadName: e.target.value })}
-                className="w-full rounded border border-slate-300 px-2 py-1 mt-0.5 text-sm"
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className="text-[10px] font-bold uppercase text-slate-500">Plocha m²</span>
-                <input
-                  value={previewCtx.plocha ?? ""}
-                  onChange={(e) => setPreviewCtx({ ...previewCtx, plocha: e.target.value })}
-                  className="w-full rounded border border-slate-300 px-2 py-1 mt-0.5 text-sm"
-                />
-              </label>
-              <label className="block">
-                <span className="text-[10px] font-bold uppercase text-slate-500">Lokalita</span>
-                <input
-                  value={previewCtx.lokalita ?? ""}
-                  onChange={(e) => setPreviewCtx({ ...previewCtx, lokalita: e.target.value })}
-                  className="w-full rounded border border-slate-300 px-2 py-1 mt-0.5 text-sm"
-                />
-              </label>
-            </div>
-          </div>
-        </details>
       </div>
       </div>{/* end grid */}
     </div>
