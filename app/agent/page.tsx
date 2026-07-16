@@ -6,6 +6,7 @@ import { AgentLiveWrapper } from "@/components/agent-live-wrapper";
 import { LeadCard } from "@/components/leads/lead-card";
 import { NewLeadButton } from "@/components/leads/new-lead-modal";
 import { LeadsSearch } from "@/components/leads/leads-search";
+import { PullMoreButton } from "@/components/leads/pull-more-button";
 import type { Lead } from "@/lib/types/lead";
 import { cn } from "@/lib/utils";
 
@@ -384,6 +385,12 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <LeadsSearch />
+          {/* Pull-more: obchod si stiahne 5 nedotknutých leadov z poolu.
+              User 2026-07-16: „ked obchodakovi dojdu nove leady... stlaci
+              to a prida mu to 5 leadov z poolu... zobere kazdemu obchodakovi 1". */}
+          {(user.role === "obchod" || user.role === "admin") && (
+            <PullMoreButton count={5} />
+          )}
           <NewLeadButton />
         </div>
       </header>
