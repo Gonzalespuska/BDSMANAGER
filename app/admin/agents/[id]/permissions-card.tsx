@@ -15,10 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import {
-  deleteAgentAction,
-  updateAgentAction,
-} from "@/app/admin/agents/actions";
+import { deleteAgentAction } from "@/app/admin/agents/actions";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -114,36 +111,70 @@ export function PermissionsCard({
   async function applyRole(next: UserRole) {
     setBusy(true);
     setError(null);
-    const res = await updateAgentAction(agentId, { role: next });
-    setBusy(false);
-    setPendingRole(null);
-    if (!res.ok) {
-      setError(res.error);
-      toast.error(`Chyba: ${res.error}`);
-    } else {
-      toast.success(`✅ Rola zmenená na „${labelOf(next)}"`);
-      setTimeout(() => window.location.reload(), 900);
+    try {
+      const r = await fetch("/api/admin/agent-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: agentId, role: next }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      setBusy(false);
+      setPendingRole(null);
+      if (!r.ok || !j.ok) {
+        const err = j.error ?? `HTTP ${r.status}`;
+        setError(err);
+        toast.error(`Chyba: ${err}`);
+      } else {
+        toast.success(`✅ Rola zmenená na „${labelOf(next)}"`);
+        setTimeout(() => window.location.reload(), 900);
+      }
+    } catch (e) {
+      setBusy(false);
+      setPendingRole(null);
+      const msg = e instanceof Error ? e.message : "network";
+      setError(msg);
+      toast.error(`Chyba: ${msg}`);
     }
   }
 
   async function saveSecondary() {
     setBusy(true);
     setError(null);
-    const list = Array.from(secondary).filter((r) => r !== role);
-    const res = await updateAgentAction(agentId, {
-      secondary_roles: list,
+    const list: string[] = [];
+    secondary.forEach((r) => {
+      if (r !== role) list.push(r);
     });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      toast.error(`Chyba: ${res.error}`);
-    } else {
-      toast.success(
-        list.length === 0
-          ? "✅ Sekundárne role vymazané"
-          : `✅ Sekundárne role uložené (${list.length})`,
-      );
-      setTimeout(() => window.location.reload(), 900);
+    try {
+      const r = await fetch("/api/admin/agent-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: agentId, secondary_roles: list }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      setBusy(false);
+      if (!r.ok || !j.ok) {
+        const err = j.error ?? `HTTP ${r.status}`;
+        setError(err);
+        toast.error(`Chyba: ${err}`);
+      } else {
+        toast.success(
+          list.length === 0
+            ? "✅ Sekundárne role vymazané"
+            : `✅ Sekundárne role uložené (${list.length})`,
+        );
+        setTimeout(() => window.location.reload(), 900);
+      }
+    } catch (e) {
+      setBusy(false);
+      const msg = e instanceof Error ? e.message : "network";
+      setError(msg);
+      toast.error(`Chyba: ${msg}`);
     }
   }
 

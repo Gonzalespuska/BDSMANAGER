@@ -4,7 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Check, Pencil, X } from "lucide-react";
 
-import { updateAgentAction } from "@/app/admin/agents/actions";
 import { toast } from "@/components/ui/toast";
 
 /**
@@ -37,19 +36,32 @@ export function AgentNameEditor({
     }
     setBusy(true);
     setError(null);
-    const res = await updateAgentAction(agentId, { name: trimmed });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      toast.error(`Chyba: ${res.error}`);
-      return;
+    try {
+      const r = await fetch("/api/admin/agent-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: agentId, name: trimmed }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      setBusy(false);
+      if (!r.ok || !j.ok) {
+        setError(j.error ?? `HTTP ${r.status}`);
+        toast.error(`Chyba: ${j.error ?? `HTTP ${r.status}`}`);
+        return;
+      }
+      setSaved(trimmed);
+      setEditing(false);
+      toast.success(`✅ Meno zmenené na „${trimmed}"`);
+      setTimeout(() => window.location.reload(), 900);
+    } catch (e) {
+      setBusy(false);
+      const msg = e instanceof Error ? e.message : "network";
+      setError(msg);
+      toast.error(`Chyba: ${msg}`);
     }
-    setSaved(trimmed);
-    setEditing(false);
-    toast.success(`✅ Meno zmenené na „${trimmed}"`);
-    // Delay pred reload — bez neho zabije JS kontext skôr než sa toast
-    // stihne vykresliť. User 2026-07-16 → „no notification".
-    setTimeout(() => window.location.reload(), 900);
   }
 
   if (editing) {

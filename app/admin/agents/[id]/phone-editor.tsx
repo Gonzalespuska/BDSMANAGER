@@ -4,7 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Check, Phone, X } from "lucide-react";
 
-import { updateAgentAction } from "@/app/admin/agents/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
@@ -39,24 +38,33 @@ export function PhoneEditor({
     }
     setBusy(true);
     setError(null);
-    // Normalizuj na +421 950 890 098 format PRED uložením — jednotný tvar
-    // v celom CRM + email footeroch. User 2026-07-16: „telefonne cislo
-    // nech tam je rovnake pravidlo ako sme sa bavili v tom formate
-    // +421 950 890 a nech to takto ukazuje vsade aj do footerov mailov".
     const normalized = trimmed ? formatPhoneIntl(trimmed) : null;
-    const res = await updateAgentAction(agentId, {
-      phone: normalized,
-    });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      toast.error(`Chyba: ${res.error}`);
-      return;
+    try {
+      const r = await fetch("/api/admin/agent-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: agentId, phone: normalized }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      setBusy(false);
+      if (!r.ok || !j.ok) {
+        setError(j.error ?? `HTTP ${r.status}`);
+        toast.error(`Chyba: ${j.error ?? `HTTP ${r.status}`}`);
+        return;
+      }
+      setSavedPhone(normalized ?? "");
+      setEditing(false);
+      toast.success(`✅ Telefón uložený: ${normalized || "(prázdny)"}`);
+      setTimeout(() => window.location.reload(), 900);
+    } catch (e) {
+      setBusy(false);
+      const msg = e instanceof Error ? e.message : "network";
+      setError(msg);
+      toast.error(`Chyba: ${msg}`);
     }
-    setSavedPhone(normalized ?? "");
-    setEditing(false);
-    toast.success(`✅ Telefón uložený: ${normalized || "(prázdny)"}`);
-    setTimeout(() => window.location.reload(), 900);
   }
 
   return (
