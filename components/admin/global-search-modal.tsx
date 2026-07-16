@@ -321,12 +321,12 @@ export function GlobalSearchTrigger() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 h-9 px-3 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-xs font-black transition-colors"
-        title="Globálne hľadanie (Cmd+K)"
+        className="inline-flex items-center gap-2 h-9 px-3 rounded-full bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/30 dark:hover:bg-sky-900/40 border border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-200 text-xs font-black transition-colors"
+        title="Hľadať leady + tím (Cmd+K)"
       >
         <Search className="w-3.5 h-3.5" />
-        <span>Hľadať kdekoľvek</span>
-        <span className="hidden sm:inline text-[10px] font-mono bg-white border border-sky-200 px-1.5 py-0.5 rounded">
+        <span>Hľadať</span>
+        <span className="hidden sm:inline text-[10px] font-mono bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 px-1.5 py-0.5 rounded">
           ⌘K
         </span>
       </button>

@@ -249,19 +249,19 @@ export async function AppShell({
 
           <div className="flex items-center gap-1.5 md:gap-3">
             {isRealAdmin && <RoleViewDropdown currentViewAs={currentViewAs} />}
-            {/* Admin — globálne hľadanie (leady akéhokoľvek stavu + tím).
-                User 2026-07-16: „admin musi vediet vyhladat cokolvek ci uz
-                lead alebo agenta alebo cokolvek". Cmd+K skratka. */}
-            {user.role === "admin" && <GlobalSearchTrigger />}
-            {/* Pool search — všetky rolí okrem office/skolenie.
-                Dropdown modes + akcie sa dynamicky menia podľa role
-                viewera (user 2026-07-15). Pre adminov ostáva pool search
-                pre rýchle prevzatie z poolu (nie search kdekoľvek). */}
-            {(user.role === "obchod" ||
-              user.role === "obhliadky" ||
-              user.role === "realizacie" ||
-              user.role === "admin") && (
-              <PoolSearchDrawer viewerRole={user.role} />
+            {/* Search — Admin má JEDEN chip „Hľadať" (globálny cez leady
+                všetkých stavov + tím). Ostatné role majú pool search chip
+                (užšia funkcia: iba nedotknuté leady z poolu na prevzatie).
+                User 2026-07-16: „admin nech nema hladat v poole aj hladat
+                kdekolvek + nech sa to nevola hladat kdekolvek". */}
+            {user.role === "admin" ? (
+              <GlobalSearchTrigger />
+            ) : (
+              (user.role === "obchod" ||
+                user.role === "obhliadky" ||
+                user.role === "realizacie") && (
+                <PoolSearchDrawer viewerRole={user.role} />
+              )
             )}
             {/* Realizator nemá notifikácie — pracuje na stavbe, netreba mu je. */}
             {user.role !== "realizacie" && (

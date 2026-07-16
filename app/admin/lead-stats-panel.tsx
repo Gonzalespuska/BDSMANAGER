@@ -62,15 +62,15 @@ export function LeadStatsPanel() {
 
       <Link
         href="/admin/leads"
-        className="group block rounded-2xl border-2 border-emerald-300 bg-emerald-50/40 hover:border-emerald-500 hover:bg-emerald-50/70 transition-all p-5 shadow-sm"
+        className="group block rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/40 dark:bg-emerald-950/20 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/70 dark:hover:bg-emerald-950/30 transition-all p-5 shadow-sm"
       >
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-wider font-black text-emerald-700 inline-flex items-center gap-1">
+            <div className="text-[10px] uppercase tracking-wider font-black text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1">
               Leady celkovo · {windowLabel}
               <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-            <div className="mt-1 text-5xl font-black tabular-nums text-emerald-900">
+            <div className="mt-1 text-5xl font-black tabular-nums text-emerald-900 dark:text-emerald-100">
               {loading ? (
                 <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
               ) : (
@@ -78,7 +78,7 @@ export function LeadStatsPanel() {
               )}
             </div>
           </div>
-          <div className="rounded-xl bg-emerald-100 text-emerald-600 p-3" aria-hidden>
+          <div className="rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 p-3" aria-hidden>
             <TrendingUp className="w-8 h-8" />
           </div>
         </div>
@@ -172,23 +172,23 @@ function Breakdown({
   inBuild?: boolean;
 }) {
   const cls = inBuild
-    ? "border-slate-200 bg-slate-50 text-slate-400"
+    ? "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-slate-400"
     : tint === "indigo"
-      ? "border-indigo-200 bg-white text-indigo-900"
+      ? "border-indigo-200 dark:border-indigo-800 bg-white dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-100"
       : tint === "sky"
-        ? "border-sky-200 bg-white text-sky-900"
+        ? "border-sky-200 dark:border-sky-800 bg-white dark:bg-sky-950/30 text-sky-900 dark:text-sky-100"
         : tint === "amber"
-          ? "border-amber-200 bg-white text-amber-900"
-          : "border-rose-200 bg-white text-rose-900";
+          ? "border-amber-200 dark:border-amber-800 bg-white dark:bg-amber-950/30 text-amber-900 dark:text-amber-100"
+          : "border-rose-200 dark:border-rose-800 bg-white dark:bg-rose-950/30 text-rose-900 dark:text-rose-100";
   const iconCls = inBuild
     ? "text-slate-400"
     : tint === "indigo"
-      ? "text-indigo-500"
+      ? "text-indigo-500 dark:text-indigo-400"
       : tint === "sky"
-        ? "text-sky-500"
+        ? "text-sky-500 dark:text-sky-400"
         : tint === "amber"
-          ? "text-amber-500"
-          : "text-rose-500";
+          ? "text-amber-500 dark:text-amber-400"
+          : "text-rose-500 dark:text-rose-400";
   return (
     <div
       className={
