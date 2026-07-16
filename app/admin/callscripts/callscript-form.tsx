@@ -49,8 +49,8 @@ type Script = {
 };
 
 const TARGET_ROLES: Array<{ value: TargetRole; label: string }> = [
-  { value: "obchod", label: "📞 Obchod (telefonát obchodáka)" },
-  { value: "obhliadky", label: "🔍 Obhliadka (postup obhliadkára u klienta)" },
+  { value: "obchod", label: "📞 Obchod" },
+  { value: "obhliadky", label: "🔍 Obhliadka" },
 ];
 
 const FLOOR_TYPES = [

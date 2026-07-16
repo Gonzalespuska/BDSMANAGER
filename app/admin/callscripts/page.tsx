@@ -114,7 +114,7 @@ export default async function AdminCallscriptsPage({
           href="/admin/callscripts?role=obchod"
           active={activeRole === "obchod"}
           Icon={Phone}
-          label="Obchod (telefonát)"
+          label="Obchod"
           count={counts.obchod}
           activeCls="border-rose-500 text-rose-700"
         />
@@ -122,7 +122,7 @@ export default async function AdminCallscriptsPage({
           href="/admin/callscripts?role=obhliadky"
           active={activeRole === "obhliadky"}
           Icon={Search}
-          label="Obhliadka (u klienta)"
+          label="Obhliadka"
           count={counts.obhliadky}
           activeCls="border-violet-500 text-violet-700"
         />
