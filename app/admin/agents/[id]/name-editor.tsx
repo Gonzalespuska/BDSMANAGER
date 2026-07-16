@@ -47,9 +47,9 @@ export function AgentNameEditor({
     setSaved(trimmed);
     setEditing(false);
     toast.success(`✅ Meno zmenené na „${trimmed}"`);
-    // Hard nav — router.refresh() občas nechá stale header/sidebar cache.
-    // User 2026-07-16: „dam zmenit meno confirmnem nic, ziadna noti".
-    window.location.reload();
+    // Delay pred reload — bez neho zabije JS kontext skôr než sa toast
+    // stihne vykresliť. User 2026-07-16 → „no notification".
+    setTimeout(() => window.location.reload(), 900);
   }
 
   if (editing) {

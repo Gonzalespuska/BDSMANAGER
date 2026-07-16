@@ -56,7 +56,7 @@ export function PhoneEditor({
     setSavedPhone(normalized ?? "");
     setEditing(false);
     toast.success(`✅ Telefón uložený: ${normalized || "(prázdny)"}`);
-    window.location.reload();
+    setTimeout(() => window.location.reload(), 900);
   }
 
   return (

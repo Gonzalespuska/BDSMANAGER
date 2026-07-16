@@ -122,7 +122,7 @@ export function PermissionsCard({
       toast.error(`Chyba: ${res.error}`);
     } else {
       toast.success(`✅ Rola zmenená na „${labelOf(next)}"`);
-      window.location.reload();
+      setTimeout(() => window.location.reload(), 900);
     }
   }
 
@@ -143,7 +143,7 @@ export function PermissionsCard({
           ? "✅ Sekundárne role vymazané"
           : `✅ Sekundárne role uložené (${list.length})`,
       );
-      window.location.reload();
+      setTimeout(() => window.location.reload(), 900);
     }
   }
 

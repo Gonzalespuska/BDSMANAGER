@@ -108,9 +108,10 @@ export function AgentsTable({ initial }: { initial: AgentListRow[] }) {
                 key={a.id}
                 agent={a}
                 onChanged={() => {
-                  // Hard nav — router.refresh() občas nechá stale server-render
-                  // (RSC cache). Reload zaručene načíta nový stav.
-                  window.location.href = "/admin/agents";
+                  // Delay pred hard nav aby toast stihol vykresliť.
+                  setTimeout(() => {
+                    window.location.href = "/admin/agents";
+                  }, 900);
                 }}
               />
             ))}
@@ -130,8 +131,10 @@ export function AgentsTable({ initial }: { initial: AgentListRow[] }) {
           onClose={() => setAddOpen(false)}
           onCreated={() => {
             setAddOpen(false);
-            // Hard nav — po vytvorení chceme aby sa v tíme okamžite objavil.
-            window.location.href = "/admin/agents";
+            // Delay pred hard nav — toast stihne vykresliť.
+            setTimeout(() => {
+              window.location.href = "/admin/agents";
+            }, 900);
           }}
         />
       )}
