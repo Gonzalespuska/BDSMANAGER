@@ -20,6 +20,7 @@ import {
   updateAgentAction,
 } from "@/app/admin/agents/actions";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 /**
@@ -118,12 +119,8 @@ export function PermissionsCard({
     setPendingRole(null);
     if (!res.ok) {
       setError(res.error);
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { toast } = require("@/components/ui/toast");
       toast.error(`Chyba: ${res.error}`);
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { toast } = require("@/components/ui/toast");
       toast.success(`✅ Rola zmenená na „${labelOf(next)}"`);
       window.location.reload();
     }
@@ -137,8 +134,6 @@ export function PermissionsCard({
       secondary_roles: list,
     });
     setBusy(false);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { toast } = require("@/components/ui/toast");
     if (!res.ok) {
       setError(res.error);
       toast.error(`Chyba: ${res.error}`);
