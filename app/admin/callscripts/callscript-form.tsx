@@ -165,9 +165,11 @@ export function CallscriptForm({ initial }: { initial: Script }) {
     const j = await r.json();
     setSaving(false);
     if (!j.ok) return toast.error(`Chyba: ${j.error}`);
-    toast.success(isEdit ? "Uložené" : "Vytvorené");
-    router.push("/admin/callscripts");
-    router.refresh();
+    toast.success(isEdit ? "✅ Uložené" : "✅ Vytvorené");
+    setTimeout(() => {
+      router.push("/admin/callscripts");
+      router.refresh();
+    }, 900);
   }
 
   function insertPlaceholder(field: "body" | "prompt", tag: string, stepIdx?: number) {

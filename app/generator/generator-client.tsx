@@ -866,7 +866,7 @@ ${signatureLines.join("\n")}`;
       setEditOpen(false);
       setEditPayload(null);
       toast.success(`✉️ CP odoslaná zákazníkovi na ${recipient}`);
-      router.push("/agent?tab=kontakt");
+      setTimeout(() => router.push("/agent?tab=kontakt"), 900);
     } catch (e) {
       alert(`Chyba: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
@@ -1070,7 +1070,7 @@ ${signatureLines.join("\n")}`;
         : "/agent?tab=kontakt";
       setTimeout(() => {
         window.location.href = backTo; // hard nav — no-cache middleware fetches fresh
-      }, 500);
+      }, 900);
       return;
     } catch (e) {
       toast.error(

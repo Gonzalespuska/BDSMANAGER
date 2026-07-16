@@ -90,7 +90,7 @@ export function LeadAdminControls({
         toast.success(`🗑 ${leadName} natrvalo zmazaný z DB.`);
       }
       setOpen(false);
-      router.refresh();
+      setTimeout(() => router.refresh(), 900);
     } catch (e) {
       toast.error(
         `Sieťová chyba: ${e instanceof Error ? e.message : "unknown"}`,

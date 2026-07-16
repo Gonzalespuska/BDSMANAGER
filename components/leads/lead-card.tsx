@@ -174,7 +174,7 @@ export function LeadCard({
         `📵 ${lead.name || "Lead"} → Nezdvíhali${reminderHours ? ` (pripomienka o ${reminderHours}h)` : " (pripomienka o 4h)"}`,
         { href: "/agent?tab=nedovolany" },
       );
-      window.location.href = "/agent?tab=nedovolany";
+      setTimeout(() => { window.location.href = "/agent?tab=nedovolany"; }, 900);
     }
   }
 
@@ -196,7 +196,7 @@ export function LeadCard({
       toast.success(`📦 ${lead.name || "Lead"} → Archivované`, {
         href: "/agent?tab=archivovane",
       });
-      window.location.href = "/agent?tab=archivovane";
+      setTimeout(() => { window.location.href = "/agent?tab=archivovane"; }, 900);
     }
   }
 
@@ -225,7 +225,7 @@ export function LeadCard({
       toast.success(`🗑 ${lead.name || "Lead"} → Kôš`, {
         href: "/agent?tab=kos",
       });
-      window.location.href = "/agent?tab=kos";
+      setTimeout(() => { window.location.href = "/agent?tab=kos"; }, 900);
     }
   }
 
@@ -255,7 +255,7 @@ export function LeadCard({
       toast.success(`❌ ${lead.name || "Lead"} → Neexistujúce číslo (Kôš)`, {
         href: "/agent?tab=kos",
       });
-      window.location.href = "/agent?tab=kos";
+      setTimeout(() => { window.location.href = "/agent?tab=kos"; }, 900);
     }
   }
 
@@ -277,7 +277,7 @@ export function LeadCard({
       toast.success(`✅ ${lead.name || "Lead"} → Kontakt`, {
         href: "/agent?tab=kontakt",
       });
-      window.location.href = "/agent?tab=kontakt";
+      setTimeout(() => { window.location.href = "/agent?tab=kontakt"; }, 900);
     }
   }
 

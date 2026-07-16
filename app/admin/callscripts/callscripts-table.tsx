@@ -52,8 +52,8 @@ export function CallscriptsTable({ initial }: { initial: Script[] }) {
     setBusy(null);
     if (!j.ok) return toast.error(`Chyba: ${j.error}`);
     setScripts((prev) => prev.filter((x) => x.id !== s.id));
-    toast.success("Zmazaný");
-    router.refresh();
+    toast.success("🗑 Zmazaný");
+    setTimeout(() => router.refresh(), 900);
   }
 
   async function duplicate(s: Script) {
@@ -76,8 +76,8 @@ export function CallscriptsTable({ initial }: { initial: Script[] }) {
     setBusy(null);
     if (!j.ok) return toast.error(`Chyba: ${j.error}`);
     setScripts((prev) => [...prev, j.script]);
-    toast.success("Duplikát vytvorený");
-    router.refresh();
+    toast.success("✅ Duplikát vytvorený");
+    setTimeout(() => router.refresh(), 900);
   }
 
   if (scripts.length === 0) {

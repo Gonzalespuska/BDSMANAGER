@@ -64,8 +64,7 @@ export function PullMoreButton({
       toast.success(
         `✓ Získané ${j.transferred} leadov${detail ? ` (${detail})` : ""}. Refresh…`,
       );
-      // Refresh server data — nové leady sa objavia v tabe „Nové".
-      router.refresh();
+      setTimeout(() => router.refresh(), 900);
     } catch (e) {
       toast.error(
         `Sieťová chyba: ${e instanceof Error ? e.message : "unknown"}`,

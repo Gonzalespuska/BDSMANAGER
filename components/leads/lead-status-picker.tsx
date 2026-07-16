@@ -170,7 +170,9 @@ export function LeadStatusPicker({
         // User 2026-07-16: „musel som refresh aby som ho videl v tom stave
         // v ktorom som chcel". Hard nav = žiadny refresh nutný.
         if (tab && typeof window !== "undefined") {
-          window.location.href = `/agent?tab=${tab}`;
+          setTimeout(() => {
+            window.location.href = `/agent?tab=${tab}`;
+          }, 900);
         } else {
           router.refresh();
         }
