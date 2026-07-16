@@ -229,14 +229,14 @@ export async function AppShell({
         <header className="border-b bg-background">
         {/* Header — kompaktnejší na mobile (menšia logika + hidden CRM subtitle). */}
         <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-3 sm:px-6 py-2 md:py-4 flex items-center justify-between gap-2 md:gap-3">
-          {/* Macko + názov — Link je vnútri MackoLogo (klik = refresh
-              animácia), názov vpravo je bez Linku aby sa animácia
-              nespúšťala pri hover na texte. */}
-          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+          {/* Macko + názov — na mobile iba macko (text by tlačil header),
+              text „Epoxidovo Manager" sa objaví od sm breakpointu.
+              User 2026-07-16: responsive header bug — text prekrýval search chip. */}
+          <div className="flex items-center gap-2 md:gap-3 min-w-0 shrink-0">
             <MackoLogo homeHref={homeHref} />
             <Link
               href={homeHref}
-              className="hover:opacity-80 transition-opacity min-w-0"
+              className="hidden sm:block hover:opacity-80 transition-opacity min-w-0"
             >
               <div className="text-lg md:text-3xl font-extrabold tracking-tight leading-none whitespace-nowrap">
                 Epoxidovo<span className="text-sky-500"> Manager</span>
