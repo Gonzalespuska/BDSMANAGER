@@ -283,6 +283,58 @@ export function ProfileMenu({
             </a>
           )}
 
+          {/* Self-pause / obnoviť príjem — nie pre admina + realizátora.
+              User 2026-07-16: „neni tam ta pause option ze ked sa pauznem
+              vsetko prechadza na inych obchodakov alebo realizartorov". */}
+          {realRole !== "admin" && realRole !== "realizacie" && (
+            <button
+              type="button"
+              onClick={async () => {
+                const willPause = !paused;
+                if (
+                  willPause &&
+                  !window.confirm(
+                    "Pauznúť príjem nových leadov?\n\n" +
+                      "• Prestaneš dostávať nové leady z automatického rozdelenia.\n" +
+                      "• Tvoje netknuté leady sa presunú aktívnym kolegom.\n" +
+                      "• Kedykoľvek si obnov príjem klikom „▶ Obnoviť príjem".",
+                  )
+                )
+                  return;
+                try {
+                  const r = await fetch("/api/agent/pause", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ paused: willPause }),
+                  });
+                  const j = (await r.json().catch(() => ({}))) as {
+                    ok?: boolean;
+                    error?: string;
+                  };
+                  if (!r.ok || !j.ok) {
+                    alert(`Chyba: ${j.error ?? "unknown"}`);
+                    return;
+                  }
+                  window.location.reload();
+                } catch (e) {
+                  alert(
+                    `Sieťová chyba: ${e instanceof Error ? e.message : "unknown"}`,
+                  );
+                }
+              }}
+              className={
+                "w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold inline-flex items-center gap-2.5 " +
+                (paused
+                  ? "hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400"
+                  : "hover:bg-amber-50 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400")
+              }
+              role="menuitem"
+            >
+              <Pause className="w-4 h-4" aria-hidden />
+              {paused ? "▶ Obnoviť príjem leadov" : "⏸ Pauznúť príjem leadov"}
+            </button>
+          )}
+
           {/* Sign out */}
           <form action={signOutAction}>
             <button

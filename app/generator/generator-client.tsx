@@ -1539,18 +1539,34 @@ ${signatureLines.join("\n")}`;
             to tak nie varitant a nech tam je ze pridat dalsiu CP". */}
         {savedCps.length > 0 && (
           <div className="mt-2 rounded-xl border-2 border-violet-400 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="text-[10px] uppercase tracking-wider font-black text-violet-700">
                 📎 Pripravené CP-ky ({savedCps.length})
               </div>
-              <button
-                type="button"
-                onClick={() => setSavedCps([])}
-                className="text-[10px] font-bold text-violet-700 hover:text-violet-900 underline"
-                title="Zrušiť všetky uložené CP-ky"
-              >
-                × vymazať všetky
-              </button>
+              <div className="flex items-center gap-3">
+                {/* User 2026-07-16: „ked kliknem pridat 2. cp a nejako
+                    si to rozmyslim a uz ju nechcem pridat, tak teraz musim
+                    urobit dokoncit 2.cp a potom ju zrusit, nemam moznost
+                    ist spat". */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSavedCps((prev) => prev.slice(0, -1))
+                  }
+                  className="text-[11px] font-black text-amber-700 hover:text-amber-900 underline"
+                  title="Odstrániť poslednú pridanú CP zo zoznamu"
+                >
+                  ↶ Vrátiť poslednú
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSavedCps([])}
+                  className="text-[10px] font-bold text-violet-700 hover:text-rose-700 underline"
+                  title="Zrušiť všetky uložené CP-ky"
+                >
+                  × vymazať všetky
+                </button>
+              </div>
             </div>
             <ul className="space-y-1">
               {savedCps.map((s, i) => (
@@ -1574,10 +1590,11 @@ ${signatureLines.join("\n")}`;
                     onClick={() =>
                       setSavedCps((prev) => prev.filter((_, idx) => idx !== i))
                     }
-                    className="shrink-0 text-[10px] font-bold text-violet-700 hover:text-rose-700"
-                    title="Odstrániť túto CP"
+                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-rose-100 hover:bg-rose-600 text-rose-700 hover:text-white text-sm font-black transition-colors"
+                    title="Odstrániť túto CP zo zoznamu"
+                    aria-label="Odstrániť CP"
                   >
-                    ×
+                    ✕
                   </button>
                 </li>
               ))}
