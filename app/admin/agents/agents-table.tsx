@@ -230,7 +230,7 @@ function AgentRow({
     if (!ok) return;
     setBusy(true);
     setError(null);
-    let ok = false;
+    let success = false;
     let errMsg = "";
     try {
       const r = await fetch("/api/admin/agent-update", {
@@ -242,13 +242,13 @@ function AgentRow({
         ok?: boolean;
         error?: string;
       };
-      ok = !!(r.ok && j.ok);
+      success = !!(r.ok && j.ok);
       errMsg = j.error ?? `HTTP ${r.status}`;
     } catch (e) {
       errMsg = e instanceof Error ? e.message : "network";
     }
     setBusy(false);
-    if (!ok) {
+    if (!success) {
       setError(errMsg);
       toast.error(`Chyba: ${errMsg}`);
     } else {
