@@ -28,6 +28,7 @@ import { NotificationsBell } from "./notifications-bell";
 import { ImpersonationBanner } from "./impersonation-banner";
 import { ReassignRequestsBar } from "./reassign-requests-bar";
 import { PoolSearchDrawer } from "./pool-search-drawer";
+import { GlobalSearchTrigger } from "./admin/global-search-modal";
 import { VacationApprovalsBar } from "./vacation-approvals-bar";
 import { Toaster } from "./ui/toast";
 import { RoleViewDropdown } from "./role-view-dropdown";
@@ -240,9 +241,14 @@ export async function AppShell({
 
           <div className="flex items-center gap-1.5 md:gap-3">
             {isRealAdmin && <RoleViewDropdown currentViewAs={currentViewAs} />}
+            {/* Admin — globálne hľadanie (leady akéhokoľvek stavu + tím).
+                User 2026-07-16: „admin musi vediet vyhladat cokolvek ci uz
+                lead alebo agenta alebo cokolvek". Cmd+K skratka. */}
+            {user.role === "admin" && <GlobalSearchTrigger />}
             {/* Pool search — všetky rolí okrem office/skolenie.
                 Dropdown modes + akcie sa dynamicky menia podľa role
-                viewera (user 2026-07-15). */}
+                viewera (user 2026-07-15). Pre adminov ostáva pool search
+                pre rýchle prevzatie z poolu (nie search kdekoľvek). */}
             {(user.role === "obchod" ||
               user.role === "obhliadky" ||
               user.role === "realizacie" ||

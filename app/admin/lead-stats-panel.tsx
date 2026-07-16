@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowRight, Globe, Loader2, Search, Share2, TrendingUp } from "lucide-react";
+import { ArrowRight, Globe, Loader2, Search, Share2, TrendingUp, UserPlus } from "lucide-react";
 
 /**
  * LeadStatsPanel — jedna veľká bublina LEADY CELKOVO (klikateľná →
@@ -84,7 +84,7 @@ export function LeadStatsPanel() {
         </div>
       </Link>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Breakdown
           label="Meta"
           value={stats?.meta ?? 0}
@@ -97,6 +97,16 @@ export function LeadStatsPanel() {
           value={stats?.web ?? 0}
           Icon={Globe}
           tint="sky"
+          loading={loading}
+        />
+        {/* Manuálne = admin sám pridal cez /admin/pridat (source_type=manual)
+            User 2026-07-16: „7 leadov 6 z mety a 0 z webu totalne ti jebe uz
+            alebo co" — chýbal 4. tile (Michal Mazuch bol admin-added manual). */}
+        <Breakdown
+          label="Manuálne"
+          value={stats?.other ?? 0}
+          Icon={UserPlus}
+          tint="amber"
           loading={loading}
         />
         <Breakdown
@@ -157,7 +167,7 @@ function Breakdown({
   label: string;
   value: number;
   Icon: typeof TrendingUp;
-  tint: "indigo" | "sky" | "rose";
+  tint: "indigo" | "sky" | "rose" | "amber";
   loading: boolean;
   inBuild?: boolean;
 }) {
@@ -167,14 +177,18 @@ function Breakdown({
       ? "border-indigo-200 bg-white text-indigo-900"
       : tint === "sky"
         ? "border-sky-200 bg-white text-sky-900"
-        : "border-rose-200 bg-white text-rose-900";
+        : tint === "amber"
+          ? "border-amber-200 bg-white text-amber-900"
+          : "border-rose-200 bg-white text-rose-900";
   const iconCls = inBuild
     ? "text-slate-400"
     : tint === "indigo"
       ? "text-indigo-500"
       : tint === "sky"
         ? "text-sky-500"
-        : "text-rose-500";
+        : tint === "amber"
+          ? "text-amber-500"
+          : "text-rose-500";
   return (
     <div
       className={
