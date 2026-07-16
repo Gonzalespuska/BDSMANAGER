@@ -22,6 +22,7 @@ import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
 import { MissedCallDropdown } from "./missed-call-dropdown";
 import { MissingFieldChip } from "./missing-field-chip";
+import { LeadEmailEditor } from "./lead-email-editor";
 import { SK_CITIES } from "@/lib/data/sk-cities";
 
 import { Button } from "@/components/ui/button";
@@ -358,10 +359,10 @@ export function LeadCard({
                 {lead.email}
               </a>
             ) : (
-              <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground/70">
-                <Mail className="w-4 h-4 shrink-0" aria-hidden />
-                Email neznámy
-              </div>
+              // User 2026-07-16: „niekedy v leade nieje email v tom pripade
+              // nech je kolonka kde mozem doplnit ten email rovanko ako ked
+              // chyba mesto typ podlahy".
+              <LeadEmailEditor leadId={lead.id} />
             )}
             </div>
 

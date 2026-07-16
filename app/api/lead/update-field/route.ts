@@ -20,7 +20,17 @@ import { getCurrentAppUser } from "@/lib/auth";
  * Prístup: obchodník-vlastník leadu alebo admin.
  */
 
-const ALLOWED_FIELDS = new Set(["plocha", "lokalita", "typ_podlahy", "priestor"]);
+const ALLOWED_FIELDS = new Set([
+  "plocha",
+  "lokalita",
+  "typ_podlahy",
+  "priestor",
+  // Top-level lead columns (uložené priamo do leads.*, nie do data JSONB):
+  "email",
+  "phone",
+  "name",
+]);
+const TOP_LEVEL_FIELDS = new Set(["email", "phone", "name"]);
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentAppUser();
@@ -63,6 +73,15 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  // Email validácia — basic (a@b.c) pre top-level field
+  if (field === "email" && value !== "") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_email" },
+        { status: 400 },
+      );
+    }
+  }
 
   const admin = createAdminClient();
   const { data: lead, error: leadErr } = await admin
@@ -87,21 +106,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Merge do data JSONB (nezmažeme ostatné polia!)
-  const currentData = (lead.data ?? {}) as Record<string, unknown>;
-  const newData = { ...currentData };
-  if (value === "") {
-    delete newData[field];
+  // Top-level column update (email/phone/name) — priamo do leads.*
+  // ostatné idú do data JSONB s merge.
+  const updatePayload: Record<string, unknown> = {
+    last_activity_at: new Date().toISOString(),
+  };
+  if (TOP_LEVEL_FIELDS.has(field)) {
+    updatePayload[field] =
+      value === "" ? null : field === "email" ? value.toLowerCase() : value;
   } else {
-    newData[field] = value;
+    const currentData = (lead.data ?? {}) as Record<string, unknown>;
+    const newData = { ...currentData };
+    if (value === "") {
+      delete newData[field];
+    } else {
+      newData[field] = value;
+    }
+    updatePayload.data = newData;
   }
 
   const { error: updErr } = await admin
     .from("leads")
-    .update({
-      data: newData,
-      last_activity_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("id", leadId);
   if (updErr) {
     return NextResponse.json(
