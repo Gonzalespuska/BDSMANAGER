@@ -38,23 +38,9 @@ export async function GET(request: NextRequest) {
   }
   const includeAll =
     user!.role === "admin" && request.nextUrl.searchParams.get("all") === "1";
-
-  const roleParam = request.nextUrl.searchParams.get("role");
-  // User 2026-07-16: „obhlaidkar ma tiez script co ma rozpravat".
-  // Obchod vidí len obchod scripty, obhliadky len obhliadky scripty,
-  // admin vidí všetko (alebo filter cez ?role=obchod|obhliadky).
-  let targetRole: "obchod" | "obhliadky" | null = null;
-  if (user!.role === "obchod") targetRole = "obchod";
-  else if (user!.role === "obhliadky") targetRole = "obhliadky";
-  if (roleParam === "obchod" || roleParam === "obhliadky") {
-    // admin override (alebo user obmedzí ešte viac — ale rovnaká rola len prejde)
-    if (user!.role === "admin" || user!.role === roleParam) targetRole = roleParam;
-  }
-
   const admin = createAdminClient();
   const query = admin.from("call_scripts").select("*");
   if (!includeAll) query.eq("active", true);
-  if (targetRole) query.eq("target_role", targetRole);
   const { data, error } = await query.order("sort_order", { ascending: true });
   if (error) {
     return NextResponse.json({ ok: false, error: error.message, scripts: [] });
@@ -73,8 +59,6 @@ export async function POST(request: NextRequest) {
   if (!label || !bodyText) {
     return NextResponse.json({ ok: false, error: "missing_fields" }, { status: 400 });
   }
-  const target_role =
-    body.target_role === "obhliadky" ? "obhliadky" : "obchod";
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("call_scripts")
@@ -87,7 +71,6 @@ export async function POST(request: NextRequest) {
       steps: Array.isArray(body.steps) ? body.steps : null,
       sort_order: (body.sort_order as number) ?? 100,
       active: body.active === false ? false : true,
-      target_role,
       created_by: user!.id,
     })
     .select("*")
@@ -109,15 +92,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
   }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const k of ["label", "description", "floor_type", "space", "body", "steps", "sort_order", "active", "target_role"]) {
+  for (const k of ["label", "description", "floor_type", "space", "body", "steps", "sort_order", "active"]) {
     if (k in body) patch[k] = body[k];
-  }
-  if (
-    patch.target_role &&
-    patch.target_role !== "obchod" &&
-    patch.target_role !== "obhliadky"
-  ) {
-    return NextResponse.json({ ok: false, error: "invalid_target_role" }, { status: 400 });
   }
   const admin = createAdminClient();
   const { error } = await admin.from("call_scripts").update(patch).eq("id", id);

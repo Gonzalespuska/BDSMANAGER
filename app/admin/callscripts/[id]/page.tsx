@@ -33,8 +33,6 @@ export default async function EditCallscriptPage({
         steps: (data.steps as never) ?? null,
         sort_order: (data.sort_order as number) ?? 100,
         active: (data.active as boolean) ?? true,
-        target_role:
-          data.target_role === "obhliadky" ? "obhliadky" : "obchod",
       }}
     />
   );

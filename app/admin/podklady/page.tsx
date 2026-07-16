@@ -1,12 +1,5 @@
 import Link from "next/link";
-import {
-  ArrowLeft,
-  BookOpen,
-  Camera,
-  Hammer,
-  Phone,
-  Search,
-} from "lucide-react";
+import { ArrowLeft, BookOpen, Camera, Hammer, Phone } from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -18,26 +11,17 @@ export default async function AdminPodkladyPage() {
   noStore();
   const sb = createAdminClient();
 
-  const [csObchodRes, csObhliadkyRes, systemsRes, kontentRes] =
-    await Promise.all([
-      sb
-        .from("call_scripts")
-        .select("id", { count: "exact", head: true })
-        .eq("target_role", "obchod"),
-      sb
-        .from("call_scripts")
-        .select("id", { count: "exact", head: true })
-        .eq("target_role", "obhliadky"),
-      sb
-        .from("realization_systems")
-        .select("id", { count: "exact", head: true }),
-      sb
-        .from("content_shotlist_templates")
-        .select("id", { count: "exact", head: true }),
-    ]);
+  const [callscriptsRes, systemsRes, kontentRes] = await Promise.all([
+    sb.from("call_scripts").select("id", { count: "exact", head: true }),
+    sb
+      .from("realization_systems")
+      .select("id", { count: "exact", head: true }),
+    sb
+      .from("content_shotlist_templates")
+      .select("id", { count: "exact", head: true }),
+  ]);
 
-  const csObchodCount = csObchodRes.count ?? 0;
-  const csObhliadkyCount = csObhliadkyRes.count ?? 0;
+  const callscriptsCount = callscriptsRes.count ?? 0;
   const systemsCount = systemsRes.count ?? 0;
   const kontentCount = kontentRes.count ?? 0;
 
@@ -61,22 +45,14 @@ export default async function AdminPodkladyPage() {
         </p>
       </header>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SubTile
-          href="/admin/callscripts?role=obchod"
-          title="Call scripty — obchod"
-          count={csObchodCount}
+          href="/admin/callscripts"
+          title="Call scripty"
+          count={callscriptsCount}
           desc="Telefonáty pre obchodákov — placeholdery ({priezvisko}, {plocha}…), interaktívne otázky, uzavretie leadu."
           Icon={Phone}
           tint="sky"
-        />
-        <SubTile
-          href="/admin/callscripts?role=obhliadky"
-          title="Obhliadka scripty"
-          count={csObhliadkyCount}
-          desc="Postup obhliadkára u klienta — čo skontrolovať, zmerať, opýtať, ako uzavrieť. Placeholdery rovnaké."
-          Icon={Search}
-          tint="violet"
         />
         <SubTile
           href="/admin/systems"
@@ -112,7 +88,7 @@ function SubTile({
   count: number;
   desc: string;
   Icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  tint: "sky" | "emerald" | "fuchsia" | "violet";
+  tint: "sky" | "emerald" | "fuchsia";
 }) {
   const tintMap = {
     sky: "border-sky-300 hover:border-sky-500 bg-sky-50/40 dark:bg-sky-950/20 text-sky-700 dark:text-sky-300",
@@ -120,8 +96,6 @@ function SubTile({
       "border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300",
     fuchsia:
       "border-fuchsia-300 hover:border-fuchsia-500 bg-fuchsia-50/40 dark:bg-fuchsia-950/20 text-fuchsia-700 dark:text-fuchsia-300",
-    violet:
-      "border-violet-300 hover:border-violet-500 bg-violet-50/40 dark:bg-violet-950/20 text-violet-700 dark:text-violet-300",
   } as const;
   return (
     <Link

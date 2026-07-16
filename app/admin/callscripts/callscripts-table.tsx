@@ -27,13 +27,7 @@ type Script = {
   updated_at: string | null;
 };
 
-export function CallscriptsTable({
-  initial,
-  role = "obchod",
-}: {
-  initial: Script[];
-  role?: "obchod" | "obhliadky";
-}) {
+export function CallscriptsTable({ initial }: { initial: Script[] }) {
   const router = useRouter();
   const [scripts, setScripts] = React.useState(initial);
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -84,7 +78,6 @@ export function CallscriptsTable({
         steps: s.steps,
         sort_order: (s.sort_order ?? 100) + 1,
         active: false,
-        target_role: role,
       }),
     });
     const j = await r.json();
@@ -96,27 +89,19 @@ export function CallscriptsTable({
   }
 
   if (scripts.length === 0) {
-    const isObhliadky = role === "obhliadky";
     return (
       <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-10 text-center">
         <div className="font-black text-slate-700 text-lg mb-1">
-          Zatiaľ žiadny {isObhliadky ? "obhliadka postup" : "call script"}
+          Zatiaľ žiadny call script
         </div>
         <div className="text-sm text-muted-foreground mb-4">
-          {isObhliadky
-            ? "Klikni „Nový obhliadka postup“ a vytvor scenár pre obhliadkárov."
-            : "Klikni „Nový script“ a vytvor scenár pre obchodákov."}
+          Klikni „Nový call script“ a vytvor scenár pre obchodákov.
         </div>
         <Link
-          href={`/admin/callscripts/new?role=${role}`}
-          className={
-            "inline-flex items-center gap-1.5 rounded-lg text-white text-sm font-black px-3 py-2 " +
-            (isObhliadky
-              ? "bg-violet-600 hover:bg-violet-700"
-              : "bg-rose-600 hover:bg-rose-700")
-          }
+          href="/admin/callscripts/new"
+          className="inline-flex items-center gap-1.5 rounded-lg text-white text-sm font-black px-3 py-2 bg-rose-600 hover:bg-rose-700"
         >
-          + Nový {isObhliadky ? "obhliadka postup" : "script"}
+          + Nový script
         </Link>
       </div>
     );
@@ -223,7 +208,6 @@ export function CallscriptsTable({
       {preview && (
         <PreviewModal
           script={preview}
-          role={role}
           onClose={() => setPreviewId(null)}
         />
       )}
@@ -233,11 +217,9 @@ export function CallscriptsTable({
 
 function PreviewModal({
   script,
-  role,
   onClose,
 }: {
   script: Script;
-  role: "obchod" | "obhliadky";
   onClose: () => void;
 }) {
   const [stepIdx, setStepIdx] = React.useState(0);
@@ -252,7 +234,6 @@ function PreviewModal({
     typPodlahy: script.floor_type,
     priestor: script.space,
   };
-  const isObhliadky = role === "obhliadky";
 
   React.useEffect(() => {
     function onEsc(e: KeyboardEvent) {
@@ -271,24 +252,15 @@ function PreviewModal({
         onClick={(e) => e.stopPropagation()}
         className="rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[85vh] w-full max-w-lg flex flex-col border border-black/10"
       >
-        <div
-          className={
-            "text-white shrink-0 bg-gradient-to-br " +
-            (isObhliadky
-              ? "from-violet-500 to-violet-700"
-              : "from-rose-500 to-rose-700")
-          }
-        >
+        <div className="text-white shrink-0 bg-gradient-to-br from-rose-500 to-rose-700">
           <div className="px-5 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wider opacity-90">
             👤 {ctx.leadName} — mock lead
           </div>
           <div className="px-5 pb-3 flex items-center gap-3">
-            <div className="w-5 h-5 shrink-0">
-              {isObhliadky ? "🔍" : "📞"}
-            </div>
+            <div className="w-5 h-5 shrink-0">📞</div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
-                {isObhliadky ? "Obhliadka postup" : "Scenár hovoru"}
+                Scenár hovoru
               </div>
               <div className="font-black text-lg leading-tight truncate">
                 {script.label || "(bez názvu)"}
