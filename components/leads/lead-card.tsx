@@ -579,15 +579,6 @@ export function LeadCard({
                   onPick={(hrs) => handleMissedCall(hrs)}
                 />
               </div>
-              <button
-                type="button"
-                onClick={handleInvalidPhone}
-                disabled={busy}
-                className="w-full mb-2 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 disabled:opacity-50 transition-colors"
-                title="Operátor oznámil že číslo neexistuje → do Koša"
-              >
-                ❌ Neexistujúce číslo — do koša
-              </button>
             </>
           )}
 
@@ -619,15 +610,6 @@ export function LeadCard({
                 busy={busy}
                 onPick={(hrs) => handleMissedCall(hrs)}
               />
-              <button
-                type="button"
-                onClick={handleInvalidPhone}
-                disabled={busy}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 disabled:opacity-50 transition-colors"
-                title="Operátor oznámil že číslo neexistuje → do Koša"
-              >
-                ❌ Neexistujúce číslo — do koša
-              </button>
             </div>
           )}
 
@@ -856,12 +838,11 @@ export function LeadCard({
               />
             </div>
           )}
-        </div>
-        </div>
-        {/* Callscript — samostatný riadok pod akciami (predtým floating,
-            prekrýval sa so „Zavolať" tlačidlom na mobile).
-            User 2026-07-12: „to callscript je cez zavolat cize total napicu
-            musi to mat vlastne miesto". */}
+        {/* Callscript riadok pod akciami — INSIDE main content (nie side-column).
+            User 2026-07-16: „pozri ako to je skaredo cele preco sa to cele
+            nefituje do toho okna". Predtým bol callscript flex sibling
+            k content divu → renderoval sa vpravo od karty a robil ju
+            asymetrickou. Teraz je normálny riadok dole. */}
         <div className="px-5 pb-4 -mt-1 flex items-center justify-end">
           <CallscriptButton
             leadId={lead.id}
@@ -878,6 +859,7 @@ export function LeadCard({
                 | undefined
             }
           />
+        </div>
         </div>
       </article>
 
