@@ -157,10 +157,12 @@ function ToastCard({
   }[item.variant];
   const clickable = !!item.href && item.variant !== "loading";
   const className = cn(
-    "pointer-events-auto min-w-[240px] max-w-sm inline-flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl border-2 shadow-lg text-sm font-semibold",
-    "animate-in slide-in-from-right-4 fade-in duration-200",
+    "pointer-events-auto min-w-[240px] max-w-sm inline-flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl border-2 shadow-lg text-sm font-semibold opacity-100",
+    // Pridaný explicit opacity-100 — inak animate-in nechá toast s opacity:0
+    // ak sa CSS animácia neaplikuje (napr. reload prerušil animáciu skôr).
+    "transition-opacity",
     meta.cls,
-    clickable && "cursor-pointer hover:shadow-xl hover:brightness-95 transition-all no-underline",
+    clickable && "cursor-pointer hover:shadow-xl hover:brightness-95 no-underline",
   );
   const inner = (
     <>
