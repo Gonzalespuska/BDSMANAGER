@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { EmailAutocomplete } from "@/components/ui/email-autocomplete";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,7 +104,15 @@ export function AgentsTable({ initial }: { initial: AgentListRow[] }) {
           </thead>
           <tbody className="divide-y">
             {agents.map((a) => (
-              <AgentRow key={a.id} agent={a} onChanged={() => router.refresh()} />
+              <AgentRow
+                key={a.id}
+                agent={a}
+                onChanged={() => {
+                  // Hard nav — router.refresh() občas nechá stale server-render
+                  // (RSC cache). Reload zaručene načíta nový stav.
+                  window.location.href = "/admin/agents";
+                }}
+              />
             ))}
             {agents.length === 0 && (
               <tr>
@@ -121,7 +130,8 @@ export function AgentsTable({ initial }: { initial: AgentListRow[] }) {
           onClose={() => setAddOpen(false)}
           onCreated={() => {
             setAddOpen(false);
-            router.refresh();
+            // Hard nav — po vytvorení chceme aby sa v tíme okamžite objavil.
+            window.location.href = "/admin/agents";
           }}
         />
       )}
@@ -157,12 +167,22 @@ function AgentRow({
   async function toggleActive() {
     setBusy(true);
     setError(null);
+    const willActivate = !agent.active;
     const res = agent.active
       ? await deactivateAgentAction(agent.id)
       : await activateAgentAction(agent.id);
     setBusy(false);
-    if (!res.ok) setError(res.error);
-    else onChanged();
+    if (!res.ok) {
+      setError(res.error);
+      toast.error(`Chyba: ${res.error}`);
+    } else {
+      toast.success(
+        willActivate
+          ? `✅ ${agent.name || agent.email} aktivovaný`
+          : `⏸ ${agent.name || agent.email} deaktivovaný`,
+      );
+      onChanged();
+    }
   }
 
   async function sendInvite() {
@@ -172,8 +192,10 @@ function AgentRow({
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
+      toast.error(`Chyba: ${res.error}`);
     } else {
       setInviteSent(true);
+      toast.success(`✉️ Pozvánka odoslaná na ${agent.email}`);
       setTimeout(() => setInviteSent(false), 3000);
     }
   }
@@ -192,7 +214,9 @@ function AgentRow({
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
+      toast.error(`Chyba: ${res.error}`);
     } else {
+      toast.success(`🗑 Prístup pre ${agent.name || agent.email} odobratý`);
       onChanged();
     }
   }
@@ -453,6 +477,11 @@ function AddAgentModal({
       setError(res.error);
       return;
     }
+    // User 2026-07-16: „zaidny efekt nic iba sa to zatocilo na sekundu a
+    // prestalo sa tocit nic, pravdepodobne ho pridalo ale musim dat refresh
+    // takze prosim urob to tak ze na kazdej akcii bude success button ze
+    // sa to stalo".
+    toast.success(`✅ Agent ${name} vytvorený`);
     onCreated();
   }
 
