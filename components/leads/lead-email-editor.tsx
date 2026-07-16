@@ -142,7 +142,7 @@ export function LeadEmailEditor({
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50/40 hover:border-emerald-500 hover:bg-emerald-50 text-sm font-black text-emerald-800 transition-colors"
+      className="mt-2 flex w-fit items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50/40 hover:border-emerald-500 hover:bg-emerald-50 text-sm font-black text-emerald-800 transition-colors"
       title="Doplniť email zákazníka"
     >
       <Mail className="w-4 h-4 shrink-0" aria-hidden />
