@@ -6,8 +6,6 @@ import {
   GraduationCap,
   Package,
   Settings2,
-  Share2,
-  UserPlus,
   Warehouse,
 } from "lucide-react";
 
@@ -91,13 +89,6 @@ export default async function NastaveniaAdminPage() {
             desc="Všetky materiály pre tím — Call scripty (interaktívne scenáre), Kontent shotlist (foto/video), Sales tips, protokoly, cenníky. Rozdeľujú sa podľa role."
             Icon={GraduationCap}
             tint="violet"
-          />
-          <SubmoduleTile
-            href="/admin/teams"
-            title="Realizačné tímy"
-            desc="Tímy realizátorov + ich sídlo (mesto odkial vyrážajú)."
-            Icon={UserPlus}
-            tint="emerald"
           />
           <SubmoduleTile
             href="/admin/objednavky"
