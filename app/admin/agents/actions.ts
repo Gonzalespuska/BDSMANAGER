@@ -299,8 +299,14 @@ export async function updateAgentAction(
     }
   }
 
-  revalidatePath("/admin/agents");
-  revalidatePath("/admin");
+  // revalidatePath môže občas hodiť v CF Pages edge runtime — nesmie
+  // to zabiť save. Wrap defensively.
+  try {
+    revalidatePath("/admin/agents");
+    revalidatePath("/admin");
+  } catch (e) {
+    console.warn("[updateAgent] revalidatePath failed:", e);
+  }
   return { ok: true };
 }
 
