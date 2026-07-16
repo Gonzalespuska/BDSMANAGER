@@ -938,13 +938,11 @@ ${signatureLines.join("\n")}`;
         input.agent_email,
         "www.epoxidovo.sk",
       ].filter(Boolean);
-      // Celkový počet CP v maily = saved + aktuálna (posiela sa vždy aktuálna
-      // + všetky uložené naraz).  User 2026-07-16: „ked posielas dve cp tak
-      // v tele emailu to meni text tiez ze posielam cp na toto: a das tam
-      // ze 1. a druha 2". Rozšírené na ľubovoľný počet.
-      const totalCpCount = savedCps.length + 1;
+      // Počet CP v maily = presne savedCps.length (ak sú uložené), inak 1
+      // (aktuálny formulár). User 2026-07-16: „pozri odoslat 5 a mam tam 4
+      // podlahy". Predtým sa aktuálna auto-pridávala k savedCps → nezhoda.
+      const totalCpCount = savedCps.length > 0 ? savedCps.length : 1;
       const isMulti = totalCpCount > 1;
-      // Poradie: uložené idú prvé (1., 2., … savedCps.length), aktuálna posledná.
       const variantsListing = isMulti
         ? "\n" +
           savedCps
@@ -952,7 +950,7 @@ ${signatureLines.join("\n")}`;
               (s, i) => `\n  ${i + 1}. CP — ${s.label} · ${s.total.toFixed(0)} €`,
             )
             .join("") +
-          `\n  ${totalCpCount}. CP — ${input.floor_type_label} · ${total.toFixed(0)} €\n\nPorovnajte si prosím ${totalCpCount === 2 ? "obe" : "všetky"} možnosti a dajte mi vedieť ktorá Vám vyhovuje viac.`
+          `\n\nPorovnajte si prosím ${totalCpCount === 2 ? "obe" : "všetky"} možnosti a dajte mi vedieť ktorá Vám vyhovuje viac.`
         : "";
 
       const finalOrientLabel = (finálne: boolean) =>
@@ -1028,30 +1026,17 @@ ${signatureLines.join("\n")}`;
           body_text: bodyText,
           // Prvá príloha = 1. CP (buď savedCps[0] alebo aktuálna ak nič neuložené).
           // Zvyšok ide v extra_pdfs (poradie zachované — 2., 3., 4., …, aktuálna posledná).
+          // User 2026-07-16: „pozri odoslat 5 a mam tam 4 podlahy".
+          // Logika: ak sú uložené savedCps → posli PRESNE tie (obchodák
+          //   musí kliknúť „➕ Pridať CP" pred sendom ak chce aj aktuálnu).
+          //   Bez neho posiela iba to čo je vidno v „Pripravené CP-ky".
+          // Ak žiadne uložené → posli aktuálnu ako 1 CP (klasický flow).
           pdf_base64: savedCps[0]?.pdfBase64 ?? pdfBase64,
-          pdf_filename:
-            savedCps[0]?.filename ??
-            filename.replace(/\.pdf$/i, "") +
-              (savedCps.length === 0 ? "" : "-cp-1") +
-              ".pdf",
-          extra_pdfs: [
-            // Zvyšné savedCps (2., 3., …)
-            ...savedCps.slice(1).map((s) => ({
-              base64: s.pdfBase64,
-              filename: s.filename,
-            })),
-            // Aktuálna CP (nemá vlastnú savedCp entry, generuje sa na fly)
-            ...(savedCps.length > 0
-              ? [
-                  {
-                    base64: pdfBase64,
-                    filename:
-                      filename.replace(/\.pdf$/i, "") +
-                      `-cp-${savedCps.length + 1}.pdf`,
-                  },
-                ]
-              : []),
-          ],
+          pdf_filename: savedCps[0]?.filename ?? filename,
+          extra_pdfs: savedCps.slice(1).map((s) => ({
+            base64: s.pdfBase64,
+            filename: s.filename,
+          })),
           agent_email: input.agent_email,
           agent_name: input.agent_name,
           quote_state: quoteStateSnapshot,
@@ -1599,7 +1584,7 @@ ${signatureLines.join("\n")}`;
             </ul>
             <div className="text-xs text-violet-900 font-semibold bg-white/60 rounded-lg px-2.5 py-1.5 border border-violet-200">
               💡 Zmeň typ podlahy vyššie a klikni <strong>„➕ Pridať CP"</strong>{" "}
-              — alebo rovno <strong>„📧 Odoslať {savedCps.length + 1} CP naraz"</strong>.
+              — alebo rovno <strong>„📧 Odoslať {savedCps.length} CP naraz"</strong>.
             </div>
           </div>
         )}
@@ -1644,11 +1629,13 @@ ${signatureLines.join("\n")}`;
             className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-base font-black shadow-md"
           >
             <Mail className="w-5 h-5 mr-2" aria-hidden />
-            {savedCps.length > 0
-              ? `📧 Odoslať ${savedCps.length + 1} CP naraz`
-              : isResend
-                ? "Preposlať upravenú ponuku"
-                : "📧 Odoslať cenovú ponuku"}
+            {savedCps.length >= 2
+              ? `📧 Odoslať ${savedCps.length} CP naraz`
+              : savedCps.length === 1
+                ? "📧 Odoslať 1. CP"
+                : isResend
+                  ? "Preposlať upravenú ponuku"
+                  : "📧 Odoslať cenovú ponuku"}
           </Button>
 
           {/* Editovanie textu emailu — sekundárna možnosť pod primárnym CTA.
