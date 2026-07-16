@@ -305,18 +305,30 @@ export function MissingFieldChip({
   }
 
   // ─── DISPLAY MODE ───
-  // User 2026-07-12: „nech sa da editovat len to co nebolo povodne
-  // zodpovedane v leade" — ak pole má hodnotu (prišlo z leadu), zobraz
-  // ako read-only pill; iba prázdne polia sú editovateľné „Doplniť" chipy.
+  // User 2026-07-16: „nemamm moznost editnut m2 pokial boli sice vyplnene
+  // v leade ale chcem to reeditnut na novo nech mam moznost proste".
+  // Predtým vyplnené polia boli read-only pill. Teraz klik = otvorí edit
+  // (aj pre polia ktoré prišli z Meta formu — user ich môže opraviť ak
+  // zákazník povedal iné číslo).
   if (hasValue) {
     return (
-      <span
-        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-zinc-100 text-zinc-800"
-        aria-label={`${labelForField(field)}: ${displayValue}`}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setEditing(true);
+        }}
+        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-zinc-100 hover:bg-sky-100 text-zinc-800 hover:text-sky-900 border border-transparent hover:border-sky-300 transition-colors group"
+        aria-label={`Upraviť ${labelForField(field)}: ${displayValue}`}
+        title={`Klik = upraviť ${labelForField(field)}`}
       >
         <span>{displayValue}</span>
         {suffix && <span className="opacity-60">{suffix}</span>}
-      </span>
+        <span className="opacity-0 group-hover:opacity-60 text-[10px] ml-0.5">
+          ✎
+        </span>
+      </button>
     );
   }
   return (
