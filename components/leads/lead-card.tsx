@@ -838,7 +838,8 @@ export function LeadCard({
               />
             </div>
           )}
-        {/* Callscript riadok pod akciami — INSIDE main content (nie side-column).
+        </div>
+        {/* Callscript riadok pod akciami — INSIDE flex-1 min-w-0 (nie side-column).
             User 2026-07-16: „pozri ako to je skaredo cele preco sa to cele
             nefituje do toho okna". Predtým bol callscript flex sibling
             k content divu → renderoval sa vpravo od karty a robil ju
