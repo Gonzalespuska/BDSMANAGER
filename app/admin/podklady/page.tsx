@@ -3,16 +3,12 @@ import {
   ArrowLeft,
   BookOpen,
   Camera,
-  FileText,
   Hammer,
   Phone,
-  Plus,
   Search,
 } from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-
-import { PodkladyTable } from "./podklady-table";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -22,9 +18,8 @@ export default async function AdminPodkladyPage() {
   noStore();
   const sb = createAdminClient();
 
-  const [docsRes, csObchodRes, csObhliadkyRes, systemsRes, kontentRes] =
+  const [csObchodRes, csObhliadkyRes, systemsRes, kontentRes] =
     await Promise.all([
-      sb.from("training_docs").select("*").order("sort_order", { ascending: true }),
       sb
         .from("call_scripts")
         .select("id", { count: "exact", head: true })
@@ -40,17 +35,6 @@ export default async function AdminPodkladyPage() {
         .from("content_shotlist_templates")
         .select("id", { count: "exact", head: true }),
     ]);
-
-  const docs = (docsRes.data ?? []) as Array<{
-    id: string;
-    title: string;
-    body_md: string;
-    target_role: "obchod" | "obhliadky" | "realizacie" | "admin" | "vsetci";
-    category: string;
-    sort_order: number;
-    active: boolean;
-    created_at: string;
-  }>;
 
   const csObchodCount = csObchodRes.count ?? 0;
   const csObhliadkyCount = csObhliadkyRes.count ?? 0;
@@ -72,9 +56,8 @@ export default async function AdminPodkladyPage() {
           Podklady
         </h1>
         <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-          Všetky materiály pre tím na jednom mieste — Call scripty, Realizačné
-          systémy, Kontent shotlist a voľné podklady (sales tips, protokoly,
-          cenníky). Rozdeľujú sa podľa role.
+          Všetky materiály pre tím na jednom mieste — rozdeľujú sa podľa
+          kategórie a role.
         </p>
       </header>
 
@@ -97,9 +80,9 @@ export default async function AdminPodkladyPage() {
         />
         <SubTile
           href="/admin/systems"
-          title="Realizačné systémy"
+          title="Realizačné systémy — postup"
           count={systemsCount}
-          desc="264, 3000, TopStone… + spotreba kg/m² + postup krokov pre realizátorov."
+          desc="Ako sa robí každý systém (264, 3000, TopStone…) — postup krokov + spotreba kg/m². Realizátor si to prečíta v Podkladoch a naučí sa všetky systémy."
           Icon={Hammer}
           tint="emerald"
         />
@@ -111,34 +94,6 @@ export default async function AdminPodkladyPage() {
           Icon={Camera}
           tint="fuchsia"
         />
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3 flex-wrap border-t pt-5">
-          <div>
-            <h2 className="text-lg font-extrabold tracking-tight inline-flex items-center gap-2">
-              <FileText className="w-5 h-5 text-violet-500" aria-hidden />
-              Voľné podklady{" "}
-              <span className="text-violet-500 tabular-nums text-base">
-                ({docs.length})
-              </span>
-            </h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5 max-w-2xl">
-              Markdown dokumenty — sales tips, obhliadka protokoly, product info,
-              cenníky. Priraď k role (obchod / obhliadky / realizacie / vsetci) →
-              člen tímu to uvidí vo svojej sekcii Podklady.
-            </p>
-          </div>
-          <Link
-            href="/admin/podklady/new"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-black px-3 py-2 shadow-md"
-          >
-            <Plus className="w-4 h-4" aria-hidden />
-            Nový podklad
-          </Link>
-        </div>
-
-        <PodkladyTable initial={docs} />
       </section>
     </div>
   );
