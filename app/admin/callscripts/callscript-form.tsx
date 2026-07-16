@@ -348,18 +348,83 @@ export function CallscriptForm({ initial }: { initial: Script }) {
       </div>
       </div>{/* end left column */}
 
-      {/* Preview column — obchodákov pohľad */}
+      {/* Preview column — kompletný obchodákov modal */}
       <div className="xl:sticky xl:top-3 space-y-2">
-        <div className="rounded-xl border-2 border-rose-300 bg-white overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-br from-rose-500 to-rose-700 text-white px-4 py-2.5">
-            <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
-              👁 Preview — takto to uvidí obchodák
+        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 flex items-center gap-2">
+          <span>👁 Preview — takto to uvidí obchodák</span>
+          {steps.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setPreviewStepIdx(0);
+                setPreviewAnswers({});
+                setPreviewPendingNote("");
+                setPreviewOtherText("");
+              }}
+              className="ml-auto text-sky-700 hover:underline normal-case tracking-normal font-bold"
+            >
+              🔄 Reset
+            </button>
+          )}
+        </div>
+        {/* Modal shell — 1:1 s CallscriptButton */}
+        <div className="rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[75vh] flex flex-col border border-black/10">
+          {/* Header (rose gradient) */}
+          <div className="bg-gradient-to-br from-rose-500 to-rose-700 text-white shrink-0">
+            <div className="w-full flex items-center gap-1.5 px-5 pt-2.5 pb-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider opacity-90">
+                👤 {previewCtx.leadName?.trim() || "Neznámy lead"}
+              </span>
+              <span className="text-[10px] opacity-70 ml-1">← späť na lead</span>
             </div>
-            <div className="font-black text-sm leading-tight truncate">
-              {form.label || "(bez názvu)"}
+            <div className="px-5 pb-3 flex items-center gap-3">
+              <div className="w-5 h-5 shrink-0">📞</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
+                  Scenár hovoru
+                </div>
+                <div className="font-black text-lg leading-tight truncate">
+                  {form.label || "(bez názvu)"}
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 text-white font-black text-xs px-3 py-2 shadow-md shrink-0">
+                📞 Vytočiť
+              </span>
+              <span className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0">
+                ✕
+              </span>
             </div>
           </div>
-          <div className="p-4 max-h-[70vh] overflow-y-auto">
+
+          {/* Tag row (typ podlahy + priestor) */}
+          {(form.floor_type || form.space) && (
+            <div className="px-5 py-2 border-b bg-slate-50 flex items-center gap-1.5 shrink-0 flex-wrap">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                Tagy scriptu:
+              </span>
+              {form.floor_type && (
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                  🎨 {form.floor_type}
+                </span>
+              )}
+              {form.space && (
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">
+                  📍 {form.space}
+                </span>
+              )}
+              <span className="ml-auto text-[10px] italic text-slate-400">
+                (obchodák: 150 m² · Prešov)
+              </span>
+            </div>
+          )}
+
+          {/* Body */}
+          <div className="p-5 overflow-y-auto flex-1">
+            {form.description && (
+              <div className="text-xs italic text-slate-500 mb-3">
+                {form.description}
+              </div>
+            )}
             {steps.length > 0 ? (
               <ScriptStepper
                 steps={steps}
@@ -381,31 +446,22 @@ export function CallscriptForm({ initial }: { initial: Script }) {
                 }}
               />
             ) : form.body ? (
-              <pre className="text-xs font-semibold text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
+              <pre className="text-sm font-semibold text-slate-900 whitespace-pre-wrap font-sans leading-relaxed">
                 {renderCallscript(form.body, previewCtx)}
               </pre>
             ) : (
               <div className="text-center text-xs text-slate-400 italic py-8">
-                Zatiaľ prázdne — pridaj kroky alebo body text ↓
+                Zatiaľ prázdne — pridaj kroky alebo body text v ľavom stĺpci ↑
               </div>
             )}
           </div>
-          {steps.length > 0 && (
-            <div className="border-t bg-slate-50 px-3 py-2 flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewStepIdx(0);
-                  setPreviewAnswers({});
-                  setPreviewPendingNote("");
-                  setPreviewOtherText("");
-                }}
-                className="text-[10px] font-bold text-sky-700 hover:underline"
-              >
-                🔄 Reset preview
-              </button>
-            </div>
-          )}
+
+          {/* Footer */}
+          <div className="border-t px-5 py-3 bg-slate-50 flex items-center justify-end gap-2 shrink-0">
+            <span className="rounded-lg bg-slate-800 text-white px-4 py-2 text-sm font-black">
+              Zavrieť
+            </span>
+          </div>
         </div>
 
         {/* Preview data — nastavovanie mock leadu */}
