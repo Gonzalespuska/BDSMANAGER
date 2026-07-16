@@ -385,12 +385,11 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <LeadsSearch />
-          {/* Pull-more: obchod si stiahne 5 nedotknutých leadov z poolu.
-              User 2026-07-16: „ked obchodakovi dojdu nove leady... stlaci
-              to a prida mu to 5 leadov z poolu... zobere kazdemu obchodakovi 1". */}
-          {(user.role === "obchod" || user.role === "admin") && (
-            <PullMoreButton count={5} />
-          )}
+          {/* Pull-more presunuté do empty-state (dole).
+              User 2026-07-16: „malo by byt tam kde je ze ziadne leady v
+              tejto kategorii, nech tam pod tym je to talcidlo pridat
+              manualne leady + nech sa to nevola 5 leadov z poolu proste
+              nech tam je ze pridat Leady iba". */}
           <NewLeadButton />
         </div>
       </header>
@@ -460,6 +459,15 @@ export default async function AgentDashboard({ searchParams }: PageProps) {
             {!searchMode && tab === "ukoncene" && "Žiadne hotové realizácie. Sem sa presunú zákazky až KEĎ realizator reálne dokončí prácu (auto po 36h od realization_at alebo manuálne kliknutím \"Hotovo\" na /realizacie/[id]). % obchodákovi sa počíta iba z týchto."}
             {!searchMode && tab === "archivovane" && "Žiadne archivované leady. Po neúspešnom kontakte / 3× nezdvihol sa lead presunie sem."}
           </p>
+          {/* CTA — Pridať leady (pull z poolu). Iba v "Nové" tabe a iba
+              pre obchod/admin (obhliadkár nemá pool leadov na prevzatie). */}
+          {!searchMode &&
+            tab === "novy" &&
+            (user.role === "obchod" || user.role === "admin") && (
+              <div className="mt-6 flex justify-center">
+                <PullMoreButton count={5} size="lg" />
+              </div>
+            )}
           {!searchMode && process.env.NODE_ENV !== "production" && (
             <div className="mt-4 text-xs text-muted-foreground">
               Pre vygenerovanie testovacích leadov navštív{" "}

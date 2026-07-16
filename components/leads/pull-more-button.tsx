@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Sparkles } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
 import { toast } from "@/components/ui/toast";
 
@@ -13,7 +13,14 @@ import { toast } from "@/components/ui/toast";
  * dojdu nove leady... prida mu to 5 leadov z poolu ktore su nedotknute...
  * zobere kazdemu obchodakovi 1 nie jednemu 5".
  */
-export function PullMoreButton({ count = 5 }: { count?: number }) {
+export function PullMoreButton({
+  count = 5,
+  size = "sm",
+}: {
+  count?: number;
+  /** "sm" = default header chip; "lg" = veľký CTA button pre empty state. */
+  size?: "sm" | "lg";
+}) {
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
 
@@ -68,23 +75,25 @@ export function PullMoreButton({ count = 5 }: { count?: number }) {
     }
   }
 
+  const isLarge = size === "lg";
   return (
     <button
       type="button"
       onClick={pull}
       disabled={busy}
-      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-black bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-sm disabled:opacity-60"
+      className={
+        isLarge
+          ? "inline-flex items-center gap-2 px-5 py-3 rounded-xl text-base font-black bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md disabled:opacity-60"
+          : "inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-black bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-sm disabled:opacity-60"
+      }
       title={`Získať ${count} nedotknutých leadov z poolu (po 1 od každého kolegu)`}
     >
       {busy ? (
-        <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+        <Loader2 className={isLarge ? "w-5 h-5 animate-spin" : "w-4 h-4 animate-spin"} aria-hidden />
       ) : (
-        <>
-          <Sparkles className="w-4 h-4" aria-hidden />
-          <Plus className="w-3 h-3 -ml-1" aria-hidden />
-        </>
+        <Plus className={isLarge ? "w-5 h-5" : "w-4 h-4"} aria-hidden />
       )}
-      {count} leadov z poolu
+      Pridať leady
     </button>
   );
 }
