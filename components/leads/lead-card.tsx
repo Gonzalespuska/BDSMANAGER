@@ -783,6 +783,7 @@ export function LeadCard({
             musi to mat vlastne miesto". */}
         <div className="px-5 pb-4 -mt-1 flex items-center justify-end">
           <CallscriptButton
+            leadId={lead.id}
             floorType={coerceString(dataFields.typ_podlahy)}
             space={coerceString(dataFields.priestor)}
           />

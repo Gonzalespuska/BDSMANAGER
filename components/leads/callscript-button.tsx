@@ -79,9 +79,11 @@ function scoreScript(
 }
 
 export function CallscriptButton({
+  leadId,
   floorType,
   space,
 }: {
+  leadId?: string;
   floorType?: string | null;
   space?: string | null;
 }) {
@@ -90,12 +92,22 @@ export function CallscriptButton({
   const [loading, setLoading] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [savingTag, setSavingTag] = React.useState(false);
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  const nFloor = normalizeFloorType(floorType);
-  const nSpace = normalizeSpace(space);
+  // User 2026-07-16: „ked nemas to info tie tagy ze kde ide ta podlaha
+  // a aky typ tak priamo v tom call scripte musis mat moznost dropdownom
+  // to doplnit". Lokálne overrides — persistujeme cez /api/lead/update-field
+  // ale používame ich okamžite pre re-score bez čakania na router.refresh.
+  const [localFloor, setLocalFloor] = React.useState<string | null>(floorType ?? null);
+  const [localSpace, setLocalSpace] = React.useState<string | null>(space ?? null);
+  React.useEffect(() => setLocalFloor(floorType ?? null), [floorType]);
+  React.useEffect(() => setLocalSpace(space ?? null), [space]);
+
+  const nFloor = normalizeFloorType(localFloor);
+  const nSpace = normalizeSpace(localSpace);
 
   // User 2026-07-16: „ked to obchodak zisti a zada do toho dropdownu
   // loadne mu automatikcy novy script ktory uz je na tie tagy a
@@ -152,6 +164,35 @@ export function CallscriptButton({
   }
 
   const selected = scripts?.find((s) => s.id === selectedId) ?? null;
+
+  async function saveTag(field: "typ_podlahy" | "priestor", value: string) {
+    if (!leadId) return;
+    setSavingTag(true);
+    try {
+      await fetch("/api/lead/update-field", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_id: leadId, field, value }),
+      });
+      if (field === "typ_podlahy") setLocalFloor(value);
+      else setLocalSpace(value);
+    } finally {
+      setSavingTag(false);
+    }
+  }
+
+  const FLOOR_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: "jednofarebná epoxidová", label: "Jednofarebná (epoxid)" },
+    { value: "chipsová", label: "Chipsová" },
+    { value: "mramorová", label: "Mramorová" },
+    { value: "metalická", label: "Metalická" },
+  ];
+  const SPACE_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: "interiér", label: "Interiér (dom/byt)" },
+    { value: "garáž", label: "Garáž" },
+    { value: "exteriér", label: "Exteriér" },
+    { value: "priemyselná hala", label: "Priemyselná hala" },
+  ];
 
   // User 2026-07-16: „ten callscript nech funguje ale s tym co proste
   // som ti posielal" — reaktivované, používa existujúce scripty v DB
@@ -266,6 +307,51 @@ export function CallscriptButton({
             )}
 
             <div className="p-5 overflow-y-auto flex-1">
+              {leadId && (!nFloor || !nSpace) && (
+                <div className="mb-4 rounded-lg border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+                    <span>⚠</span> Doplň chýbajúce tagy — script sa automaticky prepne
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {!nFloor && (
+                      <label className="block">
+                        <span className="block text-[10px] font-bold uppercase text-amber-900 mb-1">
+                          Typ podlahy
+                        </span>
+                        <select
+                          disabled={savingTag}
+                          value=""
+                          onChange={(e) => e.target.value && saveTag("typ_podlahy", e.target.value)}
+                          className="w-full rounded-md border border-amber-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        >
+                          <option value="">— vyber —</option>
+                          {FLOOR_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {!nSpace && (
+                      <label className="block">
+                        <span className="block text-[10px] font-bold uppercase text-amber-900 mb-1">
+                          Priestor
+                        </span>
+                        <select
+                          disabled={savingTag}
+                          value=""
+                          onChange={(e) => e.target.value && saveTag("priestor", e.target.value)}
+                          className="w-full rounded-md border border-amber-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        >
+                          <option value="">— vyber —</option>
+                          {SPACE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
               {selected?.description && (
                 <div className="text-xs italic text-slate-500 mb-3">
                   {selected.description}
