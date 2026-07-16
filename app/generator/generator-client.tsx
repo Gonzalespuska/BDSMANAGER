@@ -717,7 +717,7 @@ export function GeneratorClient({
         },
       ]);
       toast.success(
-        `💾 ${nextIdx}. CP uložená (${input.floor_type_label} · ${total.toFixed(0)} €). Prestav generátor na ďalšiu CP a klikni Pridať alebo Odoslať.`,
+        `💾 ${input.floor_type_label} CP uložená (${total.toFixed(0)} €) — ${nextIdx}. v poradí`,
       );
     } catch (e) {
       toast.error(
@@ -1598,9 +1598,8 @@ ${signatureLines.join("\n")}`;
               ))}
             </ul>
             <div className="text-xs text-violet-900 font-semibold bg-white/60 rounded-lg px-2.5 py-1.5 border border-violet-200">
-              💡 Uprav formulár na ďalšiu CP a klikni buď{" "}
-              <strong>„➕ Pridať ďalšiu CP"</strong> alebo{" "}
-              <strong>„📧 Odoslať {savedCps.length + 1} CP naraz"</strong>.
+              💡 Zmeň typ podlahy vyššie a klikni <strong>„➕ Pridať CP"</strong>{" "}
+              — alebo rovno <strong>„📧 Odoslať {savedCps.length + 1} CP naraz"</strong>.
             </div>
           </div>
         )}
@@ -1626,15 +1625,9 @@ ${signatureLines.join("\n")}`;
               disabled={busy || total <= 0}
               variant="outline"
               className="flex-1 min-w-[200px] border-violet-400 text-violet-900 hover:bg-violet-50 font-black"
-              title={
-                savedCps.length === 0
-                  ? "Uloží aktuálnu CP a pripraví ťa na druhú (vyplň formulár znova a klikni buď Pridať dalsiu alebo Odoslať naraz)."
-                  : `Pridá aktuálnu CP ako ${savedCps.length + 1}. do zoznamu. Potom uprav formulár znova a klikni Pridať alebo Odoslať.`
-              }
+              title="Uloží aktuálnu CP do zoznamu príloh. Potom môžeš zmeniť typ podlahy a pridať ďalšiu."
             >
-              ➕ {savedCps.length === 0
-                ? "Pridať 1. CP a chcem druhú"
-                : `Pridať ďalšiu CP (bude ${savedCps.length + 1}.)`}
+              ➕ Pridať CP{savedCps.length > 0 ? ` (${savedCps.length + 1}.)` : ""}
             </Button>
           </div>
 
