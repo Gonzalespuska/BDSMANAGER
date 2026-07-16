@@ -134,7 +134,11 @@ export default async function AdminCallscriptsPage({
         </div>
       )}
 
-      <CallscriptsTable initial={scripts} role={activeRole} />
+      <CallscriptsTable
+        key={activeRole}
+        initial={scripts}
+        role={activeRole}
+      />
     </div>
   );
 }
