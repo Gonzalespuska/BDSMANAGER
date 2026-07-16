@@ -115,13 +115,16 @@ export async function POST(request: NextRequest) {
     pdf_base64?: string;
     pdf_filename?: string;
     /**
-     * Voliteľné — druhá varianta CP (napr. epoxid + polyuretán varianta).
-     * User 2026-07-15: „Moznost poslat dve CP do jedneho mailu — jednu
-     * plusko a druhu manualne vyklikas". Ak je zadané, priloží sa aj
-     * druhé PDF k rovnakému emailu.
+     * DEPRECATED — pre backwards compat, nový klient posiela `extra_pdfs`.
      */
     pdf_base64_2?: string;
     pdf_filename_2?: string;
+    /**
+     * Ďalšie CP-ky pripravené obchodákom (2., 3., 4., …). Bez limitu — user
+     * 2026-07-16: „chcem pridat aj 3 aj 4 cp proste pluskom".
+     * Resend má limit ~40 MB na celý email; každé PDF ~50-100 KB.
+     */
+    extra_pdfs?: Array<{ base64: string; filename: string }>;
     /** Email obchodáka (Reply-To + BCC copy do jeho inboxu) */
     agent_email?: string;
     /** Meno obchodáka — vloží sa do From display name */
@@ -223,16 +226,22 @@ export async function POST(request: NextRequest) {
           filename: body.pdf_filename ?? "ponuka.pdf",
           content: body.pdf_base64,
         },
-        // Voliteľne druhá varianta CP (napr. epoxid A + polyuretán B).
-        // User 2026-07-15: „jednu plusko a druhu manualne vyklikas".
+        // Backwards compat — starý klient posielal iba 1 extra PDF.
         ...(body.pdf_base64_2
           ? [
               {
-                filename: body.pdf_filename_2 ?? "ponuka-variant-2.pdf",
+                filename: body.pdf_filename_2 ?? "ponuka-2.pdf",
                 content: body.pdf_base64_2,
               },
             ]
           : []),
+        // Nový flow — ľubovoľný počet CP (užívateľ 2026-07-16 „aj 3 aj 4 cp").
+        ...((body.extra_pdfs ?? [])
+          .filter((p) => p && typeof p.base64 === "string" && p.base64.length > 0)
+          .map((p, i) => ({
+            filename: p.filename ?? `ponuka-${i + 2}.pdf`,
+            content: p.base64,
+          }))),
       ],
     });
 

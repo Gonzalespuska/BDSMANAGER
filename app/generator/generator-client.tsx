@@ -232,17 +232,16 @@ export function GeneratorClient({
   >(savedQuote?.state.materialQtys ?? {});
 
   // ─── Dual-variant email (2026-07-15) ─────────────────────────────────
-  // User: „Moznost poslat dve CP do jedneho mailu — jednu plusko a druhu
-  // manualne vyklikas". Obchodák si vygeneruje prvú variantu (napr. epoxid),
-  // klikne „Uložiť ako variant A", potom prestaví generátor na druhú
-  // variantu (napr. polyuretán) a klikne „Pošli 2 varianty" → v prílohe
-  // idú OBIDVE PDF-ká v jednom emaili.
-  const [variantASnapshot, setVariantASnapshot] = React.useState<{
+  // User 2026-07-16: „chcem pridat aj 3 aj 4 cp proste pluskom urob to tak
+  // nie varitant a nech tam je ze pridat dalsiu CP". Snapshot array pre N
+  // CP-iek (predtým bola iba 1 varianta A).
+  type SavedCp = {
     pdfBase64: string;
     filename: string;
     total: number;
     label: string;
-  } | null>(null);
+  };
+  const [savedCps, setSavedCps] = React.useState<SavedCp[]>([]);
 
   // Subtotal pre material mode — pre každý produkt aplikujeme jeho per-role
   // maržu (`markup.primer` / `markup.main` / `markup.topcoat` / `markup.additive`
@@ -704,21 +703,25 @@ export function GeneratorClient({
         binary += String.fromCharCode(bytes[i]);
       }
       const pdfBase64 = btoa(binary);
-      // Prípona -variant-A pred .pdf, aby v Gmaili obchodák hneď videl
-      // rozdiel medzi prílohami.
-      const filenameA = filename.replace(/\.pdf$/i, "") + "-1-varianta.pdf";
-      setVariantASnapshot({
-        pdfBase64,
-        filename: filenameA,
-        total,
-        label: input.floor_type_label,
-      });
+      // Číslujeme podľa aktuálneho poradia — 1. uložená = -cp-1.pdf, 2. = -cp-2.pdf …
+      const nextIdx = savedCps.length + 1;
+      const filenameN =
+        filename.replace(/\.pdf$/i, "") + `-cp-${nextIdx}.pdf`;
+      setSavedCps((prev) => [
+        ...prev,
+        {
+          pdfBase64,
+          filename: filenameN,
+          total,
+          label: input.floor_type_label,
+        },
+      ]);
       toast.success(
-        `💾 1. varianta uložená (${input.floor_type_label} · ${total.toFixed(0)} €). Prestav generátor na druhú variantu a pošli obidve naraz.`,
+        `💾 ${nextIdx}. CP uložená (${input.floor_type_label} · ${total.toFixed(0)} €). Prestav generátor na ďalšiu CP a klikni Pridať alebo Odoslať.`,
       );
     } catch (e) {
       toast.error(
-        `1. varianta chyba: ${e instanceof Error ? e.message : "unknown"}`,
+        `Uloženie CP chyba: ${e instanceof Error ? e.message : "unknown"}`,
       );
     } finally {
       setBusy(false);
@@ -884,17 +887,18 @@ ${signatureLines.join("\n")}`;
     // mailu text ze rovnake cp aj tie cp v prilohe boli rovnake".
     // Ak je uložená variant A ale user NIČ nezmenil v formulári → posiela
     // 2× rovnaké PDF. Blokni to explicitne + vysvetli.
-    if (
-      variantASnapshot &&
-      Math.round(variantASnapshot.total) === Math.round(total)
-    ) {
+    // Ak aktuálna CP (bude odoslaná ako posledná v poradí) má rovnaký total
+    // ako niektorá zo savedCps → pravdepodobne user zabudol upraviť formulár.
+    const dupIdx = savedCps.findIndex(
+      (s) => Math.round(s.total) === Math.round(total),
+    );
+    if (dupIdx >= 0) {
       const ok = confirm(
-        "⚠ POZOR — 2. varianta má IDENTICKÚ cenu ako 1. varianta\n\n" +
+        `⚠ POZOR — nová CP má IDENTICKÚ cenu ako ${dupIdx + 1}. uložená CP\n\n` +
           `Obidve: ${total.toFixed(0)} €\n\n` +
-          "Pravdepodobne si zabudol upraviť formulár po uložení 1. variantu " +
-          "(napr. zmeniť typ podlahy, systém, alebo plochu). Ak pošleš, " +
-          "zákazník dostane 2× takmer rovnaké PDF a bude to pôsobiť neprofesionálne.\n\n" +
-          "Chceš aj tak poslať 2 rovnaké CP?",
+          "Pravdepodobne si zabudol upraviť formulár po uložení. Ak pošleš, " +
+          "zákazník dostane 2× (alebo viac) rovnaké PDF.\n\n" +
+          "Chceš aj tak poslať?",
       );
       if (!ok) return;
     }
@@ -934,23 +938,34 @@ ${signatureLines.join("\n")}`;
         input.agent_email,
         "www.epoxidovo.sk",
       ].filter(Boolean);
-      // 2 varianty — user 2026-07-16: „ked posielas dve cp tak v tele emailu
-      // to meni text tiez ze posielam cp na toto: a das tam ze 1. a druha 2".
-      // Prepis:  „Variant A/B" → „1. varianta / 2. varianta"
-      //          Intro spomeňme DVE ponuky namiesto jednej.
-      const hasVariantA = !!variantASnapshot;
-      const variantsListing = hasVariantA
-        ? `\n\n  1. varianta — ${variantASnapshot!.label} · ${variantASnapshot!.total.toFixed(0)} €\n  2. varianta — ${input.floor_type_label} · ${total.toFixed(0)} €\n\nPorovnajte si prosím obe možnosti a dajte mi vedieť ktorá Vám vyhovuje viac.`
+      // Celkový počet CP v maily = saved + aktuálna (posiela sa vždy aktuálna
+      // + všetky uložené naraz).  User 2026-07-16: „ked posielas dve cp tak
+      // v tele emailu to meni text tiez ze posielam cp na toto: a das tam
+      // ze 1. a druha 2". Rozšírené na ľubovoľný počet.
+      const totalCpCount = savedCps.length + 1;
+      const isMulti = totalCpCount > 1;
+      // Poradie: uložené idú prvé (1., 2., … savedCps.length), aktuálna posledná.
+      const variantsListing = isMulti
+        ? "\n" +
+          savedCps
+            .map(
+              (s, i) => `\n  ${i + 1}. CP — ${s.label} · ${s.total.toFixed(0)} €`,
+            )
+            .join("") +
+          `\n  ${totalCpCount}. CP — ${input.floor_type_label} · ${total.toFixed(0)} €\n\nPorovnajte si prosím ${totalCpCount === 2 ? "obe" : "všetky"} možnosti a dajte mi vedieť ktorá Vám vyhovuje viac.`
         : "";
 
-      const bodyText = isFinal
-        ? // FINÁLNA — user: "text na konci vravi aj za aku podlahu konkretne
-          // ze jednofarebnu to tam nemusi byt a ma to koncit ze v prilohe
-          // vam posielam finalnu cenovu ponuku". Odstranený "na ${accusative}
-          // podlahu" a "Ponuka je vypracovaná..." odsek.
-          `Dobrý deň prajeme,
+      const finalOrientLabel = (finálne: boolean) =>
+        isMulti
+          ? `${totalCpCount} ${finálne ? "FINÁLNE" : "ORIENTAČNÉ"} cenové ponuky`
+          : finálne
+            ? "finálnu cenovú ponuku"
+            : `ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu`;
 
-Ďakujeme za obhliadku. V prílohe Vám posielam ${hasVariantA ? "2 finálne cenové ponuky" : "finálnu cenovú ponuku"}.${variantsListing}
+      const bodyText = isFinal
+        ? `Dobrý deň prajeme,
+
+Ďakujeme za obhliadku. V prílohe Vám posielam ${finalOrientLabel(true)}.${variantsListing}
 
 V prípade akýchkoľvek otázok ma neváhajte kontaktovať.
 
@@ -958,7 +973,7 @@ S pozdravom,
 ${signatureLinesFinal.join("\n")}`
         : `Dobrý deň prajeme,
 
-Na základe nášho telefonátu Vám v prílohe posielam ${hasVariantA ? `2 ORIENTAČNÉ cenové ponuky` : `ORIENTAČNÚ cenovú ponuku na ${accusative} podlahu`}.${variantsListing}
+Na základe nášho telefonátu Vám v prílohe posielam ${finalOrientLabel(false)}.${variantsListing}
 
 Upozorňujeme, že ide o orientačné ceny — presná cenová ponuka bude vyčíslená až po obhliadke. V závislosti od stavu podkladu sa cena môže líšiť o niekoľko percent (viac alebo menej).
 
@@ -1011,17 +1026,32 @@ ${signatureLines.join("\n")}`;
           to_name: customerName.trim() || "Zákazník",
           subject,
           body_text: bodyText,
-          // Variant B (aktuálna) = hlavná príloha; Variant A (uložená) =
-          // priložená druhá. Poradie v Gmail prílohách: A prvá (uložená
-          // skôr) → obchodák dostane obe naraz.
-          pdf_base64: variantASnapshot?.pdfBase64 ?? pdfBase64,
-          pdf_filename: variantASnapshot?.filename ?? filename,
-          pdf_base64_2: variantASnapshot
-            ? pdfBase64
-            : undefined,
-          pdf_filename_2: variantASnapshot
-            ? filename.replace(/\.pdf$/i, "") + "-2-varianta.pdf"
-            : undefined,
+          // Prvá príloha = 1. CP (buď savedCps[0] alebo aktuálna ak nič neuložené).
+          // Zvyšok ide v extra_pdfs (poradie zachované — 2., 3., 4., …, aktuálna posledná).
+          pdf_base64: savedCps[0]?.pdfBase64 ?? pdfBase64,
+          pdf_filename:
+            savedCps[0]?.filename ??
+            filename.replace(/\.pdf$/i, "") +
+              (savedCps.length === 0 ? "" : "-cp-1") +
+              ".pdf",
+          extra_pdfs: [
+            // Zvyšné savedCps (2., 3., …)
+            ...savedCps.slice(1).map((s) => ({
+              base64: s.pdfBase64,
+              filename: s.filename,
+            })),
+            // Aktuálna CP (nemá vlastnú savedCp entry, generuje sa na fly)
+            ...(savedCps.length > 0
+              ? [
+                  {
+                    base64: pdfBase64,
+                    filename:
+                      filename.replace(/\.pdf$/i, "") +
+                      `-cp-${savedCps.length + 1}.pdf`,
+                  },
+                ]
+              : []),
+          ],
           agent_email: input.agent_email,
           agent_name: input.agent_name,
           quote_state: quoteStateSnapshot,
@@ -1519,44 +1549,64 @@ ${signatureLines.join("\n")}`;
           </div>
         </div>
 
-        {/* Variant A saved — big instruction card explaining what to do next.
-            User 2026-07-16: „ked vyplnim jednu dam subnit a bude tam plusko
-            ktore mi dovoli pridat 2. cp a potom to poslat naraz".
-            Predtým bol iba malý chip → user nevedel čo má robiť. */}
-        {variantASnapshot && (
+        {/* Saved CPs — list všetkých pripravených CP-iek s inštrukciou.
+            User 2026-07-16: „chcem pridat aj 3 aj 4 cp proste pluskom urob
+            to tak nie varitant a nech tam je ze pridat dalsiu CP". */}
+        {savedCps.length > 0 && (
           <div className="mt-2 rounded-xl border-2 border-violet-400 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-3 space-y-2">
-            <div className="flex items-start gap-2">
-              <div className="text-2xl leading-none">✅</div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] uppercase tracking-wider font-black text-violet-700">
-                  1. Varianta pripravená (uložená v pamäti)
-                </div>
-                <div className="text-base font-black text-violet-900 truncate">
-                  {variantASnapshot.label} ·{" "}
-                  <span className="tabular-nums">
-                    {variantASnapshot.total.toFixed(0)} €
-                  </span>
-                </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] uppercase tracking-wider font-black text-violet-700">
+                📎 Pripravené CP-ky ({savedCps.length})
               </div>
               <button
                 type="button"
-                onClick={() => setVariantASnapshot(null)}
-                className="shrink-0 text-[10px] font-bold text-violet-700 hover:text-violet-900 underline"
-                title="Zrušiť 1. variantu, vrátim sa k odoslaniu iba 1 CP"
+                onClick={() => setSavedCps([])}
+                className="text-[10px] font-bold text-violet-700 hover:text-violet-900 underline"
+                title="Zrušiť všetky uložené CP-ky"
               >
-                × zrušiť
+                × vymazať všetky
               </button>
             </div>
+            <ul className="space-y-1">
+              {savedCps.map((s, i) => (
+                <li
+                  key={i}
+                  className="flex items-center gap-2 rounded-lg bg-white/70 border border-violet-200 px-2.5 py-1.5"
+                >
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-black flex items-center justify-center">
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-black text-violet-900 truncate">
+                      {s.label} ·{" "}
+                      <span className="tabular-nums">
+                        {s.total.toFixed(0)} €
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSavedCps((prev) => prev.filter((_, idx) => idx !== i))
+                    }
+                    className="shrink-0 text-[10px] font-bold text-violet-700 hover:text-rose-700"
+                    title="Odstrániť túto CP"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
             <div className="text-xs text-violet-900 font-semibold bg-white/60 rounded-lg px-2.5 py-1.5 border border-violet-200">
-              💡 Teraz uprav formulár na <strong>2. variantu</strong> (napr. iný
-              typ podlahy, iný systém, iná plocha) — keď budeš mať aj druhú
-              hotovú, klikni <strong>„📧 Odoslať 2 varianty"</strong>.
+              💡 Uprav formulár na ďalšiu CP a klikni buď{" "}
+              <strong>„➕ Pridať ďalšiu CP"</strong> alebo{" "}
+              <strong>„📧 Odoslať {savedCps.length + 1} CP naraz"</strong>.
             </div>
           </div>
         )}
 
         <div className="pt-2 mt-2 border-t border-sky-200 space-y-2">
-          {/* Sekundárne akcie — Stiahnuť PDF + prípadne Uložiť ako 1. variantu */}
+          {/* Sekundárne akcie — Stiahnuť PDF + Pridať ďalšiu CP */}
           <div className="flex items-stretch gap-2 flex-wrap">
             <Button
               type="button"
@@ -1570,18 +1620,22 @@ ${signatureLines.join("\n")}`;
               <FileText className="w-4 h-4 mr-1" aria-hidden />
               Stiahnuť PDF
             </Button>
-            {!variantASnapshot && (
-              <Button
-                type="button"
-                onClick={handleSaveVariantA}
-                disabled={busy || total <= 0}
-                variant="outline"
-                className="flex-1 min-w-[200px] border-violet-400 text-violet-900 hover:bg-violet-50 font-black"
-                title="Uloží aktuálnu CP ako 1. variantu. Potom uprav formulár na 2. variantu a klikni Odoslať 2 varianty naraz."
-              >
-                ➕ Chcem pridať 2. variantu
-              </Button>
-            )}
+            <Button
+              type="button"
+              onClick={handleSaveVariantA}
+              disabled={busy || total <= 0}
+              variant="outline"
+              className="flex-1 min-w-[200px] border-violet-400 text-violet-900 hover:bg-violet-50 font-black"
+              title={
+                savedCps.length === 0
+                  ? "Uloží aktuálnu CP a pripraví ťa na druhú (vyplň formulár znova a klikni buď Pridať dalsiu alebo Odoslať naraz)."
+                  : `Pridá aktuálnu CP ako ${savedCps.length + 1}. do zoznamu. Potom uprav formulár znova a klikni Pridať alebo Odoslať.`
+              }
+            >
+              ➕ {savedCps.length === 0
+                ? "Pridať 1. CP a chcem druhú"
+                : `Pridať ďalšiu CP (bude ${savedCps.length + 1}.)`}
+            </Button>
           </div>
 
           {/* Primárna akcia — Odoslať (veľký button na celý riadok, jasný CTA) */}
@@ -1597,8 +1651,8 @@ ${signatureLines.join("\n")}`;
             className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-base font-black shadow-md"
           >
             <Mail className="w-5 h-5 mr-2" aria-hidden />
-            {variantASnapshot
-              ? "📧 Odoslať 2 varianty naraz (A + B)"
+            {savedCps.length > 0
+              ? `📧 Odoslať ${savedCps.length + 1} CP naraz`
               : isResend
                 ? "Preposlať upravenú ponuku"
                 : "📧 Odoslať cenovú ponuku"}
