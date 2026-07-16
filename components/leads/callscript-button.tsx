@@ -97,6 +97,24 @@ export function CallscriptButton({
   const nFloor = normalizeFloorType(floorType);
   const nSpace = normalizeSpace(space);
 
+  // User 2026-07-16: „ked to obchodak zisti a zada do toho dropdownu
+  // loadne mu automatikcy novy script ktory uz je na tie tagy a
+  // nadpoji sa tym na rozhovor". Ak sa počas otvoreného modálu zmení
+  // floorType alebo space (obchodák aktualizoval MissingFieldChip),
+  // re-score existujúci list a prepni na best match.
+  React.useEffect(() => {
+    if (!scripts || scripts.length === 0) return;
+    const ranked = [...scripts].sort(
+      (a, b) => scoreScript(b, nFloor, nSpace) - scoreScript(a, nFloor, nSpace),
+    );
+    const best = ranked[0];
+    if (best && best.id !== selectedId) {
+      setSelectedId(best.id);
+    }
+    // scripts a selectedId sú stable references; sledujeme iba tagy.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nFloor, nSpace, scripts]);
+
   async function openModal() {
     setOpen(true);
     if (scripts !== null) return;
