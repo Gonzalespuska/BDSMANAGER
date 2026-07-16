@@ -573,10 +573,23 @@ function AddAgentModal({
               <Input
                 id="agent-phone"
                 type="tel"
+                inputMode="tel"
+                autoComplete="off"
                 value={phone}
                 onChange={(e) =>
                   setPhone(autoFormatPhoneWhileTyping(e.target.value))
                 }
+                onBlur={(e) =>
+                  setPhone(autoFormatPhoneWhileTyping(e.target.value))
+                }
+                onPaste={(e) => {
+                  // Paste tiež spusti auto-format ihneď.
+                  const text = e.clipboardData.getData("text");
+                  if (text) {
+                    e.preventDefault();
+                    setPhone(autoFormatPhoneWhileTyping(text));
+                  }
+                }}
                 placeholder="+421 950 890 098 alebo 0950 890 098"
               />
             </div>

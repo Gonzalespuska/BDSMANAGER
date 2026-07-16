@@ -64,9 +64,19 @@ export function PhoneEditor({
         <div className="space-y-2">
           <Input
             type="tel"
+            inputMode="tel"
+            autoComplete="off"
             value={phone}
             onChange={(e) => setPhone(autoFormatPhoneWhileTyping(e.target.value))}
-            placeholder="+421 905 123 456"
+            onBlur={(e) => setPhone(autoFormatPhoneWhileTyping(e.target.value))}
+            onPaste={(e) => {
+              const text = e.clipboardData.getData("text");
+              if (text) {
+                e.preventDefault();
+                setPhone(autoFormatPhoneWhileTyping(text));
+              }
+            }}
+            placeholder="+421 950 890 098"
             autoFocus
             disabled={busy}
             onKeyDown={(e) => {
