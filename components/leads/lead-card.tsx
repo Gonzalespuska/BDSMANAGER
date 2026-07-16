@@ -858,8 +858,18 @@ export function LeadCard({
         <div className="px-5 pb-4 -mt-1 flex items-center justify-end">
           <CallscriptButton
             leadId={lead.id}
+            leadName={lead.name}
+            leadPhone={lead.phone}
             floorType={coerceString(dataFields.typ_podlahy)}
             space={coerceString(dataFields.priestor)}
+            plocha={coerceString(dataFields.plocha)}
+            lokalita={coerceString(dataFields.lokalita)}
+            savedAnswers={
+              (lead.data as Record<string, unknown>).callscript_answers as
+                | Record<string, { value: string; note?: string; at: string }>
+                | null
+                | undefined
+            }
           />
         </div>
       </article>

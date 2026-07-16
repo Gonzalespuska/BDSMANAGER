@@ -25,12 +25,15 @@ const ALLOWED_FIELDS = new Set([
   "lokalita",
   "typ_podlahy",
   "priestor",
+  // JSON payload — value je JSON string, parsuje sa a ukladá do data JSONB
+  "callscript_answers",
   // Top-level lead columns (uložené priamo do leads.*, nie do data JSONB):
   "email",
   "phone",
   "name",
 ]);
 const TOP_LEVEL_FIELDS = new Set(["email", "phone", "name"]);
+const JSON_FIELDS = new Set(["callscript_answers"]);
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentAppUser();
@@ -119,6 +122,16 @@ export async function POST(request: NextRequest) {
     const newData = { ...currentData };
     if (value === "") {
       delete newData[field];
+    } else if (JSON_FIELDS.has(field)) {
+      // Value je JSON string — parsni a ulož ako objekt do data JSONB
+      try {
+        newData[field] = JSON.parse(value);
+      } catch {
+        return NextResponse.json(
+          { ok: false, error: "invalid_json_value" },
+          { status: 400 },
+        );
+      }
     } else {
       newData[field] = value;
     }

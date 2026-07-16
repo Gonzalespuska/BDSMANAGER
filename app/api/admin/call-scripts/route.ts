@@ -31,17 +31,17 @@ async function requireAdmin() {
   return { user, err: null };
 }
 
-export async function GET() {
-  const { err } = await requireAuth();
+export async function GET(request: NextRequest) {
+  const { user, err } = await requireAuth();
   if (err) {
     return NextResponse.json({ ok: false, error: err }, { status: 401 });
   }
+  const includeAll =
+    user!.role === "admin" && request.nextUrl.searchParams.get("all") === "1";
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("call_scripts")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order", { ascending: true });
+  const query = admin.from("call_scripts").select("*");
+  if (!includeAll) query.eq("active", true);
+  const { data, error } = await query.order("sort_order", { ascending: true });
   if (error) {
     return NextResponse.json({ ok: false, error: error.message, scripts: [] });
   }
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
       floor_type: (body.floor_type as string) || null,
       space: (body.space as string) || null,
       body: bodyText,
+      steps: Array.isArray(body.steps) ? body.steps : null,
       sort_order: (body.sort_order as number) ?? 100,
       active: body.active === false ? false : true,
       created_by: user!.id,
@@ -91,7 +92,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
   }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const k of ["label", "description", "floor_type", "space", "body", "sort_order", "active"]) {
+  for (const k of ["label", "description", "floor_type", "space", "body", "steps", "sort_order", "active"]) {
     if (k in body) patch[k] = body[k];
   }
   const admin = createAdminClient();
@@ -113,7 +114,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
   }
   const admin = createAdminClient();
-  const { error } = await admin.from("call_scripts").update({ active: false }).eq("id", id);
+  const hard = body.hard === true || body.hard === "true";
+  const { error } = hard
+    ? await admin.from("call_scripts").delete().eq("id", id)
+    : await admin.from("call_scripts").update({ active: false }).eq("id", id);
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

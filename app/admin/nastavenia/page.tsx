@@ -86,9 +86,9 @@ export default async function NastaveniaAdminPage() {
             tint="emerald"
           />
           <SubmoduleTile
-            href="/admin/podklady"
-            title="Podklady — Call skripty"
-            desc="Call scripty pre obchodákov podľa typu podlahy + priestoru."
+            href="/admin/callscripts"
+            title="Call scripty"
+            desc="Interaktívne scenáre hovorov — text s placeholder-mi ({priezvisko}, {plocha}…) + otázky pre obchodákov s odpoveďami uloženými k leadu."
             Icon={GraduationCap}
             tint="violet"
           />
