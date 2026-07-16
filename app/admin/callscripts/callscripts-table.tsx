@@ -134,15 +134,22 @@ export function CallscriptsTable({
               (s.active ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50 opacity-70")
             }
           >
-            <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 font-black">
-              {s.sort_order}
-            </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="font-black text-slate-900 truncate">{s.label}</div>
-                {!s.active && (
-                  <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
-                    Vypnutý
+                {s.floor_type && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">
+                    🎨 {s.floor_type}
+                  </span>
+                )}
+                {s.space && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">
+                    📍 {s.space}
+                  </span>
+                )}
+                {!s.floor_type && !s.space && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                    GENERAL fallback
                   </span>
                 )}
                 {stepCount > 0 && (
@@ -150,12 +157,11 @@ export function CallscriptsTable({
                     {stepCount} krokov
                   </span>
                 )}
-              </div>
-              <div className="text-[11px] text-muted-foreground flex gap-3 mt-0.5 flex-wrap">
-                {s.floor_type && <span>🎨 {s.floor_type}</span>}
-                {s.space && <span>📍 {s.space}</span>}
-                {!s.floor_type && !s.space && <span className="italic">bez tagov (fallback)</span>}
-                <span>· {s.body.length} znakov</span>
+                {!s.active && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
+                    Vypnutý
+                  </span>
+                )}
               </div>
               {s.description && (
                 <div className="text-xs text-slate-500 italic mt-1 line-clamp-1">
