@@ -96,8 +96,8 @@ export function CallscriptsTable({
         </div>
         <div className="text-sm text-muted-foreground mb-4">
           {isObhliadky
-            ? "Klikni „Nový obhliadka postup" a vytvor scenár pre obhliadkárov."
-            : "Klikni „Nový script" a vytvor scenár pre obchodákov."}
+            ? "Klikni „Nový obhliadka postup“ a vytvor scenár pre obhliadkárov."
+            : "Klikni „Nový script“ a vytvor scenár pre obchodákov."}
         </div>
         <Link
           href={`/admin/callscripts/new?role=${role}`}
