@@ -18,6 +18,7 @@ import {
 import { CallbackReminder } from "./callback-reminder";
 import { CallscriptButton } from "./callscript-button";
 import { SmsCopyButton } from "./sms-copy-button";
+import { downloadVCard } from "@/lib/vcard";
 import { HandoffActions } from "./handoff-actions";
 import { LeadNotesInline } from "./lead-notes-inline";
 import { LeadStatusPicker } from "./lead-status-picker";
@@ -262,19 +263,38 @@ export function LeadCard({
   /**
    * "Kontakt" — agent volal a zákazník zdvihol.
    * Karta zmizne z Nové tab-u, objaví sa v Kontakt tab-e po refreshi.
+   *
+   * User 2026-07-16: „ked stlacis kontakt automaticky ti ho ulozi v
+   * telefone: cislo, meno, mozno aj poznamka". → Stiahne .vcf ktoré
+   * OS pridá ako nový kontakt (iOS: dialog, Android: Contacts app,
+   * desktop: iba download súboru).
    */
   async function handleContact() {
     setLeaving(true);
+    // vCard download PRV — spustí sa v rámci user gesture (klik), aby
+    // Safari/Chrome nezablokovali download popup po async fetch.
+    const notes: string[] = [];
+    if (dataFields.plocha) notes.push(`${dataFields.plocha} m²`);
+    if (dataFields.priestor) notes.push(String(dataFields.priestor));
+    if (dataFields.typ_podlahy) notes.push(String(dataFields.typ_podlahy));
+    if (dataFields.lokalita) notes.push(String(dataFields.lokalita));
+    try {
+      downloadVCard({
+        name: lead.name,
+        phone: lead.phone,
+        email: lead.email,
+        meta: notes,
+      });
+    } catch (e) {
+      console.warn("[vcard] download failed", e);
+    }
+
     const result = await callLeadAction("contact");
     if (!result.ok) {
       setLeaving(false);
       toast.error(`Chyba: ${result.error}`);
     } else {
-      // User 2026-07-16: „ked zmenim stav napriklad na kontakt z noveho, tak
-      // nech ma hodi na ten stav dany priklad do kontakt ked hodim po
-      // telefonate tak som v kontakt a mozem pokracovat s nejakou akciou
-      // poslat mu cp".
-      toast.success(`✅ ${lead.name || "Lead"} → Kontakt`, {
+      toast.success(`✅ ${lead.name || "Lead"} → Kontakt · 📇 kontakt stiahnutý`, {
         href: "/agent?tab=kontakt",
       });
       window.location.href = "/agent?tab=kontakt";
