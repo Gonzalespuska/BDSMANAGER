@@ -12,12 +12,21 @@ import { Check, Loader2, Mail, X } from "lucide-react";
  * kolonka kde mozem doplnit ten email rovanko ako ked chyba mesto typ
  * podlahy".
  */
-export function LeadEmailEditor({ leadId }: { leadId: string }) {
+export function LeadEmailEditor({
+  leadId,
+  onSaved,
+}: {
+  leadId: string;
+  /** Volané po úspešnom uložení — parent aktualizuje lokálny lead state
+   * aby sa nový email zobrazil okamžite bez čakania na router.refresh. */
+  onSaved?: (email: string) => void;
+}) {
   const router = useRouter();
   const [editing, setEditing] = React.useState(false);
   const [value, setValue] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [savedEmail, setSavedEmail] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
@@ -51,7 +60,13 @@ export function LeadEmailEditor({ leadId }: { leadId: string }) {
         setBusy(false);
         return;
       }
+      // Optimisticky ukáž nový email v mieste chip-u (parent state re-render
+      // môže trvať kým router.refresh dobehne).
+      setSavedEmail(v);
       setEditing(false);
+      setValue("");
+      setBusy(false);
+      onSaved?.(v);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "network");
@@ -108,6 +123,17 @@ export function LeadEmailEditor({ leadId }: { leadId: string }) {
         {error && (
           <div className="w-full text-xs text-rose-700 font-bold">⚠ {error}</div>
         )}
+      </div>
+    );
+  }
+
+  // Ak sme práve uložili email, ukáž ho ako confirmation chip
+  // (parent LeadCard sa re-renderne po router.refresh a schová celý editor).
+  if (savedEmail) {
+    return (
+      <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-emerald-300 bg-emerald-50 text-sm font-black text-emerald-800">
+        <Check className="w-4 h-4 shrink-0" aria-hidden />
+        {savedEmail}
       </div>
     );
   }

@@ -394,7 +394,10 @@ export function LeadCard({
               // User 2026-07-16: „niekedy v leade nieje email v tom pripade
               // nech je kolonka kde mozem doplnit ten email rovanko ako ked
               // chyba mesto typ podlahy".
-              <LeadEmailEditor leadId={lead.id} />
+              <LeadEmailEditor
+                leadId={lead.id}
+                onSaved={(email) => setLead({ ...lead, email })}
+              />
             )}
             </div>
 
