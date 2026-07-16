@@ -14,10 +14,17 @@ import {
 } from "lucide-react";
 
 import { toast } from "@/components/ui/toast";
-import { CALLSCRIPT_PLACEHOLDERS } from "@/lib/callscript-render";
+import { CALLSCRIPT_PLACEHOLDERS, renderCallscript } from "@/lib/callscript-render";
+import {
+  ScriptStepper,
+  type Answer,
+  type Step as StepperStep,
+} from "@/components/leads/callscript-stepper";
 
 type StepType = "info" | "choice" | "yesno" | "number" | "freetext";
-type Step = {
+type Step = StepperStep;
+// Loose helper — pri manipulácii dostaneme all props naraz.
+type LooseStep = {
   id: string;
   type: StepType;
   prompt: string;
@@ -65,6 +72,19 @@ export function CallscriptForm({ initial }: { initial: Script }) {
   const [saving, setSaving] = React.useState(false);
   const isEdit = Boolean(initial.id);
 
+  // Live preview state — obchodákov pohľad počas editácie
+  const [previewStepIdx, setPreviewStepIdx] = React.useState(0);
+  const [previewAnswers, setPreviewAnswers] = React.useState<Record<string, Answer>>({});
+  const [previewPendingNote, setPreviewPendingNote] = React.useState("");
+  const [previewOtherText, setPreviewOtherText] = React.useState("");
+  const [previewCtx, setPreviewCtx] = React.useState({
+    leadName: "Ján Novák",
+    plocha: "150" as string,
+    lokalita: "Prešov",
+    typPodlahy: "jednofarebná",
+    priestor: "garáž",
+  });
+
   function patch(k: keyof Script, v: unknown) {
     setForm((prev) => ({ ...prev, [k]: v }) as Script);
   }
@@ -72,18 +92,14 @@ export function CallscriptForm({ initial }: { initial: Script }) {
   const steps = form.steps ?? [];
 
   function addStep(type: StepType) {
-    const s: Step = {
-      id: randomStepId(),
-      type,
-      prompt: "",
-    };
-    if (type === "choice") s.options = [{ value: "1", label: "" }];
-    patch("steps", [...steps, s]);
+    const base: LooseStep = { id: randomStepId(), type, prompt: "" };
+    if (type === "choice") base.options = [{ value: "1", label: "" }];
+    patch("steps", [...steps, base as Step]);
   }
-  function updateStep(i: number, patchS: Partial<Step>) {
-    const next = steps.slice();
+  function updateStep(i: number, patchS: Partial<LooseStep>) {
+    const next = steps.slice() as LooseStep[];
     next[i] = { ...next[i], ...patchS };
-    patch("steps", next);
+    patch("steps", next as Step[]);
   }
   function removeStep(i: number) {
     const next = steps.slice();
@@ -178,6 +194,8 @@ export function CallscriptForm({ initial }: { initial: Script }) {
         </h1>
       </header>
 
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-4 items-start">
+      <div className="space-y-5">
       {/* Základné */}
       <section className="rounded-xl border-2 border-slate-200 bg-white p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -328,6 +346,104 @@ export function CallscriptForm({ initial }: { initial: Script }) {
           {saving ? "Ukladám…" : "Uložiť"}
         </button>
       </div>
+      </div>{/* end left column */}
+
+      {/* Preview column — obchodákov pohľad */}
+      <div className="xl:sticky xl:top-3 space-y-2">
+        <div className="rounded-xl border-2 border-rose-300 bg-white overflow-hidden shadow-lg">
+          <div className="bg-gradient-to-br from-rose-500 to-rose-700 text-white px-4 py-2.5">
+            <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
+              👁 Preview — takto to uvidí obchodák
+            </div>
+            <div className="font-black text-sm leading-tight truncate">
+              {form.label || "(bez názvu)"}
+            </div>
+          </div>
+          <div className="p-4 max-h-[70vh] overflow-y-auto">
+            {steps.length > 0 ? (
+              <ScriptStepper
+                steps={steps}
+                stepIdx={previewStepIdx}
+                setStepIdx={setPreviewStepIdx}
+                answers={previewAnswers}
+                pendingNote={previewPendingNote}
+                setPendingNote={setPreviewPendingNote}
+                otherText={previewOtherText}
+                setOtherText={setPreviewOtherText}
+                ctx={previewCtx}
+                onAnswer={(id, value, note) => {
+                  setPreviewAnswers((prev) => ({
+                    ...prev,
+                    [id]: { value, note: note?.trim() || undefined, at: "preview" },
+                  }));
+                  setPreviewPendingNote("");
+                  setPreviewOtherText("");
+                }}
+              />
+            ) : form.body ? (
+              <pre className="text-xs font-semibold text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
+                {renderCallscript(form.body, previewCtx)}
+              </pre>
+            ) : (
+              <div className="text-center text-xs text-slate-400 italic py-8">
+                Zatiaľ prázdne — pridaj kroky alebo body text ↓
+              </div>
+            )}
+          </div>
+          {steps.length > 0 && (
+            <div className="border-t bg-slate-50 px-3 py-2 flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewStepIdx(0);
+                  setPreviewAnswers({});
+                  setPreviewPendingNote("");
+                  setPreviewOtherText("");
+                }}
+                className="text-[10px] font-bold text-sky-700 hover:underline"
+              >
+                🔄 Reset preview
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Preview data — nastavovanie mock leadu */}
+        <details className="rounded-lg border border-slate-200 bg-slate-50 text-xs">
+          <summary className="cursor-pointer px-3 py-2 font-black text-slate-700 select-none">
+            🧪 Testovací lead pre preview
+          </summary>
+          <div className="p-3 pt-1 space-y-2">
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Meno + priezvisko</span>
+              <input
+                value={previewCtx.leadName ?? ""}
+                onChange={(e) => setPreviewCtx({ ...previewCtx, leadName: e.target.value })}
+                className="w-full rounded border border-slate-300 px-2 py-1 mt-0.5 text-sm"
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Plocha m²</span>
+                <input
+                  value={previewCtx.plocha ?? ""}
+                  onChange={(e) => setPreviewCtx({ ...previewCtx, plocha: e.target.value })}
+                  className="w-full rounded border border-slate-300 px-2 py-1 mt-0.5 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Lokalita</span>
+                <input
+                  value={previewCtx.lokalita ?? ""}
+                  onChange={(e) => setPreviewCtx({ ...previewCtx, lokalita: e.target.value })}
+                  className="w-full rounded border border-slate-300 px-2 py-1 mt-0.5 text-sm"
+                />
+              </label>
+            </div>
+          </div>
+        </details>
+      </div>
+      </div>{/* end grid */}
     </div>
   );
 }

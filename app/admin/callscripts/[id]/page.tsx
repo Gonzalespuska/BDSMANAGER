@@ -29,15 +29,8 @@ export default async function EditCallscriptPage({
         floor_type: (data.floor_type as string | null) ?? null,
         space: (data.space as string | null) ?? null,
         body: (data.body as string) ?? "",
-        steps: (data.steps as Array<{
-          id: string;
-          type: "info" | "choice" | "yesno" | "number" | "freetext";
-          prompt: string;
-          options?: Array<{ value: string; label: string }>;
-          allow_other?: boolean;
-          unit?: string;
-          required?: boolean;
-        }> | null) ?? null,
+        // JSONB → runtime tvar sa validuje v editore.
+        steps: (data.steps as never) ?? null,
         sort_order: (data.sort_order as number) ?? 100,
         active: (data.active as boolean) ?? true,
       }}
