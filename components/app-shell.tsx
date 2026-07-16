@@ -32,6 +32,7 @@ import { GlobalSearchTrigger } from "./admin/global-search-modal";
 import { VacationApprovalsBar } from "./vacation-approvals-bar";
 import { Toaster } from "./ui/toast";
 import { RoleViewDropdown } from "./role-view-dropdown";
+import { MackoLogo } from "./macko-logo";
 
 /** Definícia každej navigačnej dlaždice — href, label, ikona. */
 const NAV_TAB_DEFS: Record<
@@ -231,17 +232,10 @@ export async function AppShell({
             href={homeHref}
             className="hover:opacity-80 transition-opacity min-w-0 flex items-center gap-2 md:gap-3"
           >
-            {/* Macko maskot — user 2026-07-16: „bavili sme sa ze tu ma
-                byt ten macko maskot". Nahraj reálny obrázok cez
-                public/macko.png (má prioritu pred fallback SVG). */}
-            <img
-              src="/macko.png"
-              alt="Macko"
-              className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-full object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = "/macko.svg";
-              }}
-            />
+            {/* Macko maskot — client komponent (onError fallback vyžaduje
+                event handler → nesmie byť v RSC). Predtým crashoval /admin
+                s digest 1227445453. */}
+            <MackoLogo />
             <div className="min-w-0">
               <div className="text-lg md:text-3xl font-extrabold tracking-tight leading-none whitespace-nowrap">
                 Epoxidovo<span className="text-sky-500"> Manager</span>
