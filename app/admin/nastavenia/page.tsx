@@ -93,6 +93,13 @@ export default async function NastaveniaAdminPage() {
             tint="violet"
           />
           <SubmoduleTile
+            href="/admin/podklady"
+            title="Podklady (knowledge)"
+            desc="Sales tips, obhliadka protokoly, product info, cenníky. Priradíš podklad k role → člen tímu ho uvidí v svojej sekcii Podklady. Markdown."
+            Icon={GraduationCap}
+            tint="violet"
+          />
+          <SubmoduleTile
             href="/admin/kontent"
             title="Kontent shotlist"
             desc="Čo majú realizatori fotiť/nakrúcať pred/počas/po realizácii."
