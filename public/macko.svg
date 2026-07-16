@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- ušká -->
+  <circle cx="25" cy="25" r="12" fill="#8B5A2B"/>
+  <circle cx="75" cy="25" r="12" fill="#8B5A2B"/>
+  <circle cx="25" cy="25" r="6" fill="#D4A574"/>
+  <circle cx="75" cy="25" r="6" fill="#D4A574"/>
+  <!-- hlava -->
+  <circle cx="50" cy="55" r="35" fill="#8B5A2B"/>
+  <!-- tvár lighter -->
+  <ellipse cx="50" cy="65" rx="22" ry="18" fill="#D4A574"/>
+  <!-- oči -->
+  <circle cx="38" cy="50" r="3.5" fill="#1a1a1a"/>
+  <circle cx="62" cy="50" r="3.5" fill="#1a1a1a"/>
+  <circle cx="39" cy="49" r="1" fill="#fff"/>
+  <circle cx="63" cy="49" r="1" fill="#fff"/>
+  <!-- nos -->
+  <ellipse cx="50" cy="62" rx="4" ry="3" fill="#1a1a1a"/>
+  <!-- usmev -->
+  <path d="M 42 72 Q 50 78 58 72" stroke="#1a1a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg>

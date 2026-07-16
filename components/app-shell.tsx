@@ -229,13 +229,26 @@ export async function AppShell({
         <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-3 sm:px-6 py-2 md:py-4 flex items-center justify-between gap-2 md:gap-3">
           <Link
             href={homeHref}
-            className="hover:opacity-80 transition-opacity min-w-0"
+            className="hover:opacity-80 transition-opacity min-w-0 flex items-center gap-2 md:gap-3"
           >
-            <div className="text-lg md:text-3xl font-extrabold tracking-tight leading-none whitespace-nowrap">
-              Epoxidovo<span className="text-sky-500"> Manager</span>
-            </div>
-            <div className="hidden md:block mt-1 text-[11px] md:text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              CRM
+            {/* Macko maskot — user 2026-07-16: „bavili sme sa ze tu ma
+                byt ten macko maskot". Nahraj reálny obrázok cez
+                public/macko.png (má prioritu pred fallback SVG). */}
+            <img
+              src="/macko.png"
+              alt="Macko"
+              className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = "/macko.svg";
+              }}
+            />
+            <div className="min-w-0">
+              <div className="text-lg md:text-3xl font-extrabold tracking-tight leading-none whitespace-nowrap">
+                Epoxidovo<span className="text-sky-500"> Manager</span>
+              </div>
+              <div className="hidden md:block mt-1 text-[11px] md:text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                CRM
+              </div>
             </div>
           </Link>
 
