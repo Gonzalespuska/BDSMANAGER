@@ -7,7 +7,8 @@ import { Check, Phone, X } from "lucide-react";
 import { updateAgentAction } from "@/app/admin/agents/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { autoFormatPhoneWhileTyping } from "@/lib/phone-format";
+import { toast } from "@/components/ui/toast";
+import { autoFormatPhoneWhileTyping, formatPhoneIntl } from "@/lib/phone-format";
 
 /**
  * Editovateľné phone pole v admin/agents/[id] detaile.
@@ -38,17 +39,24 @@ export function PhoneEditor({
     }
     setBusy(true);
     setError(null);
+    // Normalizuj na +421 950 890 098 format PRED uložením — jednotný tvar
+    // v celom CRM + email footeroch. User 2026-07-16: „telefonne cislo
+    // nech tam je rovnake pravidlo ako sme sa bavili v tom formate
+    // +421 950 890 a nech to takto ukazuje vsade aj do footerov mailov".
+    const normalized = trimmed ? formatPhoneIntl(trimmed) : null;
     const res = await updateAgentAction(agentId, {
-      phone: trimmed || null,
+      phone: normalized,
     });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
+      toast.error(`Chyba: ${res.error}`);
       return;
     }
-    setSavedPhone(trimmed);
+    setSavedPhone(normalized ?? "");
     setEditing(false);
-    router.refresh();
+    toast.success(`✅ Telefón uložený: ${normalized || "(prázdny)"}`);
+    window.location.reload();
   }
 
   return (
@@ -128,7 +136,9 @@ export function PhoneEditor({
       ) : (
         <div className="flex items-center justify-between gap-3">
           <div className="text-xl font-extrabold tabular-nums">
-            {savedPhone || (
+            {savedPhone ? (
+              formatPhoneIntl(savedPhone)
+            ) : (
               <span className="text-muted-foreground italic font-normal text-base">
                 — nezadané
               </span>

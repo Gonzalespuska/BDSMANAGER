@@ -89,11 +89,14 @@ const ROLE_DEFS: Array<{
 export function PermissionsCard({
   agentId,
   role,
+  secondaryRoles: initialSecondary,
   active,
   name,
 }: {
   agentId: string;
   role: UserRole;
+  /** User 2026-07-16: „chcem mu dat multiple role proste". */
+  secondaryRoles?: UserRole[];
   active: boolean;
   name: string;
 }) {
@@ -103,6 +106,9 @@ export function PermissionsCard({
   const [error, setError] = React.useState<string | null>(null);
   const [pendingRole, setPendingRole] = React.useState<UserRole | null>(null);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [secondary, setSecondary] = React.useState<Set<UserRole>>(
+    new Set(initialSecondary ?? []),
+  );
 
   async function applyRole(next: UserRole) {
     setBusy(true);
@@ -112,9 +118,47 @@ export function PermissionsCard({
     setPendingRole(null);
     if (!res.ok) {
       setError(res.error);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { toast } = require("@/components/ui/toast");
+      toast.error(`Chyba: ${res.error}`);
     } else {
-      router.refresh();
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { toast } = require("@/components/ui/toast");
+      toast.success(`✅ Rola zmenená na „${labelOf(next)}"`);
+      window.location.reload();
     }
+  }
+
+  async function saveSecondary() {
+    setBusy(true);
+    setError(null);
+    const list = Array.from(secondary).filter((r) => r !== role);
+    const res = await updateAgentAction(agentId, {
+      secondary_roles: list,
+    });
+    setBusy(false);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { toast } = require("@/components/ui/toast");
+    if (!res.ok) {
+      setError(res.error);
+      toast.error(`Chyba: ${res.error}`);
+    } else {
+      toast.success(
+        list.length === 0
+          ? "✅ Sekundárne role vymazané"
+          : `✅ Sekundárne role uložené (${list.length})`,
+      );
+      window.location.reload();
+    }
+  }
+
+  function toggleSecondary(r: UserRole) {
+    setSecondary((prev) => {
+      const next = new Set(prev);
+      if (next.has(r)) next.delete(r);
+      else next.add(r);
+      return next;
+    });
   }
 
   async function doDelete() {
@@ -184,6 +228,68 @@ export function PermissionsCard({
                   </div>
                 </div>
               </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Sekundárne role — user môže mať viac rolí naraz.
+          User 2026-07-16: „tu mi to nedovoluje mu pridat rolu iba zmenit
+          ja mu chcem dat multiple role proste". */}
+      <div className="mt-3 rounded-xl border bg-background p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            Dodatočné role (multi-role user)
+          </div>
+          {(() => {
+            const currentSet = new Set(initialSecondary ?? []);
+            const nextSet = new Set(Array.from(secondary).filter((r) => r !== role));
+            const changed =
+              currentSet.size !== nextSet.size ||
+              !Array.from(currentSet).every((r) => nextSet.has(r));
+            return changed ? (
+              <button
+                type="button"
+                onClick={saveSecondary}
+                disabled={busy}
+                className="inline-flex items-center gap-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-2.5 py-1 disabled:opacity-50"
+              >
+                {busy ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Check className="w-3 h-3" />
+                )}
+                Uložiť
+              </button>
+            ) : null;
+          })()}
+        </div>
+        <p className="text-[11px] text-slate-600 leading-snug">
+          Napr. admin ktorý dostáva aj obchod-leady. Odškrtni tie ktoré má
+          mať okrem primárnej role.
+        </p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {ROLE_DEFS.filter((d) => d.role !== role).map((def) => {
+            const checked = secondary.has(def.role);
+            return (
+              <label
+                key={def.role}
+                className={cn(
+                  "flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer transition-colors",
+                  checked
+                    ? "border-sky-400 bg-sky-50 dark:bg-sky-950/30"
+                    : "border-slate-200 hover:border-slate-300",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleSecondary(def.role)}
+                  disabled={busy}
+                  className="w-4 h-4"
+                />
+                <span className="font-bold">{def.label}</span>
+              </label>
             );
           })}
         </div>

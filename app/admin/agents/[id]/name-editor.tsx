@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Pencil, X } from "lucide-react";
 
 import { updateAgentAction } from "@/app/admin/agents/actions";
+import { toast } from "@/components/ui/toast";
 
 /**
  * NameEditor — inline editovateľné meno agenta na /admin/agents/[id].
@@ -40,11 +41,15 @@ export function AgentNameEditor({
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
+      toast.error(`Chyba: ${res.error}`);
       return;
     }
     setSaved(trimmed);
     setEditing(false);
-    router.refresh();
+    toast.success(`✅ Meno zmenené na „${trimmed}"`);
+    // Hard nav — router.refresh() občas nechá stale header/sidebar cache.
+    // User 2026-07-16: „dam zmenit meno confirmnem nic, ziadna noti".
+    window.location.reload();
   }
 
   if (editing) {

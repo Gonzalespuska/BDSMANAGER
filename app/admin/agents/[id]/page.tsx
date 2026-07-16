@@ -428,6 +428,11 @@ export default async function AdminAgentDetailPage({ params }: PageProps) {
           <PermissionsCard
             agentId={agent.id as string}
             role={(agent.role as AppUserRole) ?? "obchod"}
+            secondaryRoles={
+              (Array.isArray(agent.secondary_roles)
+                ? (agent.secondary_roles as AppUserRole[])
+                : []) ?? []
+            }
             active={!!agent.active}
             name={(agent.name as string) || (agent.email as string) || "obchodník"}
           />

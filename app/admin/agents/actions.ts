@@ -182,6 +182,12 @@ export async function updateAgentAction(
       | "realizacie"
       | "office"
       | "skolenie";
+    /** User 2026-07-16: „chcem mu dat multiple role proste". Sekundárne
+     *  role okrem primary. Napr. admin s [obchod, obhliadky] = má admin
+     *  UI + zároveň dostáva leady + obhliadky. */
+    secondary_roles?: Array<
+      "admin" | "obchod" | "obhliadky" | "realizacie" | "office" | "skolenie"
+    >;
     capacity?: number;
     active?: boolean;
     phone?: string | null;
@@ -214,6 +220,16 @@ export async function updateAgentAction(
       return { ok: false, error: "Neplatná rola" };
     }
     update.role = patch.role;
+  }
+  if (patch.secondary_roles !== undefined) {
+    const ALLOWED = ["admin", "obchod", "obhliadky", "realizacie", "office", "skolenie"];
+    const filtered = patch.secondary_roles.filter(
+      (r) =>
+        ALLOWED.includes(r) &&
+        // Nevkladaj primárnu rolu do secondary (bez duplicity)
+        r !== (patch.role ?? update.role),
+    );
+    update.secondary_roles = Array.from(new Set(filtered));
   }
   if (patch.capacity !== undefined) {
     const c = Math.max(0, Math.min(10, Math.floor(patch.capacity)));
