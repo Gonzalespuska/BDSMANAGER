@@ -223,13 +223,19 @@ export async function updateAgentAction(
   }
   if (patch.secondary_roles !== undefined) {
     const ALLOWED = ["admin", "obchod", "obhliadky", "realizacie", "office", "skolenie"];
-    const filtered = patch.secondary_roles.filter(
-      (r) =>
-        ALLOWED.includes(r) &&
-        // Nevkladaj primárnu rolu do secondary (bez duplicity)
-        r !== (patch.role ?? update.role),
-    );
-    update.secondary_roles = Array.from(new Set(filtered));
+    const primary = (patch.role ?? update.role) as string | undefined;
+    // Explicitná dedupe (bez Set iteration) — next-on-pages edge runtime
+    // nemá downlevel Set support v niektorých build módoch.
+    const seen: Record<string, boolean> = {};
+    const filtered: string[] = [];
+    for (const r of patch.secondary_roles) {
+      if (!ALLOWED.includes(r)) continue;
+      if (r === primary) continue;
+      if (seen[r]) continue;
+      seen[r] = true;
+      filtered.push(r);
+    }
+    update.secondary_roles = filtered;
   }
   if (patch.capacity !== undefined) {
     const c = Math.max(0, Math.min(10, Math.floor(patch.capacity)));
