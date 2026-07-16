@@ -463,7 +463,53 @@ export default async function LeadDetailPage({
               // field_updated vidieť aký field sa menil, atď.
               const d = act.data ?? {};
               let extra: React.ReactNode = null;
-              if (act.type === "status_changed") {
+              // User 2026-07-16: „lead vytvoreny to je co ty kokot to co
+              // znamena ako vytvoreny manual meta google co". Rozšírime
+              // created event o source label + campaign.
+              if (act.type === "created") {
+                const sourceMap: Record<string, { label: string; color: string }> = {
+                  facebook: { label: "📘 Meta / Facebook", color: "bg-indigo-100 text-indigo-800" },
+                  instagram: { label: "📷 Meta / Instagram", color: "bg-fuchsia-100 text-fuchsia-800" },
+                  meta_form: { label: "📘 Meta form", color: "bg-indigo-100 text-indigo-800" },
+                  fb_lead_ads: { label: "📘 Meta / Facebook Ads", color: "bg-indigo-100 text-indigo-800" },
+                  web_webhook: { label: "🌐 Web (epoxidovo.sk)", color: "bg-sky-100 text-sky-800" },
+                  website: { label: "🌐 Web", color: "bg-sky-100 text-sky-800" },
+                  google: { label: "🔍 Google Ads", color: "bg-rose-100 text-rose-800" },
+                  manual: { label: "✍️ Manuálne (admin)", color: "bg-amber-100 text-amber-800" },
+                };
+                const meta = sourceMap[lead.source_type] ?? {
+                  label: `📥 ${lead.source_type}`,
+                  color: "bg-slate-100 text-slate-800",
+                };
+                extra = (
+                  <div className="mt-1 space-y-1">
+                    <span
+                      className={
+                        "inline-flex items-center text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded " +
+                        meta.color
+                      }
+                    >
+                      {meta.label}
+                    </span>
+                    {lead.source_campaign && (
+                      <div className="text-xs text-slate-600">
+                        Kampaň: <span className="font-semibold">{lead.source_campaign}</span>
+                        {(() => {
+                          const adName =
+                            (leadAny.data as Record<string, unknown> | null | undefined)
+                              ?.meta_ad_name;
+                          return typeof adName === "string" && adName ? (
+                            <>
+                              {" · "}
+                              <span className="font-semibold">{adName}</span>
+                            </>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                );
+              } else if (act.type === "status_changed") {
                 const from = d.from as string | undefined;
                 const to = d.to as string | undefined;
                 extra = (
