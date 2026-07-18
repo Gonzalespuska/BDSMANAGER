@@ -45,6 +45,38 @@ export function RoleViewDropdown({
   const [busy, setBusy] = React.useState<string | null>(null);
   const ref = React.useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  // Aktivny submenu — user 2026-07-18: „ked sa mi jedno zobrazi tak akonahle
+  // sa otvori novy musi sa 1. vypnut chapes teraz viem otvorit aj 3 naraz".
+  // Kedysi mal kazdy RoleButton lokalny subOpen state → viac submenu mohlo
+  // byt otvorenych naraz. Teraz je state hore, iba jeden role moze byt
+  // aktivny.
+  const [activeSubmenu, setActiveSubmenu] = React.useState<ViewAsRole | null>(null);
+  const submenuTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  function openSubmenu(role: ViewAsRole) {
+    if (submenuTimer.current) {
+      clearTimeout(submenuTimer.current);
+      submenuTimer.current = null;
+    }
+    setActiveSubmenu(role);
+  }
+  function scheduleCloseSubmenu(role: ViewAsRole) {
+    if (submenuTimer.current) clearTimeout(submenuTimer.current);
+    submenuTimer.current = setTimeout(() => {
+      // Zavri iba ak je aktivny este stale tento role
+      setActiveSubmenu((cur) => (cur === role ? null : cur));
+    }, 200);
+  }
+  function cancelCloseSubmenu() {
+    if (submenuTimer.current) {
+      clearTimeout(submenuTimer.current);
+      submenuTimer.current = null;
+    }
+  }
+  React.useEffect(() => {
+    return () => {
+      if (submenuTimer.current) clearTimeout(submenuTimer.current);
+    };
+  }, []);
 
   // Zoznam tímu — načíta sa raz keď admin otvorí dropdown; použité pre
   // hover-submenu (Obchod → konkrétni obchodáci).
@@ -282,6 +314,10 @@ export function RoleViewDropdown({
             hover="hover:bg-sky-50"
             title="Obchod"
             desc="Leady, callbacky, cenové ponuky"
+            activeSubmenu={activeSubmenu}
+            openSubmenu={openSubmenu}
+            scheduleCloseSubmenu={scheduleCloseSubmenu}
+            cancelCloseSubmenu={cancelCloseSubmenu}
           />
           <RoleButton
             role="realizacie"
@@ -295,6 +331,10 @@ export function RoleViewDropdown({
             hover="hover:bg-emerald-50"
             title="Realizácie"
             desc="Zákazky, foto/video z priebehu"
+            activeSubmenu={activeSubmenu}
+            openSubmenu={openSubmenu}
+            scheduleCloseSubmenu={scheduleCloseSubmenu}
+            cancelCloseSubmenu={cancelCloseSubmenu}
           />
           <RoleButton
             role="obhliadky"
@@ -308,6 +348,10 @@ export function RoleViewDropdown({
             hover="hover:bg-violet-50"
             title="Obhliadky"
             desc="Formulár, rozmery, foto z miesta"
+            activeSubmenu={activeSubmenu}
+            openSubmenu={openSubmenu}
+            scheduleCloseSubmenu={scheduleCloseSubmenu}
+            cancelCloseSubmenu={cancelCloseSubmenu}
           />
           {/* User 2026-07-12: „tato rola prec" — Školenie tlačidlo skryté. */}
         </div>
@@ -337,6 +381,10 @@ function RoleButton({
   title,
   desc,
   badge,
+  activeSubmenu,
+  openSubmenu,
+  scheduleCloseSubmenu,
+  cancelCloseSubmenu,
 }: {
   role: ViewAsRole;
   current?: string | null;
@@ -350,29 +398,18 @@ function RoleButton({
   title: string;
   desc: string;
   badge?: string;
+  activeSubmenu: ViewAsRole | null;
+  openSubmenu: (role: ViewAsRole) => void;
+  scheduleCloseSubmenu: (role: ViewAsRole) => void;
+  cancelCloseSubmenu: () => void;
 }) {
   const isCurrent = current === role;
   const isBusy = busy === role;
-  // Submenu (Obchod → konkrétni obchodáci) sa otvara HNED na hover.
-  // User 2026-07-18: „toto trva furt tolko isto ked na to ukazem kurzorom"
-  // — predtym bolo 800ms delay ktore uzivatel citil ako laggy.
-  const [subOpen, setSubOpen] = React.useState(false);
-  const hoverTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Submenu state je LIFTED HORE do RoleViewDropdown parentu — user
+  // 2026-07-18: „ked sa mi jedno zobrazi tak akonahle sa otvori novy musi
+  // sa 1. vypnut". Iba jeden submenu moze byt aktivny naraz.
+  const subOpen = activeSubmenu === role;
   const wrapRef = React.useRef<HTMLDivElement>(null);
-
-  function scheduleOpen() {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    setSubOpen(true);
-  }
-  function cancelOpen() {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    hoverTimer.current = null;
-  }
-  function scheduleClose() {
-    cancelOpen();
-    // 200ms grace aby cursor stihol prejst na submenu bez „utekania".
-    hoverTimer.current = setTimeout(() => setSubOpen(false), 200);
-  }
 
   const usersInRole = (team ?? []).filter(
     (u) => u.role === role && u.active,
@@ -382,8 +419,8 @@ function RoleButton({
     <div
       ref={wrapRef}
       className="relative"
-      onMouseEnter={scheduleOpen}
-      onMouseLeave={scheduleClose}
+      onMouseEnter={() => openSubmenu(role)}
+      onMouseLeave={() => scheduleCloseSubmenu(role)}
     >
       <button
         type="button"
@@ -426,8 +463,8 @@ function RoleButton({
       {/* Submenu — konkrétni ľudia tejto role. */}
       {subOpen && usersInRole.length > 0 && (
         <div
-          onMouseEnter={cancelOpen}
-          onMouseLeave={scheduleClose}
+          onMouseEnter={cancelCloseSubmenu}
+          onMouseLeave={() => scheduleCloseSubmenu(role)}
           className="absolute right-full top-0 mr-1 w-56 rounded-xl border bg-background shadow-2xl p-1.5 z-50"
         >
           <div className="px-2 py-1 border-b mb-1">
