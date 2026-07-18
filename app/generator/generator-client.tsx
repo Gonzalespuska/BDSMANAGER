@@ -801,6 +801,9 @@ export function GeneratorClient({
         agent_phone: agentInfo?.phone ?? undefined,
         discount_amount: discountEnabled ? parseFloat(discountAmount) || 0 : 0,
         discount_label: discountLabel || "Špeciálna zľava pre vás",
+        volume_discount_amount:
+          volumeTier.discount_pct > 0 ? volumeDiscountValue : 0,
+        volume_discount_label: volumeTier.label ?? undefined,
       },
     };
   }

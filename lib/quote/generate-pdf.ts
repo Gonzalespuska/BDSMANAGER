@@ -41,6 +41,12 @@ export interface PdfQuoteInput {
   discount_amount?: number;
   /** Custom label pre zľavu (default "Špeciálna zľava pre vás"). */
   discount_label?: string;
+  /** Automatická množstevná zľava (podľa plochy m²). Nezmenšuje total —
+   *  je už zarátaná v subtotal-och. Zobrazí sa samostatný riadok aby
+   *  zákazník videl že dostal zľavu. */
+  volume_discount_amount?: number;
+  /** Label pre množstevnú zľavu (napr. „Množstevná zľava 6% (od 300 m²)"). */
+  volume_discount_label?: string;
   agent_name: string;
   agent_email: string;
   /** Telefón obchodáka — voliteľný (do footera). */
@@ -301,6 +307,35 @@ export function generateQuotePdf(input: PdfQuoteInput): {
   if (y > 230) {
     doc.addPage();
     y = 25;
+  }
+
+  // Množstevná zľava (automatická podľa m²) — zobrazí sa emerald zeleno,
+  // NEznižuje total (už je zarátaná v subtotal-e). Iba informuje zákazníka
+  // že dostal zľavu.
+  const volumeDiscount = Math.max(0, input.volume_discount_amount ?? 0);
+  if (volumeDiscount > 0) {
+    const label = input.volume_discount_label ?? "Množstevná zľava";
+    doc.setFontSize(10);
+    doc.setTextColor(140);
+    doc.text("Cena pred množstevnou zľavou:", right - 70, y, {
+      align: "right",
+    });
+    doc.text(
+      formatEur(subtotalBeforeDiscount + volumeDiscount),
+      right - 2,
+      y,
+      { align: "right" },
+    );
+    y += 6;
+
+    doc.setFontSize(11);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(5, 150, 105); // emerald-600
+    doc.text(`✓ ${label}:`, right - 70, y, { align: "right" });
+    doc.text(`− ${formatEur(volumeDiscount)}`, right - 2, y, { align: "right" });
+    doc.setTextColor(0);
+    doc.setFont("Roboto", "normal");
+    y += 9;
   }
 
   // Cena bez zľavy (small)
