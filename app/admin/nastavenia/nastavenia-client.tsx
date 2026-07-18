@@ -160,23 +160,31 @@ function SectionBlock({
   desc,
   children,
   id,
+  defaultOpen = false,
 }: {
   title: string;
   desc: string;
   children: React.ReactNode;
   id?: string;
+  defaultOpen?: boolean;
 }) {
   return (
-    <section
+    <details
       id={id}
-      className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3 scroll-mt-24"
+      open={defaultOpen}
+      className="group rounded-2xl border-2 border-slate-200 bg-white scroll-mt-24 overflow-hidden"
     >
-      <header>
-        <h3 className="text-lg font-black">{title}</h3>
-        <p className="text-xs text-muted-foreground">{desc}</p>
-      </header>
-      {children}
-    </section>
+      <summary className="cursor-pointer list-none px-4 py-3 hover:bg-slate-50 flex items-center gap-3 select-none">
+        <span className="text-slate-500 group-open:rotate-90 transition-transform text-sm">
+          ▶
+        </span>
+        <div className="flex-1">
+          <h3 className="text-lg font-black">{title}</h3>
+          <p className="text-xs text-muted-foreground">{desc}</p>
+        </div>
+      </summary>
+      <div className="px-4 pb-4 pt-1 space-y-3">{children}</div>
+    </details>
   );
 }
 

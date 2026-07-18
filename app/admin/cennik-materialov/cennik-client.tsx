@@ -726,10 +726,6 @@ function MaterialRow({
                 extra
               </span>
             )}
-            <span className="text-[10px] text-muted-foreground font-mono ml-1">
-              {isExtra ? "extra." : ""}
-              {row.key}
-            </span>
           </div>
         </div>
       </div>
