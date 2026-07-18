@@ -15,7 +15,7 @@ export default async function CennikMaterialovPage() {
   const { data } = await sb
     .from("app_settings")
     .select("key, value")
-    .like("key", "material.%.price_per_sqm");
+    .like("key", "material.%");
 
   return (
     <div className="space-y-5">
@@ -32,9 +32,11 @@ export default async function CennikMaterialovPage() {
           Cenník materiálov (Generátor CP)
         </h1>
         <p className="text-xs text-muted-foreground mt-1 max-w-3xl">
-          Prepis € /m² pre 18 hardcoded materiálov ktoré generátor cenových
-          ponúk používa. Prázdne pole = default cena z kódu. Uložená hodnota má
-          prednosť pri kalkulácii CP. Zmena je live — netreba redeploy.
+          Predajná cena (generator CP) + naše nákupné ceny + spotreba materiálu
+          pre 18 operácií. Nákupné ceny + spotreby sú prefilnuté odhadmi zo Sika/
+          Topstone cenníka a TDS — upravuj podľa reálnych faktúr. Predajné ceny
+          používa generátor CP live, nákupné + spotreby sa budú neskôr čerpať
+          do postupov realizatorov.
         </p>
       </header>
 
