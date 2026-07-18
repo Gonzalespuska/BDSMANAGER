@@ -173,13 +173,8 @@ export function GlobalSearchModal({
       >
         <div className="bg-gradient-to-br from-sky-500 to-sky-700 text-white px-4 py-3 flex items-center gap-3 shrink-0">
           <Search className="w-5 h-5" />
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-widest opacity-90">
-              Admin — globálne hľadanie
-            </div>
-            <div className="font-black text-sm leading-tight">
-              Leady (všetky stavy) + tím
-            </div>
+          <div className="flex-1 min-w-0 font-black text-base leading-tight">
+            Globálne hľadanie
           </div>
           <button
             type="button"
