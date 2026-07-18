@@ -319,7 +319,7 @@ export function MissingFieldChip({
           e.preventDefault();
           setEditing(true);
         }}
-        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-zinc-100 hover:bg-sky-100 text-zinc-800 hover:text-sky-900 border border-transparent hover:border-sky-300 transition-colors group"
+        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-zinc-100 dark:bg-slate-800 hover:bg-sky-100 dark:hover:bg-sky-950/60 text-zinc-800 dark:text-slate-200 hover:text-sky-900 dark:hover:text-sky-300 border border-transparent hover:border-sky-300 dark:hover:border-sky-700 transition-colors group"
         aria-label={`Upraviť ${labelForField(field)}: ${displayValue}`}
         title={`Klik = upraviť ${labelForField(field)}`}
       >
@@ -341,7 +341,7 @@ export function MissingFieldChip({
       }}
       className={cn(
         "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all group",
-        "border-2 border-dashed border-amber-300 bg-amber-50/50 text-amber-800 hover:border-amber-500 hover:bg-amber-50 animate-pulse-slow",
+        "border-2 border-dashed border-amber-300 dark:border-slate-600 bg-amber-50/50 dark:bg-slate-900/40 text-amber-800 dark:text-slate-400 hover:border-amber-500 dark:hover:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 dark:hover:text-amber-300 animate-pulse-slow",
       )}
       aria-label={`Doplniť ${labelForField(field)}`}
     >

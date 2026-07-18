@@ -110,61 +110,64 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
  *   🏆 Ukončené   → won
  *   📦 Archivované→ archived + lost + not_interested
  */
+// Pill farby — light mode: solid bright status color; dark mode: muted
+// -950/40 background + -300 text tinted podľa statusu. Bright solid pill
+// v dark theme by pichal do očí (user 2026-07-18: WhatsApp-style dark).
 export const STATUS_META: Record<
   LeadStatus,
   { label: string; pill: string }
 > = {
   new: {
     label: "🆕 NOVÉ",
-    pill: "bg-red-500 text-white",
+    pill: "bg-red-500 dark:bg-red-950/50 text-white dark:text-red-300 dark:border dark:border-red-900",
   },
   phone_revealed: {
     label: "📞 KONTAKT",
-    pill: "bg-blue-500 text-white",
+    pill: "bg-blue-500 dark:bg-blue-950/50 text-white dark:text-blue-300 dark:border dark:border-blue-900",
   },
   no_answer: {
     label: "🟡 NEZDVÍHALI",
-    pill: "bg-amber-500 text-white",
+    pill: "bg-amber-500 dark:bg-amber-950/50 text-white dark:text-amber-300 dark:border dark:border-amber-900",
   },
   scheduled: {
     label: "📅 NAPLÁNOVANÉ",
-    pill: "bg-purple-500 text-white",
+    pill: "bg-purple-500 dark:bg-purple-950/50 text-white dark:text-purple-300 dark:border dark:border-purple-900",
   },
   interested: {
     label: "✅ CP",
-    pill: "bg-emerald-600 text-white",
+    pill: "bg-emerald-600 dark:bg-emerald-950/50 text-white dark:text-emerald-300 dark:border dark:border-emerald-900",
   },
   not_interested: {
     label: "❌ NEZÁUJEM",
-    pill: "bg-zinc-500 text-white",
+    pill: "bg-zinc-500 dark:bg-slate-800 text-white dark:text-slate-400 dark:border dark:border-slate-700",
   },
   quote_sent: {
     label: "✅ CP POSLANÁ",
-    pill: "bg-violet-600 text-white",
+    pill: "bg-violet-600 dark:bg-violet-950/50 text-white dark:text-violet-300 dark:border dark:border-violet-900",
   },
   needs_inspection: {
     label: "🔍 OBHLIADKA",
-    pill: "bg-violet-500 text-white",
+    pill: "bg-violet-500 dark:bg-violet-950/50 text-white dark:text-violet-300 dark:border dark:border-violet-900",
   },
   inspected: {
     label: "✔️ OBHLIADNUTÝ",
-    pill: "bg-teal-600 text-white",
+    pill: "bg-teal-600 dark:bg-teal-950/50 text-white dark:text-teal-300 dark:border dark:border-teal-900",
   },
   in_realization: {
     label: "🔨 V REALIZÁCII",
-    pill: "bg-emerald-600 text-white",
+    pill: "bg-emerald-600 dark:bg-emerald-950/50 text-white dark:text-emerald-300 dark:border dark:border-emerald-900",
   },
   won: {
     label: "🏆 WON",
-    pill: "bg-green-700 text-white",
+    pill: "bg-green-700 dark:bg-green-950/50 text-white dark:text-green-300 dark:border dark:border-green-900",
   },
   lost: {
     label: "💔 STRATENÝ",
-    pill: "bg-red-700 text-white",
+    pill: "bg-red-700 dark:bg-red-950/50 text-white dark:text-red-300 dark:border dark:border-red-900",
   },
   archived: {
     label: "📦 ARCHIVOVANÉ",
-    pill: "bg-zinc-400 text-white",
+    pill: "bg-zinc-400 dark:bg-slate-800 text-white dark:text-slate-400 dark:border dark:border-slate-700",
   },
 };
 

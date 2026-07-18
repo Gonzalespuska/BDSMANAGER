@@ -264,7 +264,7 @@ export function CallscriptButton({
     <button
       type="button"
       onClick={openModal}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black bg-gradient-to-br from-rose-500 to-rose-700 hover:from-rose-600 hover:to-rose-800 text-white shadow-[0_2px_6px_rgba(225,29,72,0.35)] transition-all"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 dark:from-emerald-600 dark:to-emerald-800 text-white shadow-[0_2px_6px_rgba(16,185,129,0.35)] transition-all"
       title="Otvorí interaktívny scenár hovoru — kliknutím naň idete volať"
     >
       <PhoneCall className="w-3.5 h-3.5" />

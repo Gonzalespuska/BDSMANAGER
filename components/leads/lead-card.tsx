@@ -340,8 +340,8 @@ export function LeadCard({
                   className={cn(
                     "inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md",
                     lead.call_attempts >= 3
-                      ? "bg-red-100 text-red-800"
-                      : "bg-amber-100 text-amber-800",
+                      ? "bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-900"
+                      : "bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900",
                   )}
                 >
                   <AlertCircle className="w-3 h-3" aria-hidden />
@@ -382,7 +382,7 @@ export function LeadCard({
               isRevealed ? (
                 <a
                   href={`tel:${lead.phone}`}
-                  className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight tabular-nums"
+                  className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300 tracking-tight tabular-nums"
                 >
                   <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
                   {formatPhoneSK(lead.phone)}
@@ -392,14 +392,14 @@ export function LeadCard({
                   type="button"
                   onClick={handleCall}
                   disabled={busy}
-                  className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 hover:text-emerald-900 tracking-tight tabular-nums disabled:opacity-50 group"
+                  className="inline-flex items-center gap-2 text-2xl md:text-3xl font-extrabold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300 tracking-tight tabular-nums disabled:opacity-50 group"
                   title="Kliknutím odhalíš číslo a začneš volať"
                 >
                   <Phone className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
-                  <span className="border-b-2 border-dashed border-emerald-400 group-hover:border-solid">
+                  <span className="border-b-2 border-dashed border-emerald-400 dark:border-emerald-700 group-hover:border-solid">
                     +421 •• ••• •••
                   </span>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded">
                     odhaliť
                   </span>
                 </button>
@@ -440,7 +440,7 @@ export function LeadCard({
               {lead.inspection_at && (
                 <Link
                   href={`/calendar?m=${lead.inspection_at.slice(0, 7)}`}
-                  className="inline-flex flex-col items-end gap-0 px-2.5 py-1.5 rounded-lg border-2 border-violet-300 bg-violet-50 text-[11px] font-bold text-violet-900 hover:bg-violet-100 hover:border-violet-400 hover:shadow-sm transition-all min-w-fit"
+                  className="inline-flex flex-col items-end gap-0 px-2.5 py-1.5 rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/40 text-[11px] font-bold text-violet-900 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/60 hover:border-violet-400 dark:hover:border-violet-700 hover:shadow-sm transition-all min-w-fit"
                   title="Otvoriť v kalendári"
                 >
                   <span className="inline-flex items-center gap-1">
@@ -465,7 +465,7 @@ export function LeadCard({
               {lead.realization_at && (
                 <Link
                   href={`/calendar?m=${lead.realization_at.slice(0, 7)}`}
-                  className="inline-flex flex-col items-end gap-0 px-2.5 py-1.5 rounded-lg border-2 border-emerald-300 bg-emerald-50 text-[11px] font-bold text-emerald-900 hover:bg-emerald-100 hover:border-emerald-400 hover:shadow-sm transition-all min-w-fit"
+                  className="inline-flex flex-col items-end gap-0 px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-[11px] font-bold text-emerald-900 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 hover:border-emerald-400 dark:hover:border-emerald-700 hover:shadow-sm transition-all min-w-fit"
                   title="Otvoriť v kalendári"
                 >
                   <span className="inline-flex items-center gap-1">
@@ -497,12 +497,12 @@ export function LeadCard({
             <div className="px-5 pt-3">
               <div
                 className={cn(
-                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border-2 text-xs font-bold",
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold",
                   /urgent|urgentne|do 1|do jedn/i.test(terminValue)
-                    ? "bg-rose-50 border-rose-300 text-rose-800"
+                    ? "bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300"
                     : /iba info|len info|prieskum/i.test(terminValue)
-                      ? "bg-zinc-50 border-zinc-300 text-zinc-700"
-                      : "bg-amber-50 border-amber-300 text-amber-800",
+                      ? "bg-zinc-50 dark:bg-slate-900/60 border-zinc-300 dark:border-slate-700 text-zinc-700 dark:text-slate-400"
+                      : "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300",
                 )}
                 title="Kedy chce zákazník realizovať"
               >
