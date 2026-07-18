@@ -4,17 +4,60 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
+  BarChart3,
+  BookOpen,
+  Camera,
+  ClipboardList,
+  Hammer,
   Loader2,
   Mail,
   MapPin,
+  Package,
   Phone,
   Search,
+  Settings,
+  Share2,
   Shield,
   User,
+  Users,
+  Warehouse,
   X,
+  type LucideIcon,
 } from "lucide-react";
 
 import { STATUS_META, type LeadStatus } from "@/lib/types/lead";
+
+type Section = {
+  title: string;
+  href: string;
+  keywords: string;
+  Icon: LucideIcon;
+};
+
+const ADMIN_SECTIONS: Section[] = [
+  { title: "Prehľad", href: "/admin/prehlad", keywords: "dashboard prehlad kpi metrics home admin overview", Icon: BarChart3 },
+  { title: "Leady", href: "/admin/leads", keywords: "leady leads pool obchod", Icon: ClipboardList },
+  { title: "Tím & Realizačné tímy", href: "/admin/agents", keywords: "team tim agenti agents obchodaci realizacne timy obhliadkari realizatori users", Icon: Users },
+  { title: "Nastavenia CRM", href: "/admin/nastavenia", keywords: "nastavenia settings config firma pdf email dph sika mesta cennik zlava sub-modul", Icon: Settings },
+  { title: "Podklady", href: "/admin/podklady", keywords: "podklady knowledge call scripty scenar sales tips protokoly", Icon: BookOpen },
+  { title: "Call scripty", href: "/admin/callscripts", keywords: "call scripty callscript telefonat placeholder", Icon: Phone },
+  { title: "Realizačné systémy", href: "/admin/systems", keywords: "realizacne systemy 264 3000 topstone postup kroky spotreba kg", Icon: Hammer },
+  { title: "Kontent shotlist", href: "/admin/kontent", keywords: "kontent content shotlist foto video fotenie instagram stories", Icon: Camera },
+  { title: "Objednávky materiálu", href: "/admin/objednavky", keywords: "objednavky material sika topstone order zakazka", Icon: Package },
+  { title: "Skladové zásoby", href: "/admin/sklad", keywords: "sklad zasoby inventura materialy stav", Icon: Warehouse },
+  { title: "Realne dáta", href: "/admin/realne-data", keywords: "realne data analytika reporty dokoncene realizacie casy fazy", Icon: BarChart3 },
+  { title: "Meta OAuth setup", href: "/admin/meta-setup", keywords: "meta oauth facebook instagram fb ig token access system user page_ids graph_me_accounts webhook", Icon: Share2 },
+];
+
+function matchSections(query: string): Section[] {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const parts = q.split(/\s+/).filter(Boolean);
+  return ADMIN_SECTIONS.filter((s) => {
+    const hay = (s.title + " " + s.keywords).toLowerCase();
+    return parts.every((p) => hay.includes(p));
+  });
+}
 
 type LeadHit = {
   id: string;
@@ -154,7 +197,7 @@ export function GlobalSearchModal({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && onClose()}
-              placeholder="Meno, priezvisko, telefón, email… (aspoň 2 znaky)"
+              placeholder="Sekcia, meno, telefón, email… (aspoň 2 znaky)"
               className="w-full h-11 pl-10 pr-3 rounded-lg border-2 border-slate-200 focus:border-sky-400 focus:outline-none text-sm font-semibold"
             />
             {busy && (
@@ -163,6 +206,9 @@ export function GlobalSearchModal({
           </div>
         </div>
 
+        {(() => {
+          const sectionHits = matchSections(q);
+          return (
         <div className="flex-1 overflow-y-auto p-3">
           {error && (
             <div className="rounded-lg border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
@@ -173,8 +219,9 @@ export function GlobalSearchModal({
           {!error && q.trim().length < 2 && (
             <div className="text-center text-sm text-slate-500 py-10 space-y-2">
               <div className="text-3xl">🔍</div>
-              <div>Napíš aspoň 2 znaky. Hľadá cez celú DB:</div>
+              <div>Napíš aspoň 2 znaky. Hľadá cez:</div>
               <ul className="text-xs text-slate-400 space-y-0.5 mt-2">
+                <li>• admin sekcie (napr. „objednávky", „meta", „kontent")</li>
                 <li>• leady vo VŠETKÝCH stavoch (nie iba pool)</li>
                 <li>• všetky mená / telefóny / emaily</li>
                 <li>• tímových členov (obchodákov + adminov)</li>
@@ -182,10 +229,45 @@ export function GlobalSearchModal({
             </div>
           )}
 
-          {!error && q.trim().length >= 2 && !busy && leads.length === 0 && users.length === 0 && (
-            <div className="text-center text-sm text-slate-500 py-10">
-              Nič sa nenašlo pre „{q}".
-            </div>
+          {!error &&
+            q.trim().length >= 2 &&
+            !busy &&
+            sectionHits.length === 0 &&
+            leads.length === 0 &&
+            users.length === 0 && (
+              <div className="text-center text-sm text-slate-500 py-10">
+                Nič sa nenašlo pre „{q}".
+              </div>
+            )}
+
+          {sectionHits.length > 0 && (
+            <section className="mb-4">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 px-1">
+                📁 Sekcie ({sectionHits.length})
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {sectionHits.map((s) => (
+                  <Link
+                    key={s.href}
+                    href={s.href}
+                    onClick={onClose}
+                    className="flex items-center gap-2.5 rounded-lg border border-slate-200 hover:border-sky-400 bg-white hover:bg-sky-50/40 p-2.5 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-md bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                      <s.Icon className="w-4 h-4" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-black text-sm text-slate-900 truncate">
+                        {s.title}
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate font-mono">
+                        {s.href}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
           )}
 
           {leads.length > 0 && (
@@ -291,6 +373,8 @@ export function GlobalSearchModal({
             </section>
           )}
         </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -321,20 +405,14 @@ export function GlobalSearchTrigger() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group inline-flex items-center gap-2.5 h-9 pl-3 pr-2 rounded-lg bg-muted/60 hover:bg-muted border border-input hover:border-sky-400 transition-colors"
-        title="Hľadať leady + tím (Cmd+K)"
+        className="group inline-flex items-center justify-center h-9 w-9 rounded-lg bg-muted/60 hover:bg-muted border border-input hover:border-sky-400 transition-colors"
+        title="Hľadať (Cmd+K)"
         aria-label="Hľadať"
       >
         <Search
           className="w-4 h-4 text-muted-foreground group-hover:text-sky-600 transition-colors"
           aria-hidden
         />
-        <span className="hidden sm:inline text-sm text-muted-foreground group-hover:text-foreground transition-colors">
-          Hľadať leady, tím…
-        </span>
-        <kbd className="hidden sm:inline-flex items-center h-5 px-1.5 text-[10px] font-mono font-bold text-muted-foreground bg-background border border-input rounded">
-          ⌘K
-        </kbd>
       </button>
       <GlobalSearchModal open={open} onClose={() => setOpen(false)} />
     </>
