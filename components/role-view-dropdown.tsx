@@ -148,8 +148,35 @@ export function RoleViewDropdown({
 
   const isViewingAs = !!currentViewAs;
 
+  // Hover-open — user 2026-07-18: „ked na to ukazem kurzorom nech to okamzite
+  // rozbali ten dropdown nie po par sekundach". Otvor okamzite na
+  // onMouseEnter; zavri s ~150ms grace period aby cursor stihol prejst
+  // na menu bez „utekania" dropdownu.
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  function openImmediately() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setOpen(true);
+  }
+  function closeWithGrace() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setOpen(false), 150);
+  }
+  React.useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
   return (
-    <div className="relative" ref={ref}>
+    <div
+      className="relative"
+      ref={ref}
+      onMouseEnter={openImmediately}
+      onMouseLeave={closeWithGrace}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
