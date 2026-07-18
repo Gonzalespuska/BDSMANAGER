@@ -95,14 +95,6 @@ export function NastaveniaClient({
         <SettingsList settings={dopravaSet} />
       </SectionBlock>
 
-      {legacySet.length > 0 && (
-        <SectionBlock
-          title="⚙️ Ostatné (marže, DPH, min. objednávka)"
-          desc="Kľúče uložené v DB ktoré nespadajú do Firma/Doprava. Používajú sa generatorom."
-        >
-          <SettingsList settings={legacySet} />
-        </SectionBlock>
-      )}
     </div>
   );
 }

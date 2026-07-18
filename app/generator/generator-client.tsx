@@ -154,6 +154,10 @@ export function GeneratorClient({
   /** Vlastné množstevné zľavy z /admin/generator-nastavenia. Ak sú
    *  poskytnuté, prevalcujú hardcoded VOLUME_DISCOUNT_TIERS. */
   volumeTiers?: Array<{ min_m2: number; discount_pct: number; label?: string }>;
+  /** Minimálna objednávka z /admin/generator-nastavenia (default 1000). */
+  minOrderEur?: number;
+  /** Noise range (default 27 = rozsah 1001.50–1028.50). */
+  minOrderNoiseMax?: number;
 }) {
   const router = useRouter();
   const isResend = !!savedQuote;
@@ -694,10 +698,12 @@ export function GeneratorClient({
   // (rovnaký input = rovnaká hodnota). Aplikuje sa iba na časť BEZ skrytej
   // zložky. Skrytá zložka sa pridá na vrchol → obchodák dostane presnú cenu.
   const minOrderFloor = React.useMemo(() => {
-    const MIN = 1000;
+    const MIN = minOrderEur ?? 1000;
+    const NOISE_MAX = minOrderNoiseMax ?? 27;
     if (!hasRealInput) return 0;
     // Manuálna CP (iba surcharge, žiadna m² plocha) → min order NEPLATÍ
     if (requiredM2Value <= 0) return 0;
+    if (MIN <= 0) return 0;
     const hashStr = `${saleMode}|${floorType ?? ""}|${requiredM2Value}|${Object.entries(
       materialQtys,
     )
@@ -708,8 +714,16 @@ export function GeneratorClient({
       h = (h * 31 + hashStr.charCodeAt(i)) | 0;
     }
     const norm = (Math.abs(h) % 10000) / 10000;
-    return MIN + 1.5 + norm * 27;
-  }, [saleMode, floorType, requiredM2Value, materialQtys, hasRealInput]);
+    return MIN + 1.5 + norm * NOISE_MAX;
+  }, [
+    saleMode,
+    floorType,
+    requiredM2Value,
+    materialQtys,
+    hasRealInput,
+    minOrderEur,
+    minOrderNoiseMax,
+  ]);
 
   const rawOps = opsSubtotal + transportTotal;
   // Priorita:

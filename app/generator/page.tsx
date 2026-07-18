@@ -119,6 +119,9 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
   let materialMarkups: Record<string, number> = {};
   // Volume discount tiers z /admin/generator-nastavenia (JSON) — override defaultu
   let volumeTiers: Array<{ min_m2: number; discount_pct: number; label?: string }> | null = null;
+  // Minimálna objednávka + noise range (default 1000 € + 27 = rozsah 1001.50–1028.50)
+  let minOrderEur: number | null = null;
+  let minOrderNoiseMax: number | null = null;
   // Ceny materiálov ktoré admin prepísal cez /admin/nastavenia → Cenník.
   // 2 kľúčové formáty:
   //   1. material.<id>.price_per_sqm          — default override (všetky systémy)
@@ -131,7 +134,9 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
     const { data: settings } = await sb
       .from("app_settings")
       .select("key, value")
-      .or("key.like.markup.%,key.eq.margin.material,key.like.material.%,key.eq.generator.volume_tiers");
+      .or(
+        "key.like.markup.%,key.eq.margin.material,key.like.material.%,key.eq.generator.volume_tiers,key.eq.generator.min_order_eur,key.eq.generator.min_order_noise_max",
+      );
     for (const s of settings ?? []) {
       const key = s.key as string;
       const raw = s.value;
@@ -160,6 +165,14 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
       }
       const num = typeof raw === "number" ? raw : parseFloat(String(raw));
       if (!isFinite(num) || num < 0) continue;
+      if (key === "generator.min_order_eur") {
+        minOrderEur = num;
+        continue;
+      }
+      if (key === "generator.min_order_noise_max") {
+        minOrderNoiseMax = num;
+        continue;
+      }
       if (key.startsWith("material.")) {
         // system-specific?
         const sysMatch = key.match(
@@ -234,6 +247,8 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
         systems={systems}
         defaultSystems={defaultSystems}
         volumeTiers={volumeTiers ?? undefined}
+        minOrderEur={minOrderEur ?? undefined}
+        minOrderNoiseMax={minOrderNoiseMax ?? undefined}
       />
     );
   }
@@ -309,6 +324,8 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
       systems={systems}
       defaultSystems={defaultSystems}
       volumeTiers={volumeTiers ?? undefined}
+      minOrderEur={minOrderEur ?? undefined}
+      minOrderNoiseMax={minOrderNoiseMax ?? undefined}
     />
   );
 }

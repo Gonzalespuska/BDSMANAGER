@@ -60,9 +60,148 @@ export function GeneratorNastaveniaClient({
   return (
     <div className="space-y-4">
       <DefaultSystemsSection systems={systems} settingsMap={settingsMap} />
+      <MinOrderSection settingsMap={settingsMap} />
       <VolumeDiscountsSection settingsMap={settingsMap} />
       <MarkupsSection settingsMap={settingsMap} />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Minimálna objednávka + noise (1001.50 – 1028.50 €)
+// ═══════════════════════════════════════════════════════════════════════
+function MinOrderSection({
+  settingsMap,
+}: {
+  settingsMap: Record<string, unknown>;
+}) {
+  const currentMin = (() => {
+    const raw = settingsMap["generator.min_order_eur"];
+    const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+    return isFinite(n) && n >= 0 ? n : 1000;
+  })();
+  const currentNoiseMax = (() => {
+    const raw = settingsMap["generator.min_order_noise_max"];
+    const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+    return isFinite(n) && n >= 0 ? n : 27;
+  })();
+  const [minVal, setMinVal] = React.useState(String(currentMin));
+  const [noiseVal, setNoiseVal] = React.useState(String(currentNoiseMax));
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  const previewLow =
+    parseFloat(minVal) + 1.5 || 0;
+  const previewHigh =
+    parseFloat(minVal) + 1.5 + (parseFloat(noiseVal) || 0);
+
+  async function save() {
+    if (minVal.trim()) {
+      const n = parseFloat(minVal);
+      if (!isFinite(n) || n < 0) {
+        alert("Minimálna objednávka musí byť kladné číslo alebo prázdne.");
+        return;
+      }
+    }
+    if (noiseVal.trim()) {
+      const n = parseFloat(noiseVal);
+      if (!isFinite(n) || n < 0) {
+        alert("Noise range musí byť kladné číslo alebo prázdne.");
+        return;
+      }
+    }
+    setSaving(true);
+    setSaved(false);
+    try {
+      await Promise.all([
+        saveSettingV2("generator.min_order_eur", minVal.trim()),
+        saveSettingV2("generator.min_order_noise_max", noiseVal.trim()),
+      ]);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+      <header>
+        <h2 className="text-lg font-black tracking-tight">
+          🧮 Minimálna objednávka
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Ak by cena zákazky vyšla pod túto hodnotu, generátor CP ju
+          automaticky vyfúkne pridaním „dopravy" tak, aby cena bola
+          nezvyčajne vyzerajúca (1001.50 – 1028.50 €) — neguľate čísla
+          pôsobia dôveryhodnejšie než guľatých 1000 €. Deterministické z
+          hash-u vstupu (rovnaký lead = rovnaké číslo).
+        </p>
+        <p className="text-xs text-muted-foreground mt-1 italic">
+          Pravidlo neplatí pre manuálne CP (bez m² plochy, iba surcharge).
+        </p>
+      </header>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="block rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-3">
+          <div className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+            Minimálna cena (€)
+          </div>
+          <input
+            type="number"
+            step="10"
+            min="0"
+            value={minVal}
+            onChange={(e) => setMinVal(e.target.value)}
+            placeholder="1000"
+            className="w-full h-9 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold tabular-nums text-right"
+          />
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            Prázdne = default 1000 €
+          </div>
+        </label>
+        <label className="block rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-3">
+          <div className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+            Noise range (€)
+          </div>
+          <input
+            type="number"
+            step="1"
+            min="0"
+            value={noiseVal}
+            onChange={(e) => setNoiseVal(e.target.value)}
+            placeholder="27"
+            className="w-full h-9 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold tabular-nums text-right"
+          />
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            Prázdne = default 27 (rozsah 1001.50 – 1028.50)
+          </div>
+        </label>
+      </div>
+      {isFinite(previewLow) && previewHigh > previewLow && (
+        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-2 text-xs font-black text-emerald-800 dark:text-emerald-200 tabular-nums">
+          Preview: každá zákazka pod minimom sa vyfúkne na{" "}
+          {previewLow.toFixed(2)} – {previewHigh.toFixed(2)} €
+        </div>
+      )}
+      <div>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className={
+            "inline-flex items-center gap-1 rounded-md text-white text-xs font-black px-3 py-1.5 disabled:opacity-40 " +
+            (saved ? "bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-700")
+          }
+        >
+          {saving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Save className="w-3.5 h-3.5" />
+          )}
+          {saved ? "Uložené" : "Uložiť"}
+        </button>
+      </div>
+    </section>
   );
 }
 
