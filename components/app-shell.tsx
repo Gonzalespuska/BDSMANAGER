@@ -156,7 +156,18 @@ export async function AppShell({
       NOVACIK_DAYS * 24 * 3600 * 1000;
   // Admin vidí Podklady vždy (na kontrolu obsahu).
   const showPodkladyInNav = isNovacik || user.role === "admin";
-  const viewAsCookie = (await cookies()).get("view_as_role")?.value;
+  // cookies() defensive wrap — na CF Pages Edge sme videli
+  // "Cannot read properties of null (reading 'get')" ked cookies() vrati
+  // neexpected null (napr. pri prefetch RSC bez request scope).
+  let viewAsCookie: string | undefined;
+  let viewAsUserId: string | null = null;
+  try {
+    const store = await cookies();
+    viewAsCookie = store?.get("view_as_role")?.value;
+    viewAsUserId = store?.get("view_as_user_id")?.value ?? null;
+  } catch {
+    /* no cookies → treat as no view-as */
+  }
   const validViewAsRoles = ["obchod", "obhliadky", "realizacie", "office"];
   const currentViewAs = (validViewAsRoles.includes(viewAsCookie ?? "")
     ? viewAsCookie
@@ -164,7 +175,6 @@ export async function AppShell({
 
   // Per-user impersonation banner — admin videl "ako Leo Hrisenko"
   // s tlacidlom "Späť na Admin".
-  const viewAsUserId = (await cookies()).get("view_as_user_id")?.value ?? null;
   const impersonatedName =
     isRealAdmin && viewAsUserId
       ? // user objekt sa uz prepisal na Leo v getCurrentAppUser →

@@ -30,7 +30,16 @@ export async function createClient() {
     );
   }
 
-  const cookieStore = await cookies();
+  // CF Pages Edge defensive — cookies() sme videli vratit null pri prefetch
+  // RSC bez plneho request scope. Ak sa to stane, vratime prazdny store —
+  // supabase-ssr si mysli ze nikto nie je prihlaseny a lib/auth vrati null,
+  // co spravne redirectuje na /login.
+  let cookieStore: Awaited<ReturnType<typeof cookies>> | null = null;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    /* no request scope */
+  }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,12 +47,16 @@ export async function createClient() {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          try {
+            return cookieStore?.getAll() ?? [];
+          } catch {
+            return [];
+          }
         },
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
+              cookieStore?.set(name, value, options),
             );
           } catch {
             // Server Component → set() volá z RSC, čo Next 14 nepovolí.
