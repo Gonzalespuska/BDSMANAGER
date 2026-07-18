@@ -91,6 +91,7 @@ export default async function NastaveniaAdminPage() {
             desc="Aktuálny stav materiálu na sklade. Realizátor pri tlači sa auto-odpočíta."
             Icon={Warehouse}
             tint="orange"
+            badge="🚧 In build"
           />
           <SubmoduleTile
             href="/admin/objednavky"
@@ -114,6 +115,7 @@ export default async function NastaveniaAdminPage() {
             desc="Všetky materiály pre tím — Call scripty (interaktívne scenáre), Kontent shotlist (foto/video), Sales tips, protokoly, cenníky. Rozdeľujú sa podľa role."
             Icon={GraduationCap}
             tint="violet"
+            badge="🚧 In build"
           />
           <SubmoduleTile
             href="/admin/meta-setup"

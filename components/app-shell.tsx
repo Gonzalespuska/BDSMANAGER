@@ -282,11 +282,10 @@ export async function AppShell({
                 switch co sme sa bavili na dark theme a white theme". */}
             <ThemeToggle />
             {/* Nastavenia CRM — sticky ikonka pre real admina. Skryjeme
-                keď admin je vo view-as (aby sa zabránilo confusion — admin
-                si musí najprv vypnúť view-as ak chce ísť do nastavení).
-                User 2026-07-18: „tieto nastavenia crm by mali byt hore
-                niekde v pravo ako je ucet tak napravo uplne". */}
-            {isRealAdmin && !currentViewAs && (
+                pocas view-as (per-role AJ per-user impersonation) aby
+                obchodak nevidel admin settings link cez shell impersonation.
+                User 2026-07-18: „TIETO SETTINGS VIDI IBA ADMIN TY DEMENT". */}
+            {isRealAdmin && !currentViewAs && !viewAsUserId && (
               <Link
                 href="/admin/nastavenia"
                 className="inline-flex items-center justify-center h-9 w-9 rounded-lg bg-muted/60 hover:bg-muted border border-input hover:border-sky-400 transition-colors text-muted-foreground hover:text-sky-600"
