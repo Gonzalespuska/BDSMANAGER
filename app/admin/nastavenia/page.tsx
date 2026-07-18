@@ -55,7 +55,7 @@ export default async function NastaveniaAdminPage() {
   return (
     <div className="space-y-4">
       <header className="flex items-start gap-3">
-        <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 rounded-2xl bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400 flex items-center justify-center shrink-0">
           <Settings2 className="w-6 h-6" />
         </div>
         <div>
@@ -71,10 +71,10 @@ export default async function NastaveniaAdminPage() {
           ovladat manualne cez admina takze make sure to vsetko funguje".
           Realizačné systémy, Podklady, Kontent, Tímy, Objednávky, Sklad,
           Realne dáta — priamy prístup ku každému. */}
-      <section className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-4 space-y-3">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 p-4 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="text-sm font-black uppercase tracking-widest text-sky-900">
-            🔧 Sub-moduly (klikni pre editáciu)
+          <div className="text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-400">
+            Sub-moduly · klikni pre editáciu
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -152,47 +152,48 @@ function SubmoduleTile({
   tint: "emerald" | "violet" | "fuchsia" | "orange" | "amber" | "sky";
   badge?: string;
 }) {
-  const bgMap: Record<string, string> = {
-    emerald: "border-emerald-300 bg-emerald-50 hover:border-emerald-500 hover:bg-emerald-100/70",
-    violet: "border-violet-300 bg-violet-50 hover:border-violet-500 hover:bg-violet-100/70",
-    fuchsia: "border-fuchsia-300 bg-fuchsia-50 hover:border-fuchsia-500 hover:bg-fuchsia-100/70",
-    orange: "border-orange-300 bg-orange-50 hover:border-orange-500 hover:bg-orange-100/70",
-    amber: "border-amber-300 bg-amber-50 hover:border-amber-500 hover:bg-amber-100/70",
-    sky: "border-sky-300 bg-sky-50 hover:border-sky-500 hover:bg-sky-100/70",
-  };
+  // Dark-first redesign — všetky tiles majú rovnaký neutrálny slate card,
+  // farebný tint sa vyskytuje LEN v ikonke (accent, nie background wash).
+  // User 2026-07-18: „NENI PEKNY TEN DARK THEME... TA FIALOVA ZLTA, NEDA SA
+  // CITAT". Solid neutral background + high-contrast text.
   const iconMap: Record<string, string> = {
-    emerald: "text-emerald-700 bg-emerald-100",
-    violet: "text-violet-700 bg-violet-100",
-    fuchsia: "text-fuchsia-700 bg-fuchsia-100",
-    orange: "text-orange-700 bg-orange-100",
-    amber: "text-amber-700 bg-amber-100",
-    sky: "text-sky-700 bg-sky-100",
+    emerald: "text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60",
+    violet: "text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-950/60",
+    fuchsia: "text-fuchsia-600 dark:text-fuchsia-400 bg-fuchsia-100 dark:bg-fuchsia-950/60",
+    orange: "text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-950/60",
+    amber: "text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60",
+    sky: "text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-950/60",
   };
+  const isFix = badge?.toLowerCase().includes("fix");
   return (
     <Link
       href={href}
-      className={
-        "group relative rounded-xl border-2 p-3 transition-all hover:shadow-md flex items-start gap-3 " +
-        bgMap[tint]
-      }
+      className="group relative rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 transition-all hover:border-sky-400 dark:hover:border-sky-600 hover:shadow-md dark:hover:bg-slate-900 flex items-start gap-3"
     >
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${iconMap[tint]}`}>
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconMap[tint]}`}>
         <Icon className="w-4 h-4" aria-hidden />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-black text-sm inline-flex items-center gap-2 flex-wrap">
+        <div className="font-black text-sm inline-flex items-center gap-2 flex-wrap text-slate-900 dark:text-slate-100">
           {title}
           {badge && (
-            <span className="rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0 text-[9px] font-black uppercase tracking-wider">
+            <span
+              className={
+                "rounded-full border px-1.5 py-0 text-[9px] font-black uppercase tracking-wider " +
+                (isFix
+                  ? "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700")
+              }
+            >
               {badge}
             </span>
           )}
         </div>
-        <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
           {desc}
         </div>
       </div>
-      <div className="text-lg font-black opacity-40 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className="text-lg font-black text-slate-400 dark:text-slate-600 group-hover:text-sky-500 dark:group-hover:text-sky-400 transition-colors shrink-0">
         →
       </div>
     </Link>
