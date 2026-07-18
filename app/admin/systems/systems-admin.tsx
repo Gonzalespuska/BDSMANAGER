@@ -48,6 +48,20 @@ function computeProductPricePerM2(p: {
   return p.consumption_per_m2 * pricePerKg;
 }
 
+// PREDAJ za m² — default 37% marza (MARZA_MATERIAL_PER_ROLE z lib/data/pricing).
+// User 2026-07-18: „v realizacne systemy musi ukazovat aj cenu za m2 kolko sa
+// to bude predavat a cenu kolko to stoji nas na m2".
+const DEFAULT_MARZA = 0.37;
+function computeSellPricePerM2(p: {
+  consumption_per_m2: number;
+  unit_size_kg: number;
+  price_per_unit?: number | null;
+}): number | null {
+  const cost = computeProductPricePerM2(p);
+  if (cost == null) return null;
+  return cost / (1 - DEFAULT_MARZA);
+}
+
 function fmtEur(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return "—";
   return n.toFixed(2).replace(/\.?0+$/, "") + " €";
@@ -103,7 +117,6 @@ export function SystemsAdmin({
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [library, setLibrary] = React.useState<LibraryStep[]>([]);
-  const [libraryTab, setLibraryTab] = React.useState(false);
 
   async function refresh() {
     try {
@@ -132,63 +145,40 @@ export function SystemsAdmin({
 
   return (
     <div className="space-y-3">
+      {/* User 2026-07-18: „ta kniznica krokov nech je radsej tam v tom poli
+          postup krokov vedla hned to bude lepsie". Top-level tab
+          „Knižnica krokov" bol zbytocny — refactor: LibraryPanel je
+          teraz inline v Postup krokov cez tlacidlo „Spravovať knižnicu"
+          v StepsEditor headeri. */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setLibraryTab(false)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-colors",
-              !libraryTab
-                ? "bg-slate-900 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-            )}
-          >
-            Systémy ({systems.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setLibraryTab(true)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-colors",
-              libraryTab
-                ? "bg-slate-900 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-            )}
-          >
-            📚 Knižnica krokov ({library.length})
-          </button>
+        <div className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+          Systémy ({systems.length})
         </div>
-        {!libraryTab && (
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Nový systém
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          Nový systém
+        </button>
       </div>
 
-      {libraryTab ? (
-        <LibraryPanel library={library} onChanged={refreshLibrary} />
-      ) : (
-        <ul className="space-y-2">
-          {systems.map((s) => (
-            <SystemCard
-              key={s.id}
-              system={s}
-              library={library}
-              expanded={expanded === s.id}
-              onToggle={() =>
-                setExpanded((cur) => (cur === s.id ? null : s.id))
-              }
-              onChanged={refresh}
-            />
-          ))}
-        </ul>
-      )}
+      <ul className="space-y-2">
+        {systems.map((s) => (
+          <SystemCard
+            key={s.id}
+            system={s}
+            library={library}
+            expanded={expanded === s.id}
+            onToggle={() =>
+              setExpanded((cur) => (cur === s.id ? null : s.id))
+            }
+            onChanged={refresh}
+            onLibraryChanged={refreshLibrary}
+          />
+        ))}
+      </ul>
 
       {creating && (
         <NewSystemModal
@@ -210,12 +200,14 @@ function SystemCard({
   expanded,
   onToggle,
   onChanged,
+  onLibraryChanged,
 }: {
   system: System;
   library: LibraryStep[];
   expanded: boolean;
   onToggle: () => void;
   onChanged: () => void;
+  onLibraryChanged: () => void;
 }) {
   const steps: ProcedureStep[] = Array.isArray(system.procedure_steps)
     ? (system.procedure_steps as ProcedureStep[])
@@ -269,7 +261,12 @@ function SystemCard({
         <div className="border-t border-slate-200 p-4 space-y-4 bg-slate-50/40">
           <SystemEditor system={system} onChanged={onChanged} />
           <ProductsEditor system={system} onChanged={onChanged} />
-          <StepsEditor system={system} library={library} onChanged={onChanged} />
+          <StepsEditor
+            system={system}
+            library={library}
+            onChanged={onChanged}
+            onLibraryChanged={onLibraryChanged}
+          />
           {/* Zodpovednost — user 2026-07-18: „v realizacii daj prec
               zodpovednost toto". Editor komponenty ostáva v kóde
               (mozne skoro pouzit) ale nezobrazujeme ho. */}
@@ -339,14 +336,6 @@ function SystemEditor({
             className="w-full h-9 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold"
           />
         </Field>
-        <Field label="Poradie (nižšie = vyššie hore)">
-          <input
-            type="number"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value)}
-            className="w-full h-9 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold tabular-nums"
-          />
-        </Field>
         <Field label="Popis">
           <input
             value={description}
@@ -414,6 +403,18 @@ function ProductsEditor({
   onChanged: () => void;
 }) {
   const [adding, setAdding] = React.useState(false);
+  // Sum náklad/predaj cez všetky komponenty ktoré maju cenu.
+  const systemCostPerM2 = system.products.reduce((sum, p) => {
+    const c = computeProductPricePerM2(p);
+    return c != null ? sum + c : sum;
+  }, 0);
+  const systemSellPerM2 = system.products.reduce((sum, p) => {
+    const s = computeSellPricePerM2(p);
+    return s != null ? sum + s : sum;
+  }, 0);
+  const hasPricedProducts = system.products.some(
+    (p) => computeProductPricePerM2(p) != null,
+  );
   return (
     <section className="rounded-xl bg-white border border-slate-200 p-3 space-y-3">
       <div className="flex items-center justify-between">
@@ -429,6 +430,31 @@ function ProductsEditor({
           Pridať komponent
         </button>
       </div>
+      {hasPricedProducts && (
+        <div className="flex items-center gap-2 flex-wrap rounded-lg border-2 border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            🧮 Systém spolu / m²
+          </span>
+          <span
+            className="font-black text-rose-800 bg-rose-50 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900 px-2 py-0.5 rounded text-xs"
+            title="Sum nákladov všetkých komponentov s cenou"
+          >
+            Náklad: {fmtEur(systemCostPerM2)}/m²
+          </span>
+          <span
+            className="font-black text-emerald-800 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 px-2 py-0.5 rounded text-xs"
+            title={`Predaj = náklad ÷ (1 − ${(DEFAULT_MARZA * 100).toFixed(0)}% marža)`}
+          >
+            Predaj: {fmtEur(systemSellPerM2)}/m²
+          </span>
+          <span
+            className="ml-auto font-bold text-[10px] text-emerald-700 dark:text-emerald-400 tabular-nums"
+            title="Predaj − náklad"
+          >
+            Zisk: {fmtEur(systemSellPerM2 - systemCostPerM2)}/m²
+          </span>
+        </div>
+      )}
       {system.products.length === 0 && !adding && (
         <div className="text-xs text-slate-500 italic">
           Zatiaľ žiadne komponenty. Pridaj aspoň primer + hlavnú živicu.
@@ -538,8 +564,17 @@ function ProductRow({
             {computeProductPricePerM2(product) != null && (
               <>
                 <span>·</span>
-                <span className="font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
-                  {fmtEur(computeProductPricePerM2(product))}/m²
+                <span
+                  className="font-black text-rose-800 bg-rose-50 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900 px-1.5 py-0.5 rounded"
+                  title="Náklad za m² (cena_za_balenie / balenie × spotreba)"
+                >
+                  Náklad: {fmtEur(computeProductPricePerM2(product))}/m²
+                </span>
+                <span
+                  className="font-black text-emerald-800 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 px-1.5 py-0.5 rounded"
+                  title={`Predaj za m² (náklad ÷ (1 − ${(DEFAULT_MARZA * 100).toFixed(0)}% marža))`}
+                >
+                  Predaj: {fmtEur(computeSellPricePerM2(product))}/m²
                 </span>
               </>
             )}
@@ -844,10 +879,12 @@ function StepsEditor({
   system,
   library,
   onChanged,
+  onLibraryChanged,
 }: {
   system: System;
   library: LibraryStep[];
   onChanged: () => void;
+  onLibraryChanged: () => void;
 }) {
   const initial: ProcedureStep[] = Array.isArray(system.procedure_steps)
     ? (system.procedure_steps as ProcedureStep[])
@@ -855,6 +892,7 @@ function StepsEditor({
   const [steps, setSteps] = React.useState<ProcedureStep[]>(initial);
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
+  const [showLibrary, setShowLibrary] = React.useState(false);
 
   function add() {
     setSteps((prev) => [
@@ -959,8 +997,29 @@ function StepsEditor({
             <Plus className="w-3.5 h-3.5" />
             Prázdny krok
           </button>
+          {/* Toggle inline library management — user 2026-07-18: „ta
+              kniznica krokov nech je radsej tam v tom poli postup krokov
+              vedla hned to bude lepsie". */}
+          <button
+            type="button"
+            onClick={() => setShowLibrary((v) => !v)}
+            className={cn(
+              "inline-flex items-center gap-1 rounded border px-2.5 py-1 text-xs font-black transition-colors",
+              showLibrary
+                ? "bg-violet-600 text-white border-violet-600"
+                : "bg-white border-violet-300 text-violet-700 hover:bg-violet-50 dark:bg-slate-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-slate-700",
+            )}
+            title="Spravovať knižnicu krokov (pridať/upraviť/zmazať)"
+          >
+            📚 {showLibrary ? "Zavrieť knižnicu" : `Knižnica (${library.length})`}
+          </button>
         </div>
       </div>
+      {showLibrary && (
+        <div className="rounded-lg border-2 border-violet-200 dark:border-violet-900 bg-violet-50/40 dark:bg-violet-950/20 p-3">
+          <LibraryPanel library={library} onChanged={onLibraryChanged} />
+        </div>
+      )}
       {steps.length === 0 && (
         <div className="text-xs text-slate-500 italic">
           Zatiaľ žiadne kroky.
@@ -1154,14 +1213,6 @@ function NewSystemModal({
               </select>
             </Field>
           )}
-          <Field label="Poradie">
-            <input
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-              className="w-full h-10 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold tabular-nums"
-            />
-          </Field>
           {err && (
             <div className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5">
               ⚠ {err}

@@ -57,6 +57,7 @@ export default async function AdminDashboard() {
       title: "Priradiť úlohu tímu",
       desc: "Napíš čo má kto spraviť + kedy. Notifikácia sa mu objaví v zvončeku od zvoleného dátumu (napr. „Zavolať Petrovi späť 12.7.\").",
       icon: Bell,
+      badge: "🚧 In build",
     },
     {
       href: "/admin/agents",
