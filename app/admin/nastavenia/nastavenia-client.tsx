@@ -97,6 +97,7 @@ export function NastaveniaClient({
       </SectionBlock>
 
       <SectionBlock
+        id="cennik-materialov"
         title="🎨 Cenník materiálov (Generátor CP)"
         desc="Prepis € /m² pre 18 hardcoded materiálov ktoré generátor cenových ponúk používa. Prázdne pole = default cena z kódu. Uložená hodnota má prednosť pri kalkulácii CP."
       >
@@ -178,13 +179,18 @@ function SectionBlock({
   title,
   desc,
   children,
+  id,
 }: {
   title: string;
   desc: string;
   children: React.ReactNode;
+  id?: string;
 }) {
   return (
-    <section className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3">
+    <section
+      id={id}
+      className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3 scroll-mt-24"
+    >
       <header>
         <h3 className="text-lg font-black">{title}</h3>
         <p className="text-xs text-muted-foreground">{desc}</p>
