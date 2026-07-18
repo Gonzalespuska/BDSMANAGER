@@ -62,6 +62,16 @@ type MaterialMaps = {
   customName: Record<string, string>;
   priceMode: Record<string, PriceMode>;
   marginPct: Record<string, number>;
+  /** User 2026-07-18: „tu v cenniku musi byt este ake pozname velkosti sudov
+   *  kazdy je iny cize musim mat moznost napisat 1 alebo viac moznosti ake
+   *  su na trhu a ake su na nich ceny". */
+  packagingOptions: Record<string, PackagingOption[]>;
+};
+
+export type PackagingOption = {
+  size_kg: number;
+  price_eur: number;
+  unit_label: string; // 'sud' | 'vedro' | 'vedierko' | 'vrece'
 };
 
 function buildMaps(settings: Setting[]): MaterialMaps {
@@ -71,6 +81,7 @@ function buildMaps(settings: Setting[]): MaterialMaps {
   const customName: Record<string, string> = {};
   const priceMode: Record<string, PriceMode> = {};
   const marginPct: Record<string, number> = {};
+  const packagingOptions: Record<string, PackagingOption[]> = {};
   for (const s of settings) {
     const key = s.key;
     if (!key.startsWith("material.")) continue;
@@ -88,6 +99,27 @@ function buildMaps(settings: Setting[]): MaterialMaps {
       if (strVal === "amount" || strVal === "margin") priceMode[id] = strVal;
       continue;
     }
+    if (suffix.endsWith(".packaging_options")) {
+      const id = suffix.slice(0, -".packaging_options".length);
+      try {
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (Array.isArray(parsed)) {
+          packagingOptions[id] = parsed
+            .filter(
+              (x): x is PackagingOption =>
+                x &&
+                typeof x.size_kg === "number" &&
+                x.size_kg > 0 &&
+                typeof x.price_eur === "number" &&
+                x.price_eur >= 0 &&
+                typeof x.unit_label === "string",
+            );
+        }
+      } catch {
+        /* invalid JSON — skip */
+      }
+      continue;
+    }
     const num = typeof raw === "number" ? raw : parseFloat(String(raw));
     if (!isFinite(num) || num < 0) continue;
     if (suffix.endsWith(".price_per_sqm")) {
@@ -100,7 +132,15 @@ function buildMaps(settings: Setting[]): MaterialMaps {
       marginPct[suffix.slice(0, -".margin_pct".length)] = num;
     }
   }
-  return { price, cost, consumption, customName, priceMode, marginPct };
+  return {
+    price,
+    cost,
+    consumption,
+    customName,
+    priceMode,
+    marginPct,
+    packagingOptions,
+  };
 }
 
 type CombinedItem = {
@@ -117,6 +157,7 @@ type CombinedItem = {
   marginPct?: number;
   cost?: number;
   consumption?: number;
+  packagingOptions?: PackagingOption[];
   extraId?: string;
 };
 
@@ -154,6 +195,7 @@ export function CennikMaterialovClient({
         marginPct: maps.marginPct[m.id],
         cost: maps.cost[m.id],
         consumption: maps.consumption[m.id],
+        packagingOptions: maps.packagingOptions[m.id],
       });
     }
     for (const e of extras) {
@@ -599,8 +641,30 @@ function MaterialRow({
   const [consumptionVal, setConsumptionVal] = React.useState<string>(
     row.consumption != null ? String(row.consumption) : "",
   );
+  // Balenia — user 2026-07-18: „tu v cenniku musi byt este ake pozname
+  // velkosti sudov kazdy je iny cize musim mat moznost napisat 1 alebo viac
+  // moznosti ake su na trhu a ake su na nich ceny".
+  const [packagingList, setPackagingList] = React.useState<PackagingOption[]>(
+    row.packagingOptions ?? [],
+  );
+  const [showPackaging, setShowPackaging] = React.useState(
+    (row.packagingOptions?.length ?? 0) > 0,
+  );
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
+
+  function addPackaging() {
+    setPackagingList((prev) => [
+      ...prev,
+      { size_kg: 30, price_eur: 0, unit_label: "sud" },
+    ]);
+  }
+  function updatePackaging(idx: number, patch: Partial<PackagingOption>) {
+    setPackagingList((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  }
+  function removePackaging(idx: number) {
+    setPackagingList((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   const priceHasOverride = row.priceOverride != null;
   const costHasVal = row.cost != null;
@@ -673,6 +737,13 @@ function MaterialRow({
       }
       const customNameToSave =
         nameVal.trim() && nameVal.trim() !== row.originalName ? nameVal.trim() : "";
+      // Balenia — filter validne + ulozime ako JSON (alebo prazdny string
+      // ak nic aby sa key mohol clearnut).
+      const validPackaging = packagingList.filter(
+        (p) => p.size_kg > 0 && p.price_eur >= 0 && p.unit_label,
+      );
+      const packagingToStore =
+        validPackaging.length > 0 ? JSON.stringify(validPackaging) : "";
       await Promise.all([
         saveSettingV2(`material.${row.key}.price_per_sqm`, priceToStore),
         saveSettingV2(`material.${row.key}.cost_per_sqm`, c),
@@ -683,6 +754,7 @@ function MaterialRow({
           `material.${row.key}.margin_pct`,
           priceMode === "margin" ? m : "",
         ),
+        saveSettingV2(`material.${row.key}.packaging_options`, packagingToStore),
       ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
@@ -814,8 +886,17 @@ function MaterialRow({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div>
           <div className="flex items-center gap-1 mb-0.5">
-            <div className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex-1">
+            <div
+              className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex-1 inline-flex items-center gap-1"
+              title="Predaj €/m² sa použije v generátori CP na nacenovanie práce (klient si objedná realizáciu). V móde „Iba materiál + doprava" v generátori sa použije cena za balenie z Balení nižšie — keď si niekto chce iba kúpiť materiál."
+            >
               Predaj
+              <span
+                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-[9px] cursor-help"
+                title="Predaj €/m² sa použije v generátori CP na nacenovanie práce (klient si objedná realizáciu). V móde „Iba materiál + doprava" v generátori sa použije cena za balenie z Balení nižšie — keď si niekto chce iba kúpiť materiál."
+              >
+                ?
+              </span>
             </div>
             {!isExtra && (
               <div className="inline-flex text-[10px] font-black uppercase tracking-wider rounded border border-slate-300 dark:border-slate-700 overflow-hidden">
@@ -939,6 +1020,104 @@ function MaterialRow({
           </div>
         </label>
       </div>
+
+      {/* Balenia — user 2026-07-18: „tu v cenniku musi byt este ake pozname
+          velkosti sudov kazdy je iny cize musim mat moznost napisat 1 alebo
+          viac moznosti ake su na trhu a ake su na nich ceny". Zbaleny
+          collapsible s add-tlacidlom + zoznam size/cena/jednotka rows.
+          Ceny sa pouziju v mode „Iba material + doprava" v generatori. */}
+      {!isExtra && (
+        <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-2">
+          <button
+            type="button"
+            onClick={() => setShowPackaging((v) => !v)}
+            className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              📦 Balenia · {packagingList.length}
+              <span className="text-slate-500 dark:text-slate-500 normal-case font-normal">
+                (pre „Iba materiál" predaj)
+              </span>
+            </span>
+            <span>{showPackaging ? "▾" : "▸"}</span>
+          </button>
+          {showPackaging && (
+            <div className="mt-2 space-y-1.5">
+              {packagingList.length === 0 && (
+                <div className="text-[11px] italic text-slate-500 dark:text-slate-500 px-1">
+                  Zatiaľ žiadne balenia. Klik na „+ Balenie" pridá 10 kg / 30 kg / …
+                </div>
+              )}
+              {packagingList.map((p, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 flex-wrap bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 px-2 py-1.5"
+                >
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={p.size_kg}
+                    onChange={(e) =>
+                      updatePackaging(i, {
+                        size_kg: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="h-8 w-16 px-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold tabular-nums text-right"
+                  />
+                  <span className="text-[10px] font-black text-slate-500">kg</span>
+                  <select
+                    value={p.unit_label}
+                    onChange={(e) =>
+                      updatePackaging(i, { unit_label: e.target.value })
+                    }
+                    className="h-8 px-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
+                  >
+                    <option value="sud">sud</option>
+                    <option value="vedro">vedro</option>
+                    <option value="vedierko">vedierko</option>
+                    <option value="vrece">vrece</option>
+                  </select>
+                  <span className="text-[10px] font-black text-slate-500 ml-1">
+                    cena
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={p.price_eur}
+                    onChange={(e) =>
+                      updatePackaging(i, {
+                        price_eur: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="h-8 w-24 px-1.5 rounded border-2 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-sm font-bold tabular-nums text-right"
+                  />
+                  <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400">
+                    €
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removePackaging(i)}
+                    className="ml-auto text-rose-500 hover:text-rose-700 p-1"
+                    title="Zmazať toto balenie"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addPackaging}
+                className="inline-flex items-center gap-1 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-black px-2.5 py-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Balenie
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-1.5 pt-1">
         <button
