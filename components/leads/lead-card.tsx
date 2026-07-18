@@ -641,14 +641,19 @@ export function LeadCard({
           {/* Nedvíha tab — SMS copy + prípadný ďalší pokus nezdvihal */}
           {lead.status === "no_answer" && (
             <div className="mb-2 space-y-2">
-              <div className="rounded-lg border border-violet-200 bg-violet-50 p-2.5 space-y-2">
-                <div className="text-[10px] font-black uppercase tracking-wider text-violet-800 flex items-center gap-1.5">
+              {/* SMS block — DISABLED zatiaľ (in build). Auto-SMS z čísla
+                  obchodáka ešte nefunguje, manuálne copy-paste nie je
+                  worth-it flow. Skryjeme pod IN BUILD badge. */}
+              <div className="relative rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2.5 space-y-2 opacity-70 pointer-events-none select-none">
+                <div className="absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-md bg-amber-100 dark:bg-amber-900/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5">
+                  🚧 in build
+                </div>
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                   📱 Pošli SMS aby zákazník zavolal späť
                 </div>
                 <SmsCopyButton leadName={lead.name} phone={lead.phone} />
-                <p className="text-[10px] text-violet-700/80 leading-snug">
-                  Skopíruje pripravený text — vlož v SMS aplikácii a odošli z
-                  tvojho čísla. Auto-SMS z čísla obchodáka dorobíme neskôr.
+                <p className="text-[10px] text-slate-500 dark:text-slate-500 leading-snug">
+                  Auto-SMS z čísla obchodáka ešte pripravujeme.
                 </p>
               </div>
               {lead.call_attempts < 3 && (
