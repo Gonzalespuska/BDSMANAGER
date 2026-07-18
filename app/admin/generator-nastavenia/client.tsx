@@ -62,10 +62,8 @@ export function GeneratorNastaveniaClient({
       <DefaultSystemsSection systems={systems} settingsMap={settingsMap} />
       <MinOrderSection settingsMap={settingsMap} />
       <VolumeDiscountsSection settingsMap={settingsMap} />
-      <MarkupsSection settingsMap={settingsMap} />
       <FirmaSection settingsMap={settingsMap} />
       <DopravaSection settingsMap={settingsMap} />
-      <CityKmCalcSection />
       <EmailPreviewSection settingsMap={settingsMap} />
     </div>
   );
@@ -87,16 +85,10 @@ const FIRMA_KEYS: Array<{ key: string; label: string; desc: string }> = [
 
 function FirmaSection({ settingsMap }: { settingsMap: Record<string, unknown> }) {
   return (
-    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
-      <header>
-        <h2 className="text-lg font-black tracking-tight">
-          🏢 Firma (PDF + e-mail brand)
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Firemné údaje ktoré sa vyskladajú do hlavičky/pätky PDF cenovej
-          ponuky a do e-mailových podpisov.
-        </p>
-      </header>
+    <CollapsibleSection
+      title="🏢 Firma (PDF + e-mail brand)"
+      desc="Firemné údaje ktoré sa vyskladajú do hlavičky/pätky PDF cenovej ponuky a do e-mailových podpisov."
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {FIRMA_KEYS.map((f) => (
           <TextSettingRow
@@ -108,7 +100,37 @@ function FirmaSection({ settingsMap }: { settingsMap: Record<string, unknown> })
           />
         ))}
       </div>
-    </section>
+    </CollapsibleSection>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  desc,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  desc: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className="group rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden"
+    >
+      <summary className="cursor-pointer list-none px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex items-center gap-3 select-none">
+        <span className="text-slate-500 group-open:rotate-90 transition-transform text-sm">
+          ▶
+        </span>
+        <div className="flex-1">
+          <h2 className="text-lg font-black tracking-tight">{title}</h2>
+          <p className="text-xs text-muted-foreground">{desc}</p>
+        </div>
+      </summary>
+      <div className="px-4 pb-4 pt-1 space-y-3">{children}</div>
+    </details>
   );
 }
 
@@ -135,15 +157,10 @@ const DOPRAVA_KEYS: Array<{
 
 function DopravaSection({ settingsMap }: { settingsMap: Record<string, unknown> }) {
   return (
-    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
-      <header>
-        <h2 className="text-lg font-black tracking-tight">🚗 Doprava</h2>
-        <p className="text-xs text-muted-foreground">
-          Sadzby ktoré generátor CP použije na výpočet dopravy podľa
-          vzdialenosti od HQ do mesta zákazníka. Kalkulačka nižšie ti ukáže
-          preview.
-        </p>
-      </header>
+    <CollapsibleSection
+      title="🚗 Doprava"
+      desc="Sadzby ktoré generátor CP použije na výpočet dopravy podľa vzdialenosti od HQ do mesta zákazníka."
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {DOPRAVA_KEYS.map((d) => (
           <TextSettingRow
@@ -158,7 +175,7 @@ function DopravaSection({ settingsMap }: { settingsMap: Record<string, unknown> 
           />
         ))}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -287,16 +304,10 @@ function EmailPreviewSection({
   const [showPreview, setShowPreview] = React.useState(false);
 
   return (
-    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
-      <header>
-        <h2 className="text-lg font-black tracking-tight">
-          📧 Preview e-mailu + PDF prílohy
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Tak vyzerá e-mail ktorý obchodák pošle zákazníkovi cez generátor
-          CP. Zmeny vo Firma sekcii sa premietnu do brandu.
-        </p>
-      </header>
+    <CollapsibleSection
+      title="📧 Preview e-mailu + PDF prílohy"
+      desc="Tak vyzerá e-mail ktorý obchodák pošle zákazníkovi cez generátor CP. Zmeny vo Firma sekcii sa premietnu do brandu."
+    >
       <div className="flex gap-2 flex-wrap">
         <button
           type="button"
@@ -374,7 +385,7 @@ function EmailPreviewSection({
           </div>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -518,22 +529,10 @@ function MinOrderSection({
   }
 
   return (
-    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
-      <header>
-        <h2 className="text-lg font-black tracking-tight">
-          🧮 Minimálna objednávka
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Ak by cena zákazky vyšla pod túto hodnotu, generátor CP ju
-          automaticky vyfúkne pridaním „dopravy" tak, aby cena bola
-          nezvyčajne vyzerajúca (1001.50 – 1028.50 €) — neguľate čísla
-          pôsobia dôveryhodnejšie než guľatých 1000 €. Deterministické z
-          hash-u vstupu (rovnaký lead = rovnaké číslo).
-        </p>
-        <p className="text-xs text-muted-foreground mt-1 italic">
-          Pravidlo neplatí pre manuálne CP (bez m² plochy, iba surcharge).
-        </p>
-      </header>
+    <CollapsibleSection
+      title="🧮 Minimálna objednávka"
+      desc="Ak by cena zákazky vyšla pod túto hodnotu, generátor CP ju automaticky vyfúkne (1001.50 – 1028.50 €). Neguľate čísla pôsobia dôveryhodnejšie. Neplatí pre manuálne CP."
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-3">
           <div className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
@@ -594,7 +593,7 @@ function MinOrderSection({
           {saved ? "Uložené" : "Uložiť"}
         </button>
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -798,16 +797,10 @@ function VolumeDiscountsSection({
   }
 
   return (
-    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
-      <header>
-        <h2 className="text-lg font-black tracking-tight">
-          📉 Množstevné zľavy (Volume tiers)
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Automaticky sa aplikujú v Generátori CP podľa plochy m². Aplikujú
-          sa na subtotal (pred manuálnou Špeciálnou zľavou). Nie na dopravu.
-        </p>
-      </header>
+    <CollapsibleSection
+      title="📉 Množstevné zľavy (Volume tiers)"
+      desc="Automaticky sa aplikujú v Generátori CP podľa plochy m². Aplikujú sa na subtotal (pred manuálnou Špeciálnou zľavou). Nie na dopravu."
+    >
       <ul className="space-y-1.5">
         {tiers.map((t, i) => (
           <li
@@ -887,12 +880,13 @@ function VolumeDiscountsSection({
           Reset default
         </button>
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 3. Markupy / Marže
+// 3. Markupy / Marže (deprecated — user 2026-07-18: „prec toto je uz v
+//    materialoch"). Nechávam function definíciu bez použitia.
 // ═══════════════════════════════════════════════════════════════════════
 function MarkupsSection({
   settingsMap,
