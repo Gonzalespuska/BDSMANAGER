@@ -86,13 +86,6 @@ export default async function NastaveniaAdminPage() {
             tint="emerald"
           />
           <SubmoduleTile
-            href="/admin/podklady"
-            title="Podklady"
-            desc="Všetky materiály pre tím — Call scripty (interaktívne scenáre), Kontent shotlist (foto/video), Sales tips, protokoly, cenníky. Rozdeľujú sa podľa role."
-            Icon={GraduationCap}
-            tint="violet"
-          />
-          <SubmoduleTile
             href="/admin/cennik-materialov"
             title="Cenník materiálov"
             desc="Prepis €/m² pre 18 materiálov ktoré generátor CP používa (jednofarebná / chipsová / mramorová / metalická). Prázdne = default z kódu."
@@ -107,6 +100,13 @@ export default async function NastaveniaAdminPage() {
             tint="sky"
           />
           <SubmoduleTile
+            href="/admin/sklad"
+            title="Skladové zásoby"
+            desc="Aktuálny stav materiálu na sklade. Realizátor pri tlači sa auto-odpočíta."
+            Icon={Warehouse}
+            tint="orange"
+          />
+          <SubmoduleTile
             href="/admin/objednavky"
             title="Objednávky materiálu"
             desc="Generuj objednávkové tabuľky pre Siku / Topstone."
@@ -115,19 +115,19 @@ export default async function NastaveniaAdminPage() {
             badge="🚧 In build"
           />
           <SubmoduleTile
-            href="/admin/sklad"
-            title="Skladové zásoby"
-            desc="Aktuálny stav materiálu na sklade. Realizátor pri tlači sa auto-odpočíta."
-            Icon={Warehouse}
-            tint="orange"
-          />
-          <SubmoduleTile
             href="/admin/realne-data"
             title="Realne dáta"
             desc="Analytika z dokončených realizácií — časy fáz, spotreba, problémy."
             Icon={BarChart3}
             tint="amber"
             badge="🚧 In build"
+          />
+          <SubmoduleTile
+            href="/admin/podklady"
+            title="Podklady"
+            desc="Všetky materiály pre tím — Call scripty (interaktívne scenáre), Kontent shotlist (foto/video), Sales tips, protokoly, cenníky. Rozdeľujú sa podľa role."
+            Icon={GraduationCap}
+            tint="violet"
           />
           <SubmoduleTile
             href="/admin/meta-setup"
