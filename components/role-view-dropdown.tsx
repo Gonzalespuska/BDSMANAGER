@@ -353,16 +353,16 @@ function RoleButton({
 }) {
   const isCurrent = current === role;
   const isBusy = busy === role;
-  // Hover-timer pre submenu (800 ms držanie → otvorí konkrétnych userov).
-  // User 2026-07-16: „ked podrzim na obchod neviem sekundu a pol tak mi
-  // ukaze konkretnych obchodakov".
+  // Submenu (Obchod → konkrétni obchodáci) sa otvara HNED na hover.
+  // User 2026-07-18: „toto trva furt tolko isto ked na to ukazem kurzorom"
+  // — predtym bolo 800ms delay ktore uzivatel citil ako laggy.
   const [subOpen, setSubOpen] = React.useState(false);
   const hoverTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = React.useRef<HTMLDivElement>(null);
 
   function scheduleOpen() {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    hoverTimer.current = setTimeout(() => setSubOpen(true), 800);
+    setSubOpen(true);
   }
   function cancelOpen() {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
@@ -370,6 +370,7 @@ function RoleButton({
   }
   function scheduleClose() {
     cancelOpen();
+    // 200ms grace aby cursor stihol prejst na submenu bez „utekania".
     hoverTimer.current = setTimeout(() => setSubOpen(false), 200);
   }
 
