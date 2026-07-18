@@ -31,13 +31,6 @@ export default async function CennikMaterialovPage() {
           <Palette className="w-6 h-6 text-violet-500" aria-hidden />
           Cenník materiálov (Generátor CP)
         </h1>
-        <p className="text-xs text-muted-foreground mt-1 max-w-3xl">
-          Predajná cena (generator CP) + naše nákupné ceny + spotreba materiálu
-          pre 18 operácií. Nákupné ceny + spotreby sú prefilnuté odhadmi zo Sika/
-          Topstone cenníka a TDS — upravuj podľa reálnych faktúr. Predajné ceny
-          používa generátor CP live, nákupné + spotreby sa budú neskôr čerpať
-          do postupov realizatorov.
-        </p>
       </header>
 
       <CennikMaterialovClient settings={(data ?? []) as Array<{ key: string; value: unknown }>} />
