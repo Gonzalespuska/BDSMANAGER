@@ -117,31 +117,66 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
   // ich použije na výpočet predaja materiálu podľa role produktu. Fallback:
   // MARZA_MATERIAL_PER_ROLE z pricing.ts (0.37 pre všetko).
   let materialMarkups: Record<string, number> = {};
-  // Ceny materiálov ktoré admin prepísal cez /admin/nastavenia → Cenník
-  // materiálov generátora. Kľúč: material.<id>.price_per_sqm.
+  // Ceny materiálov ktoré admin prepísal cez /admin/nastavenia → Cenník.
+  // 2 kľúčové formáty:
+  //   1. material.<id>.price_per_sqm          — default override (všetky systémy)
+  //   2. material.<id>.sys.<code>.price_per_sqm — system-specific override
+  // Klient vyberie sys-specific ak existuje pre zvolený systém, inak default.
   const priceOverrides: Record<string, number> = {};
+  const systemPriceOverrides: Record<string, Record<string, number>> = {};
   try {
     const sb = createAdminClient();
     const { data: settings } = await sb
       .from("app_settings")
       .select("key, value")
-      .or(
-        "key.like.markup.%,key.eq.margin.material,key.like.material.%.price_per_sqm",
-      );
+      .or("key.like.markup.%,key.eq.margin.material,key.like.material.%");
     for (const s of settings ?? []) {
       const key = s.key as string;
       const raw = s.value;
       const num = typeof raw === "number" ? raw : parseFloat(String(raw));
       if (!isFinite(num) || num < 0) continue;
-      if (key.startsWith("material.") && key.endsWith(".price_per_sqm")) {
-        const id = key.slice("material.".length, -".price_per_sqm".length);
-        if (id) priceOverrides[id] = num;
+      if (key.startsWith("material.")) {
+        // system-specific?
+        const sysMatch = key.match(
+          /^material\.(.+)\.sys\.([^.]+)\.price_per_sqm$/,
+        );
+        if (sysMatch) {
+          const [, matId, sysCode] = sysMatch;
+          (systemPriceOverrides[sysCode] ??= {})[matId] = num;
+          continue;
+        }
+        // default price override
+        if (key.endsWith(".price_per_sqm")) {
+          const id = key.slice("material.".length, -".price_per_sqm".length);
+          if (!id.includes(".sys.")) priceOverrides[id] = num;
+        }
       } else if (num < 1) {
         materialMarkups[key] = num;
       }
     }
   } catch (e) {
     console.warn("[generator] settings fetch failed:", e);
+  }
+
+  // ─── Load systems (jednofarebna/chipsova/mramorova/metalicka) ─────────
+  type SystemRow = {
+    code: string;
+    label: string;
+    floor_type: string;
+    binder: string | null;
+  };
+  let systems: SystemRow[] = [];
+  try {
+    const sb = createAdminClient();
+    const { data } = await sb
+      .from("realization_systems")
+      .select("code, label, floor_type, binder")
+      .eq("active", true)
+      .order("floor_type")
+      .order("code");
+    systems = (data ?? []) as SystemRow[];
+  } catch (e) {
+    console.warn("[generator] systems fetch failed:", e);
   }
 
   // ─── Demo mock leads (no DB needed) ──────────────────────────────────
@@ -153,6 +188,8 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
         agentInfo={agentInfo}
         materialMarkups={materialMarkups}
         priceOverrides={priceOverrides}
+        systemPriceOverrides={systemPriceOverrides}
+        systems={systems}
       />
     );
   }
@@ -224,6 +261,8 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
       savedQuote={savedQuote}
       materialMarkups={materialMarkups}
       priceOverrides={priceOverrides}
+      systemPriceOverrides={systemPriceOverrides}
+      systems={systems}
     />
   );
 }

@@ -92,11 +92,33 @@ export interface SavedQuoteState {
     discountEnabled: boolean;
     discountAmount: string;
     discountLabel: string;
+    /** Zvolený systém (Sikafloor 264 / 3000 / TopStone …) — 2026-07-18. */
+    systemCode?: string;
   };
   snapshot?: {
     total: number;
     subtotal: number;
   };
+}
+
+type SystemInfo = {
+  code: string;
+  label: string;
+  floor_type: string;
+  binder: string | null;
+};
+
+/** Default systém pre daný typ podlahy (Sikafloor 264 vs Topstone) — user
+ *  2026-07-18: „ta standardna cena je so systemom 264 takze ten default je
+ *  264 pri jednofarebnych a chipsovych, metalicke a mramorove su systemy
+ *  topstopne oba". */
+function defaultSystemFor(ft: FloorType | null): string | null {
+  if (!ft) return null;
+  if (ft === "jednofarebna") return "264";
+  if (ft === "chipsova") return "264-chip";
+  if (ft === "mramorova") return "topstopne";
+  if (ft === "metalicka") return "topstopne-m";
+  return null;
 }
 
 export function GeneratorClient({
@@ -105,6 +127,8 @@ export function GeneratorClient({
   savedQuote,
   materialMarkups,
   priceOverrides,
+  systemPriceOverrides,
+  systems,
 }: {
   leadContext?: LeadContext | null;
   agentInfo?: { name: string; email: string; phone?: string | null };
@@ -116,6 +140,11 @@ export function GeneratorClient({
   /** Ceny/m² prepísané v /admin/nastavenia → Cenník materiálov generátora.
    *  Kľúč = material.id, hodnota = € /m². Aplikujú sa poverch hardcoded MATERIALS. */
   priceOverrides?: Record<string, number>;
+  /** System-specific overrides — kľúč = system_code, hodnota = { material.id: cena }.
+   *  Prednosť pred generic priceOverrides pre danú položku. */
+  systemPriceOverrides?: Record<string, Record<string, number>>;
+  /** Zoznam aktívnych systémov z realization_systems tabuľky. */
+  systems?: SystemInfo[];
 }) {
   const router = useRouter();
   const isResend = !!savedQuote;
@@ -231,6 +260,51 @@ export function GeneratorClient({
   const [jednofarebnaVariant, setJednofarebnaVariant] = React.useState<
     "epoxid" | "polyuretan"
   >(savedQuote?.state.jednofarebnaVariant ?? "polyuretan");
+
+  // System (Sikafloor 264 / 1590 / 3000 / atď.) — 2026-07-18. Default per
+  // floor type. Ak sa zvolí iný systém, aplikujeme system-specific overrides
+  // zo Cenníka materiálov (nastavené na /admin/cennik-materialov).
+  const initialSystem =
+    savedQuote?.state.systemCode ??
+    defaultSystemFor(
+      savedQuote?.state.floorType ?? leadContext?.floor_type ?? null,
+    ) ??
+    "";
+  const [systemCode, setSystemCode] = React.useState<string>(initialSystem);
+
+  // Ak sa mení floor type, prepni systém na default pre nový floor (unless user
+  // explicitne pretavil savedQuote).
+  React.useEffect(() => {
+    if (!floorType) return;
+    // Nájdi systémy pre aktuálny floor
+    const forFloor = (systems ?? []).filter((s) => s.floor_type === floorType);
+    if (forFloor.length === 0) {
+      setSystemCode("");
+      return;
+    }
+    // Ak aktuálny systém nie je z tohto floor, prepni na default
+    if (!forFloor.some((s) => s.code === systemCode)) {
+      setSystemCode(defaultSystemFor(floorType) ?? forFloor[0].code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorType]);
+
+  // Auto-sync variant podľa binder-a zvoleného systému (iba jednofarebna má
+  // variants v MATERIALS). 264/1590 = epoxid, 3000/3000fx/3310 = polyuretan.
+  React.useEffect(() => {
+    if (floorType !== "jednofarebna" || !systemCode) return;
+    const sys = (systems ?? []).find((s) => s.code === systemCode);
+    if (!sys?.binder) return;
+    if (sys.binder === "epoxid" && jednofarebnaVariant !== "epoxid") {
+      setJednofarebnaVariant("epoxid");
+    } else if (
+      sys.binder === "polyuretan" &&
+      jednofarebnaVariant !== "polyuretan"
+    ) {
+      setJednofarebnaVariant("polyuretan");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [systemCode, floorType]);
   // Pre material mode: count balení / kg per produkt (id -> qty string)
   const [materialQtys, setMaterialQtys] = React.useState<
     Record<string, string>
@@ -314,9 +388,16 @@ export function GeneratorClient({
   //
   // Aplikujem `priceOverrides` z /admin/nastavenia (kľúč material.<id>.price_per_sqm)
   // — každý material s override dostane novú `price_per_sqm`.
+  // Mergne generic override + system-specific override (system má prednosť).
+  const effectiveOverrides = React.useMemo(() => {
+    const base = { ...(priceOverrides ?? {}) };
+    const sysOv = systemCode ? systemPriceOverrides?.[systemCode] : null;
+    if (sysOv) Object.assign(base, sysOv);
+    return base;
+  }, [priceOverrides, systemPriceOverrides, systemCode]);
   const pricedMaterials = React.useMemo(
-    () => applyMaterialPriceOverrides(priceOverrides),
-    [priceOverrides],
+    () => applyMaterialPriceOverrides(effectiveOverrides),
+    [effectiveOverrides],
   );
   const materials = React.useMemo(() => {
     if (!floorType) return [];
@@ -811,6 +892,7 @@ ${signatureLines.join("\n")}`;
         discountEnabled,
         discountAmount,
         discountLabel,
+        systemCode,
       },
       snapshot: { total, subtotal },
     };
@@ -1320,35 +1402,33 @@ ${signatureLines.join("\n")}`;
         </div>
       )}
 
-      {/* Jednofarebná variant toggle — Polyuretán (default) vs Epoxid */}
-      {saleMode === "realizacia" && floorType === "jednofarebna" && (
-        <div className="inline-flex rounded-lg border bg-muted/30 p-0.5 self-start">
-          <button
-            type="button"
-            onClick={() => setJednofarebnaVariant("polyuretan")}
-            className={cn(
-              "px-3 py-1.5 rounded-md text-xs font-bold transition-colors",
-              jednofarebnaVariant === "polyuretan"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Polyuretán
-          </button>
-          <button
-            type="button"
-            onClick={() => setJednofarebnaVariant("epoxid")}
-            className={cn(
-              "px-3 py-1.5 rounded-md text-xs font-bold transition-colors",
-              jednofarebnaVariant === "epoxid"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Epoxid
-          </button>
-        </div>
-      )}
+      {/* System dropdown — Sikafloor 264 (default) / 1590 / 3000 / …
+          Pri jednofarebnej binder systému riadi variant (epoxid vs polyuretan).
+          User 2026-07-18: „pridaj do generatora cp tie jednotlive systemy". */}
+      {saleMode === "realizacia" &&
+        floorType &&
+        (systems ?? []).some((s) => s.floor_type === floorType) && (
+          <div className="flex items-center gap-2 self-start rounded-lg border bg-muted/30 px-2 py-1.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              Systém
+            </span>
+            <select
+              value={systemCode}
+              onChange={(e) => setSystemCode(e.target.value)}
+              className="h-8 px-2 rounded-md border border-input bg-background text-sm font-bold"
+            >
+              {(systems ?? [])
+                .filter((s) => s.floor_type === floorType)
+                .map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.label}
+                    {s.binder ? ` · ${s.binder}` : ""}
+                    {s.code === defaultSystemFor(floorType) ? " (default)" : ""}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
 
       {/* Operations — visible only after floor type chosen (realizácia mode) */}
       {saleMode === "realizacia" && floorType && (
