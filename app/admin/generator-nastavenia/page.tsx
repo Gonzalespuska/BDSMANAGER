@@ -23,7 +23,7 @@ export default async function GeneratorNastaveniaPage() {
       .from("app_settings")
       .select("key, value")
       .or(
-        "key.like.generator.%,key.like.margin.%,key.like.markup.%",
+        "key.like.generator.%,key.like.margin.%,key.like.markup.%,key.like.company.%,key.like.pdf.%,key.like.email.%,key.like.transport.%,key.like.delivery.%",
       ),
   ]);
 

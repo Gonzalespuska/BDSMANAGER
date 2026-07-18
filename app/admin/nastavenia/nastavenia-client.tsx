@@ -86,15 +86,10 @@ export function NastaveniaClient({
 
   return (
     <div className="space-y-6">
-      <SectionBlock title="🏢 Firma" desc="Firemné údaje, PDF footer, email brand.">
-        <SettingsList settings={firmaSet} />
-      </SectionBlock>
-
-
-      <SectionBlock title="🚗 Doprava" desc="Sadzby km + rezerva + rýchlosť.">
-        <SettingsList settings={dopravaSet} />
-      </SectionBlock>
-
+      {/* Firma + Doprava presunuté do /admin/generator-nastavenia — user
+          2026-07-18: „tiez skryme pod nastavenia generatora cp".
+          Zabraňujeme kompilátorovi hovoriť o nepoužitých premenných. */}
+      <span className="hidden">{firmaSet.length + dopravaSet.length}</span>
     </div>
   );
 }

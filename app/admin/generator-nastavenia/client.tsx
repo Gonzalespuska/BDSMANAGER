@@ -63,7 +63,400 @@ export function GeneratorNastaveniaClient({
       <MinOrderSection settingsMap={settingsMap} />
       <VolumeDiscountsSection settingsMap={settingsMap} />
       <MarkupsSection settingsMap={settingsMap} />
+      <FirmaSection settingsMap={settingsMap} />
+      <DopravaSection settingsMap={settingsMap} />
+      <CityKmCalcSection />
+      <EmailPreviewSection settingsMap={settingsMap} />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Firma — údaje pre PDF hlavičky, e-mailové podpisy
+// ═══════════════════════════════════════════════════════════════════════
+const FIRMA_KEYS: Array<{ key: string; label: string; desc: string }> = [
+  { key: "company.name", label: "Firma — názov", desc: "PDF hlavička + email subject" },
+  { key: "company.address", label: "Firma — adresa sídla", desc: "PDF pätka" },
+  { key: "company.ico", label: "Firma — IČO", desc: "PDF pätka" },
+  { key: "company.dic", label: "Firma — DIČ", desc: "PDF pätka" },
+  { key: "company.web", label: "Firma — web", desc: "PDF + e-mail" },
+  { key: "company.slogan_pdf", label: "PDF slogan", desc: "Text pod logom v PDF" },
+  { key: "email.brand_name", label: "E-mail — brand meno", desc: "Meno odosielateľa" },
+  { key: "pdf.footer_note", label: "PDF footer nota", desc: "Vždy v spodnej časti PDF" },
+];
+
+function FirmaSection({ settingsMap }: { settingsMap: Record<string, unknown> }) {
+  return (
+    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+      <header>
+        <h2 className="text-lg font-black tracking-tight">
+          🏢 Firma (PDF + e-mail brand)
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Firemné údaje ktoré sa vyskladajú do hlavičky/pätky PDF cenovej
+          ponuky a do e-mailových podpisov.
+        </p>
+      </header>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {FIRMA_KEYS.map((f) => (
+          <TextSettingRow
+            key={f.key}
+            settingKey={f.key}
+            label={f.label}
+            desc={f.desc}
+            current={settingsMap[f.key]}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Doprava — sadzby km, rezerva, priemerná rýchlosť
+// ═══════════════════════════════════════════════════════════════════════
+const DOPRAVA_KEYS: Array<{
+  key: string;
+  label: string;
+  desc: string;
+  unit?: string;
+  step?: string;
+}> = [
+  { key: "transport.hq_name", label: "Sídlo firmy (mesto)", desc: "Východisková obec pre výpočet km" },
+  { key: "transport.startup_fee_eur", label: "Fixný startup fee", desc: "Za jednu jazdu (nakládka, papier, parking)", unit: "€", step: "1" },
+  { key: "transport.petrol_per_km", label: "Benzín / km", desc: "napr. 10 L/100 km × 1.60 €/L = 0.16", unit: "€", step: "0.01" },
+  { key: "transport.amortization_per_km", label: "Amortizácia / km", desc: "depreciácia + servis + pneu + poistka", unit: "€", step: "0.01" },
+  { key: "transport.avg_speed_kmh", label: "Priemerná rýchlosť", desc: "km/h — used na časový výpočet", unit: "km/h", step: "1" },
+  { key: "transport.reserve_min", label: "Rezerva času", desc: "minúty na variabilitu trasy", unit: "min", step: "5" },
+  { key: "transport.m2_per_day", label: "m² / robotnícky deň", desc: "priemerná realizácia denne", unit: "m²", step: "1" },
+  { key: "delivery.min", label: "Doprava — minimum", desc: "Minimálna suma za dopravu", unit: "€", step: "1" },
+  { key: "delivery.per_km", label: "Doprava — sadzba za km", desc: "Alternatívna finálna sadzba (legacy)", unit: "€", step: "0.01" },
+];
+
+function DopravaSection({ settingsMap }: { settingsMap: Record<string, unknown> }) {
+  return (
+    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+      <header>
+        <h2 className="text-lg font-black tracking-tight">🚗 Doprava</h2>
+        <p className="text-xs text-muted-foreground">
+          Sadzby ktoré generátor CP použije na výpočet dopravy podľa
+          vzdialenosti od HQ do mesta zákazníka. Kalkulačka nižšie ti ukáže
+          preview.
+        </p>
+      </header>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {DOPRAVA_KEYS.map((d) => (
+          <TextSettingRow
+            key={d.key}
+            settingKey={d.key}
+            label={d.label}
+            desc={d.desc}
+            current={settingsMap[d.key]}
+            unit={d.unit}
+            numeric={d.step != null}
+            step={d.step}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// City km calculator — obchodákovi ukáže preview dopravy
+// ═══════════════════════════════════════════════════════════════════════
+function CityKmCalcSection() {
+  const [city, setCity] = React.useState("Bratislava");
+  const [result, setResult] = React.useState<{
+    km: number | null;
+    startup: number;
+    petrol: number;
+    amort: number;
+    total: number;
+  } | null>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  async function calc() {
+    setBusy(true);
+    try {
+      const { getCityDistanceKm, calcTransport } = await import(
+        "@/lib/data/transport"
+      );
+      const km = getCityDistanceKm(city);
+      if (km == null) {
+        setResult({ km: null, startup: 0, petrol: 0, amort: 0, total: 0 });
+      } else {
+        const c = calcTransport(km);
+        setResult({
+          km: km,
+          startup: 20,
+          petrol: c.petrol_eur,
+          amort: c.amortization_eur,
+          total: c.total_eur,
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+      <header>
+        <h2 className="text-lg font-black tracking-tight">
+          📍 Kalkulačka dopravy (preview)
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Napíš mesto a klikni „Prepočítať" — ukáže ti akú sumu za dopravu
+          vidí obchodák v generátori CP. Používa aktuálne uložené sadzby +
+          hardcoded distance mapu (~4600 obcí + hlavné mestá).
+        </p>
+      </header>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          placeholder="Napr. Bratislava"
+          className="h-9 flex-1 min-w-[180px] px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold"
+        />
+        <button
+          type="button"
+          onClick={calc}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-xs font-black px-3 py-1.5 disabled:opacity-40"
+        >
+          {busy ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Save className="w-3.5 h-3.5" />
+          )}
+          Prepočítať
+        </button>
+      </div>
+      {result && (
+        <div
+          className={
+            "rounded-lg border p-3 text-xs " +
+            (result.km == null
+              ? "border-rose-200 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300"
+              : "border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200")
+          }
+        >
+          {result.km == null ? (
+            <div>
+              Mesto „<strong>{city}</strong>" nie je v hardcoded databáze.
+              Obchodák zadá km ručne.
+            </div>
+          ) : (
+            <div className="tabular-nums space-y-1">
+              <div>
+                Vzdialenosť z Ružomberka:{" "}
+                <strong>{result.km} km</strong> (jedna strana){" "}
+                <span className="opacity-70">
+                  = {result.km * 2} km round-trip
+                </span>
+              </div>
+              <div>Startup fee: {result.startup.toFixed(2)} €</div>
+              <div>Benzín: {result.petrol.toFixed(2)} €</div>
+              <div>Amortizácia: {result.amort.toFixed(2)} €</div>
+              <div className="pt-1 border-t border-emerald-300 dark:border-emerald-800 font-black">
+                Doprava SPOLU: {result.total.toFixed(2)} €
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// E-mail preview — ako vyzerá odoslaná ponuka
+// ═══════════════════════════════════════════════════════════════════════
+function EmailPreviewSection({
+  settingsMap,
+}: {
+  settingsMap: Record<string, unknown>;
+}) {
+  const brand =
+    String(settingsMap["email.brand_name"] ?? "") ||
+    String(settingsMap["company.name"] ?? "") ||
+    "EPOXIDOVO";
+  const web = String(settingsMap["company.web"] ?? "epoxidovo.sk");
+  const footer = String(settingsMap["pdf.footer_note"] ?? "Ďakujeme za dôveru.");
+  const [showPreview, setShowPreview] = React.useState(false);
+
+  return (
+    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+      <header>
+        <h2 className="text-lg font-black tracking-tight">
+          📧 Preview e-mailu + PDF prílohy
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Tak vyzerá e-mail ktorý obchodák pošle zákazníkovi cez generátor
+          CP. Zmeny vo Firma sekcii sa premietnu do brandu.
+        </p>
+      </header>
+      <div className="flex gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setShowPreview((v) => !v)}
+          className="inline-flex items-center gap-1 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-xs font-black px-3 py-1.5"
+        >
+          {showPreview ? "Skryť preview" : "Zobraziť e-mail preview"}
+        </button>
+        <a
+          href="/generator?demo=jednofarebna-dom"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 rounded-md border-2 border-sky-500 bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-300 text-xs font-black px-3 py-1.5"
+        >
+          Otvoriť generator (demo) →
+        </a>
+      </div>
+
+      {showPreview && (
+        <div className="rounded-xl border-2 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/40 overflow-hidden">
+          {/* E-mail header */}
+          <div className="bg-slate-100 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 p-3 text-[11px] space-y-0.5">
+            <div>
+              <span className="font-black">From:</span> {brand} &lt;info@
+              {web}&gt;
+            </div>
+            <div>
+              <span className="font-black">To:</span> jozef.zakaznik@example.sk
+            </div>
+            <div>
+              <span className="font-black">Subject:</span> Cenová ponuka —
+              Epoxidová podlaha 60 m² · {brand}
+            </div>
+          </div>
+          {/* Body preview */}
+          <div className="p-4 bg-white dark:bg-slate-900 text-sm space-y-3">
+            <div className="text-lg font-black text-slate-900 dark:text-slate-100">
+              Dobrý deň Jozef,
+            </div>
+            <div className="text-slate-700 dark:text-slate-300 leading-relaxed">
+              posielame Vám cenovú ponuku pre epoxidovú podlahu 60 m² podľa
+              požiadaviek z formulára na {web}.
+            </div>
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-3 space-y-1">
+              <div className="flex justify-between text-xs">
+                <span>Farebný náter (polyuretán 60 m²)</span>
+                <span className="tabular-nums font-black">2 820.00 €</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span>Penetrácia + Úprava povrchu (60 m²)</span>
+                <span className="tabular-nums font-black">1 200.00 €</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span>Doprava (Bratislava, 250 km)</span>
+                <span className="tabular-nums font-black">175.00 €</span>
+              </div>
+              <div className="border-t border-slate-300 dark:border-slate-700 pt-1 flex justify-between font-black">
+                <span>SPOLU (bez DPH)</span>
+                <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
+                  4 195.00 €
+                </span>
+              </div>
+            </div>
+            <div className="text-slate-700 dark:text-slate-300 text-xs">
+              Kompletná cenová ponuka s technickými detailmi je v prílohe (PDF).
+            </div>
+            <div className="text-slate-700 dark:text-slate-300 text-xs italic">
+              📎 CP_Jozef_Zakaznik_2026-07-18.pdf (152 KB)
+            </div>
+            <div className="border-t border-slate-300 dark:border-slate-700 pt-3 text-[11px] text-muted-foreground">
+              {footer}
+              <br />
+              {brand} · {web}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Reusable text/number setting row
+// ═══════════════════════════════════════════════════════════════════════
+function TextSettingRow({
+  settingKey,
+  label,
+  desc,
+  current,
+  unit,
+  numeric,
+  step,
+}: {
+  settingKey: string;
+  label: string;
+  desc: string;
+  current: unknown;
+  unit?: string;
+  numeric?: boolean;
+  step?: string;
+}) {
+  const initial =
+    typeof current === "number" ? String(current) : String(current ?? "");
+  const [val, setVal] = React.useState(initial);
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await saveSettingV2(settingKey, val.trim());
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <label className="block rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-2.5">
+      <div className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+        {label}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <input
+          type={numeric ? "number" : "text"}
+          step={step}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          placeholder="prázdne = default"
+          className={
+            "h-9 flex-1 min-w-0 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold " +
+            (numeric ? "tabular-nums text-right" : "")
+          }
+        />
+        {unit && (
+          <span className="text-xs text-muted-foreground shrink-0">{unit}</span>
+        )}
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className={
+            "inline-flex items-center gap-1 rounded-md text-white text-xs font-black px-2.5 py-1.5 disabled:opacity-40 " +
+            (saved ? "bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-700")
+          }
+        >
+          {saving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Save className="w-3.5 h-3.5" />
+          )}
+          {saved ? "OK" : "Uložiť"}
+        </button>
+      </div>
+      <div className="text-[10px] text-muted-foreground mt-0.5 italic">
+        {desc}
+      </div>
+    </label>
   );
 }
 
