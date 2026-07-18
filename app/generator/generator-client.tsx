@@ -95,6 +95,10 @@ export interface SavedQuoteState {
     discountLabel: string;
     /** Zvolený systém (Sikafloor 264 / 3000 / TopStone …) — 2026-07-18. */
     systemCode?: string;
+    /** Vlastna cena za m² pre picked system — user 2026-07-18: „daj mi
+     *  moznost to dam dopisat niekde". Ak set, prepise material subtotal
+     *  cez customPrice * m². Prazdny string / undefined = default. */
+    customSystemPricePerM2?: string;
   };
   snapshot?: {
     total: number;
@@ -592,7 +596,37 @@ export function GeneratorClient({
 
   // Subtotal = súčet predajných cien všetkých povolených riadkov.
   // Sadzby v Material sú UŽ FINÁLNE — calcLine vracia rovno predajnú cenu.
-  const subtotalRaw = calcs.reduce((s, c) => s + (c.calc?.total ?? 0), 0);
+  const materialSubtotalRaw = calcs.reduce((s, c) => s + (c.calc?.total ?? 0), 0);
+  // OVERRIDE cena za m² pre picked system — user 2026-07-18: „ked v cp
+  // vybere tento system tak to tam tu cenu ukaze bude ina ako default
+  // daj mi moznost to dam dopisat niekde". Ak set (nie prazdny string) +
+  // realizacia mode + platny m², nahradime material subtotal cez
+  // customPrice * requiredM2. Zlozky (surcharge) sa NEprepisu, aby
+  // Pomenovana/Skryta zlozka fungovala nezavisle.
+  const [customSystemPricePerM2, setCustomSystemPricePerM2] =
+    React.useState<string>(savedQuote?.state.customSystemPricePerM2 ?? "");
+  const customPriceNum = parseFloat(customSystemPricePerM2);
+  const surchargesSubtotal = calcs
+    .filter((c) => c.m.unit === "surcharge")
+    .reduce((s, c) => s + (c.calc?.total ?? 0), 0);
+  const subtotalRaw = (() => {
+    if (
+      saleMode === "realizacia" &&
+      isFinite(customPriceNum) &&
+      customPriceNum > 0
+    ) {
+      // Vypocitame required m² z prveho non-optional item-u alebo m² zaklade
+      // (rovnaka logika ako effectiveM2 nizsie).
+      const firstReq = materials.find((m) => !m.optional);
+      const m2Base = firstReq
+        ? parseFloat(lines[firstReq.id]?.m2 ?? "") || 0
+        : 0;
+      if (m2Base > 0) {
+        return customPriceNum * m2Base + surchargesSubtotal;
+      }
+    }
+    return materialSubtotalRaw;
+  })();
 
   // ─── Množstevná zľava (automatický volume discount podľa m²) ──────────
   // Pri 100/300/500/1000+ m² dostane zákazník automaticky 3/6/10/15% zľavu
@@ -938,6 +972,7 @@ ${signatureLines.join("\n")}`;
         discountAmount,
         discountLabel,
         systemCode,
+        customSystemPricePerM2,
       },
       snapshot: { total, subtotal },
     };
@@ -1451,7 +1486,7 @@ ${signatureLines.join("\n")}`;
       {saleMode === "realizacia" &&
         floorType &&
         (systems ?? []).some((s) => s.floor_type === floorType) && (
-          <div className="flex items-center gap-2.5 self-start rounded-xl border-2 border-sky-400 dark:border-sky-600 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-2.5 self-start rounded-xl border-2 border-sky-400 dark:border-sky-600 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 shadow-sm flex-wrap">
             <span className="text-xs font-black uppercase tracking-widest text-sky-700 dark:text-sky-300">
               Systém
             </span>
@@ -1472,6 +1507,44 @@ ${signatureLines.join("\n")}`;
                   </option>
                 ))}
             </select>
+            {/* Vlastna cena override — user 2026-07-18: „daj mi moznost to
+                dam dopisat niekde". Prazdny = default, cislo > 0 =
+                prepise material subtotal. Zolty highlight ked aktivny. */}
+            <div className="flex items-center gap-1.5 border-l-2 border-sky-300 dark:border-sky-800 pl-2.5">
+              <span className="text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300">
+                Vlastná cena
+              </span>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={customSystemPricePerM2}
+                  onChange={(e) => setCustomSystemPricePerM2(e.target.value)}
+                  placeholder="—"
+                  title="Prepíše cenu materiálu za m². Prázdne = default zo systému."
+                  className={
+                    "h-10 w-20 pl-2 pr-8 rounded-lg border-2 text-sm font-black tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-amber-400 " +
+                    (customPriceNum > 0
+                      ? "border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200"
+                      : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900")
+                  }
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-black text-slate-500 pointer-events-none">
+                  €/m²
+                </span>
+              </div>
+              {customPriceNum > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCustomSystemPricePerM2("")}
+                  className="text-xs font-black text-slate-500 hover:text-rose-600"
+                  title="Zrušiť custom cenu"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </div>
         )}
 
