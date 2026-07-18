@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Percent, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Percent, Plus, Save, Trash2 } from "lucide-react";
 import { saveSettingV2 } from "@/app/admin/settings/actions";
 import { FLOOR_TYPE_LABELS, type FloorType } from "@/lib/data/materials";
 
@@ -59,12 +59,14 @@ export function GeneratorNastaveniaClient({
 
   return (
     <div className="space-y-4">
-      <DefaultSystemsSection systems={systems} settingsMap={settingsMap} />
       <MinOrderSection settingsMap={settingsMap} />
       <VolumeDiscountsSection settingsMap={settingsMap} />
       <FirmaSection settingsMap={settingsMap} />
       <DopravaSection settingsMap={settingsMap} />
       <EmailPreviewSection settingsMap={settingsMap} />
+      {/* Defaultne systemy per typ podlahy — user 2026-07-18: „dajme to
+          uplne na spodok a ako dropdown ze sa da otvarat a zatvarat". */}
+      <DefaultSystemsSection systems={systems} settingsMap={settingsMap} />
     </div>
   );
 }
@@ -608,17 +610,10 @@ function DefaultSystemsSection({
   settingsMap: Record<string, unknown>;
 }) {
   return (
-    <section className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
-      <header>
-        <h2 className="text-lg font-black tracking-tight">
-          🎯 Defaultné systémy per typ podlahy
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Ktorý systém sa automaticky vyberie v Generátori CP keď obchodák
-          klikne na typ podlahy. 95 % zákaziek → default, obchodák prepne
-          manuálne ak zákazník chce iný.
-        </p>
-      </header>
+    <CollapsibleSection
+      title="🎯 Defaultné systémy per typ podlahy"
+      desc="Ktorý systém sa automaticky vyberie v Generátori CP keď obchodák klikne na typ podlahy. 95 % zákaziek → default, obchodák prepne manuálne ak zákazník chce iný."
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {FLOORS.map((ft) => (
           <DefaultSystemRow
@@ -632,7 +627,7 @@ function DefaultSystemsSection({
           />
         ))}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -678,26 +673,39 @@ function DefaultSystemRow({
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        <select
-          value={val}
-          onChange={(e) => setVal(e.target.value)}
-          className="h-9 flex-1 min-w-0 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold"
-        >
-          {systems.length === 0 && <option value="">(žiadne systémy)</option>}
-          {systems.map((s) => (
-            <option key={s.code} value={s.code}>
-              {s.label}
-              {s.binder ? ` · ${s.binder}` : ""}
-            </option>
-          ))}
-        </select>
+      <div className="flex items-stretch gap-1.5">
+        {/* Custom select — appearance-none + vlastna sipka aby native
+            chevron nepreliezal cez border. User 2026-07-18: „TA SIPKA
+            PREKRACUJE SKORO CEZ TO POLE KDE MA BYT". padding-right
+            necha priestor pre <ChevronDown/> ktora sa da centrovat. */}
+        <div className="relative flex-1 min-w-0">
+          <select
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            className="h-10 w-full appearance-none pl-2 pr-8 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold cursor-pointer"
+          >
+            {systems.length === 0 && <option value="">(žiadne systémy)</option>}
+            {systems.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.label}
+                {s.binder ? ` · ${s.binder}` : ""}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+            aria-hidden
+          />
+        </div>
+        {/* Button h-10 aby matchol select (predtym py-1.5 = ~28px, select
+            bol 36px → button vysednutel dole; user 2026-07-18: „A TO
+            ULOZIT JE MENSIE AKO TO POLE S TYM MENOM PRECO"). */}
         <button
           type="button"
           onClick={save}
           disabled={saving}
           className={
-            "inline-flex items-center gap-1 rounded-md text-white text-xs font-black px-2.5 py-1.5 disabled:opacity-40 " +
+            "h-10 inline-flex items-center gap-1 rounded-md text-white text-xs font-black px-3 shrink-0 disabled:opacity-40 " +
             (saved ? "bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-700")
           }
         >
