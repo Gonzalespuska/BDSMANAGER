@@ -139,18 +139,6 @@ function MaterialRow({
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
 
-  const effectivePrice = priceVal.trim()
-    ? parseFloat(priceVal)
-    : defaultPrice;
-  const effectiveCost = costVal.trim() ? parseFloat(costVal) : NaN;
-  const margin =
-    isFinite(effectivePrice) &&
-    isFinite(effectiveCost) &&
-    effectivePrice > 0 &&
-    effectiveCost >= 0
-      ? ((effectivePrice - effectiveCost) / effectivePrice) * 100
-      : null;
-
   async function saveAll() {
     setSaving(true);
     setSaved(false);
@@ -229,21 +217,6 @@ function MaterialRow({
             {id}
           </div>
         </div>
-        {margin != null && (
-          <div
-            className={
-              "text-xs font-black tabular-nums px-2 py-1 rounded " +
-              (margin >= 50
-                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                : margin >= 30
-                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                  : "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300")
-            }
-            title="Marža = (predaj − nákup) / predaj"
-          >
-            marža {margin.toFixed(0)}%
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
