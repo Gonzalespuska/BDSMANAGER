@@ -81,7 +81,6 @@ export function NastaveniaClient({
   // sa presúvajú do editora materiálových sadzieb, ostatné sekcie prec.
   void cities;
   void sika;
-  void materials;
   void training;
   void zlavySet;
 
@@ -89,6 +88,13 @@ export function NastaveniaClient({
     <div className="space-y-6">
       <SectionBlock title="🏢 Firma" desc="Firemné údaje, PDF footer, email brand.">
         <SettingsList settings={firmaSet} />
+      </SectionBlock>
+
+      <SectionBlock
+        title="🧪 Materiály (nacenenie)"
+        desc="Custom materiály/položky s cenou za m² alebo za kus — pridávajú sa do cenovej ponuky mimo hlavného systému."
+      >
+        <MaterialsTab initial={materials} />
       </SectionBlock>
 
       <SectionBlock title="🚗 Doprava" desc="Sadzby km + rezerva + rýchlosť.">

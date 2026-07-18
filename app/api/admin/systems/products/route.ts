@@ -50,6 +50,12 @@ export async function POST(request: NextRequest) {
       unit_size_kg: unitSize,
       unit_label: (body.unit_label as string) ?? "sud",
       sort_order: (body.sort_order as number) ?? 100,
+      price_per_unit:
+        typeof body.price_per_unit === "number"
+          ? body.price_per_unit
+          : body.price_per_unit == null
+            ? null
+            : Number(body.price_per_unit),
     })
     .select("*")
     .single();
@@ -78,6 +84,7 @@ export async function PATCH(request: NextRequest) {
     "unit_size_kg",
     "unit_label",
     "sort_order",
+    "price_per_unit",
   ]) {
     if (k in body) patch[k] = body[k];
   }

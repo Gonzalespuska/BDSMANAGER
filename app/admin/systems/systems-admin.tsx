@@ -30,7 +30,28 @@ type Product = {
   unit_size_kg: number;
   unit_label: string;
   sort_order: number;
+  /** Cena za jedno balenie (napr. 1 sud = 25 kg → 150 €). Optional. */
+  price_per_unit?: number | null;
 };
+
+/** Vypočítaná cena za m² pre daný produkt.
+ *  = spotreba_kg_na_m2 × (cena_za_balenie / veľkosť_balenia_kg)
+ *  Vráti null ak niektorý vstup chýba alebo je 0.
+ */
+function computeProductPricePerM2(p: {
+  consumption_per_m2: number;
+  unit_size_kg: number;
+  price_per_unit?: number | null;
+}): number | null {
+  if (!p.price_per_unit || !p.unit_size_kg) return null;
+  const pricePerKg = p.price_per_unit / p.unit_size_kg;
+  return p.consumption_per_m2 * pricePerKg;
+}
+
+function fmtEur(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "—";
+  return n.toFixed(2).replace(/\.?0+$/, "") + " €";
+}
 
 type ProcedureStep = { step: number; title: string; note: string };
 type ResponsibilityStep = { step: number; title: string; isControl?: boolean };
@@ -453,6 +474,9 @@ function ProductRow({
   const [cons, setCons] = React.useState(String(product.consumption_per_m2));
   const [unitSize, setUnitSize] = React.useState(String(product.unit_size_kg));
   const [unitLabel, setUnitLabel] = React.useState(product.unit_label);
+  const [price, setPrice] = React.useState(
+    product.price_per_unit != null ? String(product.price_per_unit) : "",
+  );
   const [busy, setBusy] = React.useState(false);
 
   async function save() {
@@ -468,6 +492,7 @@ function ProductRow({
         consumption_per_m2: parseFloat(cons),
         unit_size_kg: parseFloat(unitSize),
         unit_label: unitLabel,
+        price_per_unit: price.trim() ? parseFloat(price) : null,
       }),
     });
     const j = await r.json();
@@ -499,7 +524,7 @@ function ProductRow({
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-black leading-tight">{product.label}</div>
-          <div className="text-[11px] text-slate-500 flex items-center gap-2">
+          <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
             <span className="uppercase font-bold">{product.product_role}</span>
             <span>·</span>
             <span>SKU {product.sku}</span>
@@ -509,6 +534,22 @@ function ProductRow({
             <span>
               {product.unit_size_kg} kg/{product.unit_label}
             </span>
+            {product.price_per_unit != null && (
+              <>
+                <span>·</span>
+                <span className="font-black text-emerald-700">
+                  {fmtEur(product.price_per_unit)}/{product.unit_label}
+                </span>
+              </>
+            )}
+            {computeProductPricePerM2(product) != null && (
+              <>
+                <span>·</span>
+                <span className="font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                  {fmtEur(computeProductPricePerM2(product))}/m²
+                </span>
+              </>
+            )}
           </div>
         </div>
         <button
@@ -590,7 +631,33 @@ function ProductRow({
             <option value="vrece">vrece</option>
           </select>
         </Field>
+        <Field label={`Cena za ${unitLabel} (€)`}>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="napr. 125"
+            className="w-full h-9 px-2 rounded border-2 border-emerald-300 bg-emerald-50/60 text-sm font-bold tabular-nums"
+          />
+        </Field>
       </div>
+      {price.trim() && parseFloat(unitSize) > 0 && parseFloat(cons) > 0 && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2 text-xs font-black text-emerald-800 tabular-nums">
+          Auto-výpočet:{" "}
+          {fmtEur(
+            (parseFloat(cons) * parseFloat(price)) / parseFloat(unitSize),
+          )}
+          /m²{" "}
+          <span className="font-normal opacity-70">
+            ({cons} kg/m² × {(parseFloat(price) / parseFloat(unitSize)).toFixed(
+              2,
+            )}{" "}
+            €/kg)
+          </span>
+        </div>
+      )}
       <div className="flex gap-2">
         <button
           type="button"
@@ -632,6 +699,7 @@ function NewProductRow({
   const [cons, setCons] = React.useState("");
   const [unitSize, setUnitSize] = React.useState("");
   const [unitLabel, setUnitLabel] = React.useState("sud");
+  const [price, setPrice] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -649,6 +717,7 @@ function NewProductRow({
         consumption_per_m2: parseFloat(cons),
         unit_size_kg: parseFloat(unitSize),
         unit_label: unitLabel,
+        price_per_unit: price.trim() ? parseFloat(price) : null,
       }),
     });
     const j = await r.json();
@@ -727,7 +796,29 @@ function NewProductRow({
             <option value="vrece">vrece</option>
           </select>
         </Field>
+        <Field label={`Cena za ${unitLabel} (€)`}>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="voliteľné"
+            className="w-full h-9 px-2 rounded border-2 border-emerald-300 bg-emerald-50/60 text-sm font-bold tabular-nums"
+          />
+        </Field>
       </div>
+      {price.trim() &&
+        parseFloat(unitSize) > 0 &&
+        parseFloat(cons) > 0 && (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2 text-xs font-black text-emerald-800 tabular-nums">
+            Auto:{" "}
+            {fmtEur(
+              (parseFloat(cons) * parseFloat(price)) / parseFloat(unitSize),
+            )}
+            /m²
+          </div>
+        )}
       {err && <div className="text-xs text-rose-700">⚠ {err}</div>}
       <div className="flex gap-2">
         <button
