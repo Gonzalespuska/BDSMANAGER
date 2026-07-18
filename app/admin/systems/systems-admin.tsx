@@ -76,6 +76,9 @@ type System = {
   label: string;
   description: string | null;
   floor_type: string;
+  /** Multi floor types — user 2026-07-18. Ak chyba (stary system), fallback
+   *  je [floor_type]. */
+  floor_types?: string[];
   binder: string | null;
   sort_order: number;
   active: boolean;
@@ -230,12 +233,19 @@ function SystemCard({
         <div className="flex-1 min-w-0">
           <div className="font-black text-base leading-tight">{system.label}</div>
           <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-bold">
-              {FLOOR_TYPES.find((t) => t.v === system.floor_type)?.label ??
-                system.floor_type}
-            </span>
+            {(system.floor_types && system.floor_types.length > 0
+              ? system.floor_types
+              : [system.floor_type]
+            ).map((ft) => (
+              <span
+                key={ft}
+                className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold"
+              >
+                {FLOOR_TYPES.find((t) => t.v === ft)?.label ?? ft}
+              </span>
+            ))}
             {system.binder && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 text-[10px] font-bold capitalize">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 text-[10px] font-bold capitalize">
                 {system.binder}
               </span>
             )}
@@ -289,12 +299,29 @@ function SystemEditor({
   const [description, setDescription] = React.useState(
     system.description ?? "",
   );
-  const [floorType, setFloorType] = React.useState(system.floor_type);
+  // Multi floor_types — user 2026-07-18. Fallback z legacy single floor_type
+  // ak novy pole este chyba na starych systemoch.
+  const [floorTypes, setFloorTypes] = React.useState<string[]>(
+    system.floor_types && system.floor_types.length > 0
+      ? system.floor_types
+      : system.floor_type
+        ? [system.floor_type]
+        : ["jednofarebna"],
+  );
   const [binder, setBinder] = React.useState(system.binder ?? "");
-  const [sortOrder, setSortOrder] = React.useState(String(system.sort_order));
-  const [active, setActive] = React.useState(system.active);
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
+
+  function toggleFloorType(v: string) {
+    setFloorTypes((prev) => {
+      if (prev.includes(v)) {
+        // nemozeme zmazat vsetky
+        if (prev.length === 1) return prev;
+        return prev.filter((x) => x !== v);
+      }
+      return [...prev, v];
+    });
+  }
 
   async function save() {
     setBusy(true);
@@ -306,10 +333,9 @@ function SystemEditor({
         id: system.id,
         label,
         description: description || null,
-        floor_type: floorType,
-        binder: floorType === "jednofarebna" ? binder || null : null,
-        sort_order: parseInt(sortOrder) || 100,
-        active,
+        floor_types: floorTypes,
+        binder:
+          floorTypes.includes("jednofarebna") ? binder || null : null,
       }),
     });
     const j = await r.json();
@@ -344,20 +370,29 @@ function SystemEditor({
             className="w-full h-9 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold"
           />
         </Field>
-        <Field label="Typ podlahy">
-          <select
-            value={floorType}
-            onChange={(e) => setFloorType(e.target.value)}
-            className="w-full h-9 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold"
-          >
-            {FLOOR_TYPES.map((t) => (
-              <option key={t.v} value={t.v}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+        <Field label="Typ podlahy (môžeš vybrať viac)">
+          <div className="flex flex-wrap gap-1.5">
+            {FLOOR_TYPES.map((t) => {
+              const on = floorTypes.includes(t.v);
+              return (
+                <button
+                  key={t.v}
+                  type="button"
+                  onClick={() => toggleFloorType(t.v)}
+                  className={
+                    "inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-black border-2 transition-colors " +
+                    (on
+                      ? "bg-emerald-600 border-emerald-600 text-white"
+                      : "bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-400")
+                  }
+                >
+                  <span>{on ? "✓" : "+"}</span> {t.label}
+                </button>
+              );
+            })}
+          </div>
         </Field>
-        {floorType === "jednofarebna" && (
+        {floorTypes.includes("jednofarebna") && (
           <Field label="Živica (iba pre jednofarebnu)">
             <select
               value={binder}
@@ -489,7 +524,6 @@ function ProductRow({
   const [editing, setEditing] = React.useState(false);
   const [role, setRole] = React.useState(product.product_role);
   const [sku, setSku] = React.useState(product.sku);
-  const [label, setLabel] = React.useState(product.label);
   const [cons, setCons] = React.useState(String(product.consumption_per_m2));
   const [unitSize, setUnitSize] = React.useState(String(product.unit_size_kg));
   const [unitLabel, setUnitLabel] = React.useState(product.unit_label);
@@ -500,6 +534,9 @@ function ProductRow({
 
   async function save() {
     setBusy(true);
+    // Auto-generuj label ze sku + balenie — user 2026-07-18: „label vymaz".
+    // Format: „SIKAFLOOR-151 · 10 kg vedro"
+    const autoLabel = `${sku} · ${unitSize} kg ${unitLabel}`;
     const r = await fetch("/api/admin/systems/products", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -507,7 +544,7 @@ function ProductRow({
         id: product.id,
         product_role: role,
         sku,
-        label,
+        label: autoLabel,
         consumption_per_m2: parseFloat(cons),
         unit_size_kg: parseFloat(unitSize),
         unit_label: unitLabel,
@@ -622,13 +659,10 @@ function ProductRow({
             className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold"
           />
         </Field>
-        <Field label="Label">
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold col-span-2"
-          />
-        </Field>
+        {/* Label field odstranene — user 2026-07-18: „label vymaz". Label
+            sa dynamicky odvodi zo SKU + balenia (napr. „SIKAFLOOR-151 · 10 kg
+            vedro") aby obchodak nemusel typovat ten isty text 2x.
+            Nizsie v save() label sa vypocita ze sku + unitSize + unitLabel. */}
         <Field label="Spotreba (kg/m²)">
           <input
             type="number"
@@ -723,7 +757,6 @@ function NewProductRow({
 }) {
   const [role, setRole] = React.useState("primer");
   const [sku, setSku] = React.useState("");
-  const [label, setLabel] = React.useState("");
   const [cons, setCons] = React.useState("");
   const [unitSize, setUnitSize] = React.useState("");
   const [unitLabel, setUnitLabel] = React.useState("sud");
@@ -734,6 +767,8 @@ function NewProductRow({
   async function save() {
     setBusy(true);
     setErr(null);
+    // Label sa auto-generuje zo SKU + balenia — user 2026-07-18: „label vymaz".
+    const autoLabel = `${sku} · ${unitSize} kg ${unitLabel}`;
     const r = await fetch("/api/admin/systems/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -741,7 +776,7 @@ function NewProductRow({
         system_id: systemId,
         product_role: role,
         sku,
-        label,
+        label: autoLabel,
         consumption_per_m2: parseFloat(cons),
         unit_size_kg: parseFloat(unitSize),
         unit_label: unitLabel,
@@ -782,14 +817,6 @@ function NewProductRow({
             onChange={(e) => setSku(e.target.value)}
             placeholder="napr. SIKAFLOOR-151"
             className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold"
-          />
-        </Field>
-        <Field label="Label">
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="napr. Sikafloor-151 Primer 10 kg"
-            className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold col-span-2"
           />
         </Field>
         <Field label="Spotreba (kg/m²)">
@@ -1108,18 +1135,31 @@ function NewSystemModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [code, setCode] = React.useState("");
   const [label, setLabel] = React.useState("");
   const [description, setDescription] = React.useState("");
-  const [floorType, setFloorType] = React.useState("jednofarebna");
+  // Multi floor_types — user 2026-07-18. Default aspon 1.
+  const [floorTypes, setFloorTypes] = React.useState<string[]>(["jednofarebna"]);
   const [binder, setBinder] = React.useState("epoxid");
-  const [sortOrder, setSortOrder] = React.useState("100");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+
+  function toggleFloorType(v: string) {
+    setFloorTypes((prev) => {
+      if (prev.includes(v)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((x) => x !== v);
+      }
+      return [...prev, v];
+    });
+  }
 
   async function save() {
     if (!label.trim()) {
       setErr("Label je povinný");
+      return;
+    }
+    if (floorTypes.length === 0) {
+      setErr("Vyber aspoň 1 typ podlahy");
       return;
     }
     // Auto-generate slug/code from label — user 2026-07-18: „v novy system
@@ -1143,9 +1183,8 @@ function NewSystemModal({
         code: autoCode,
         label: label.trim(),
         description: description || null,
-        floor_type: floorType,
-        binder: floorType === "jednofarebna" ? binder : null,
-        sort_order: parseInt(sortOrder) || 100,
+        floor_types: floorTypes,
+        binder: floorTypes.includes("jednofarebna") ? binder : null,
       }),
     });
     const j = await r.json();
@@ -1188,21 +1227,30 @@ function NewSystemModal({
               className="w-full h-10 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold"
             />
           </Field>
-          <Field label="Typ podlahy">
-            <select
-              value={floorType}
-              onChange={(e) => setFloorType(e.target.value)}
-              className="w-full h-10 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold"
-            >
-              {FLOOR_TYPES.map((t) => (
-                <option key={t.v} value={t.v}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+          <Field label="Typ podlahy (viac možností)">
+            <div className="flex flex-wrap gap-1.5">
+              {FLOOR_TYPES.map((t) => {
+                const on = floorTypes.includes(t.v);
+                return (
+                  <button
+                    key={t.v}
+                    type="button"
+                    onClick={() => toggleFloorType(t.v)}
+                    className={
+                      "inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-black border-2 transition-colors " +
+                      (on
+                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        : "bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-400")
+                    }
+                  >
+                    <span>{on ? "✓" : "+"}</span> {t.label}
+                  </button>
+                );
+              })}
+            </div>
           </Field>
-          {floorType === "jednofarebna" && (
-            <Field label="Živica">
+          {floorTypes.includes("jednofarebna") && (
+            <Field label="Živica (iba pre jednofarebnu)">
               <select
                 value={binder}
                 onChange={(e) => setBinder(e.target.value)}

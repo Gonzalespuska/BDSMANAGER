@@ -197,6 +197,9 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
   }
 
   // ─── Load systems (jednofarebna/chipsova/mramorova/metalicka) ─────────
+  // User 2026-07-18: Sika 264 moze byt aj jednofarebna aj chipsova
+  // → sys pouziva `floor_types text[]`. Expandneme (raz row per floor_type)
+  // aby generator-client mohol filtrovat po floor_type.
   type SystemRow = {
     code: string;
     label: string;
@@ -215,16 +218,38 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
     const [{ data: sysData }, { data: dsData }] = await Promise.all([
       sb
         .from("realization_systems")
-        .select("code, label, floor_type, binder")
+        .select("code, label, floor_type, floor_types, binder")
         .eq("active", true)
-        .order("floor_type")
         .order("code"),
       sb
         .from("app_settings")
         .select("key, value")
         .like("key", "generator.default_system.%"),
     ]);
-    systems = (sysData ?? []) as SystemRow[];
+    // Expand: system s floor_types=['jednofarebna','chipsova'] → 2 rows
+    // v `systems` array, aby filter `s.floor_type === floorType` v client
+    // fungoval bez zmeny.
+    const raw = (sysData ?? []) as Array<{
+      code: string;
+      label: string;
+      floor_type: string | null;
+      floor_types: string[] | null;
+      binder: string | null;
+    }>;
+    systems = raw.flatMap((s) => {
+      const fts =
+        s.floor_types && s.floor_types.length > 0
+          ? s.floor_types
+          : s.floor_type
+            ? [s.floor_type]
+            : [];
+      return fts.map((ft) => ({
+        code: s.code,
+        label: s.label,
+        floor_type: ft,
+        binder: s.binder,
+      }));
+    });
     for (const s of dsData ?? []) {
       const ft = (s.key as string).slice("generator.default_system.".length);
       const val = String(s.value ?? "").trim();

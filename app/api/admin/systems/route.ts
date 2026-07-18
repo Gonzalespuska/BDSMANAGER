@@ -91,8 +91,17 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const code = ((body.code as string) ?? "").trim();
   const label = ((body.label as string) ?? "").trim();
-  const floorType = body.floor_type as string;
-  if (!code || !label || !floorType) {
+  // Multi floor types — user 2026-07-18: „musis mat moznost vybrat si viac
+  // typov podlah lebo napr 264 ide aj do jednofafrebnych aj do jednofrebnych chips".
+  // Prijimame `floor_types: string[]`; ak neni, fallback na single `floor_type`.
+  const floorTypesRaw = body.floor_types as unknown;
+  let floorTypes: string[] = [];
+  if (Array.isArray(floorTypesRaw)) {
+    floorTypes = floorTypesRaw.filter((x) => typeof x === "string") as string[];
+  } else if (typeof body.floor_type === "string") {
+    floorTypes = [body.floor_type];
+  }
+  if (!code || !label || floorTypes.length === 0) {
     return NextResponse.json({ ok: false, error: "missing_fields" }, { status: 400 });
   }
   const admin = createAdminClient();
@@ -102,7 +111,8 @@ export async function POST(request: NextRequest) {
       code,
       label,
       description: (body.description as string) ?? null,
-      floor_type: floorType,
+      floor_type: floorTypes[0], // backward compat — primary type
+      floor_types: floorTypes,
       binder: (body.binder as string) ?? null,
       sort_order: (body.sort_order as number) ?? 100,
       active: body.active === false ? false : true,
@@ -135,6 +145,7 @@ export async function PATCH(request: NextRequest) {
     "label",
     "description",
     "floor_type",
+    "floor_types",
     "binder",
     "sort_order",
     "active",
@@ -142,6 +153,10 @@ export async function PATCH(request: NextRequest) {
     "responsibility_steps",
   ]) {
     if (k in body) patch[k] = body[k];
+  }
+  // Ak PATCH obsahuje floor_types, synchronizuj aj legacy floor_type na prvy prvok
+  if (Array.isArray(body.floor_types) && body.floor_types.length > 0) {
+    patch.floor_type = body.floor_types[0];
   }
   const admin = createAdminClient();
   const { error } = await admin.from("realization_systems").update(patch).eq("id", id);

@@ -15,9 +15,8 @@ export default async function GeneratorNastaveniaPage() {
   const [systemsRes, settingsRes] = await Promise.all([
     sb
       .from("realization_systems")
-      .select("code, label, floor_type, binder, active")
+      .select("code, label, floor_type, floor_types, binder, active")
       .eq("active", true)
-      .order("floor_type")
       .order("code"),
     sb
       .from("app_settings")
@@ -61,12 +60,28 @@ export default async function GeneratorNastaveniaPage() {
       </section>
 
       <GeneratorNastaveniaClient
-        systems={(systemsRes.data ?? []) as Array<{
+        systems={((systemsRes.data ?? []) as Array<{
           code: string;
           label: string;
-          floor_type: string;
+          floor_type: string | null;
+          floor_types: string[] | null;
           binder: string | null;
-        }>}
+        }>).flatMap((s) => {
+          // Expand: system s viac floor_types → viac rows aby DefaultSystems
+          // vedel vyhladat spravny system per floor_type v UI.
+          const fts =
+            s.floor_types && s.floor_types.length > 0
+              ? s.floor_types
+              : s.floor_type
+                ? [s.floor_type]
+                : [];
+          return fts.map((ft) => ({
+            code: s.code,
+            label: s.label,
+            floor_type: ft,
+            binder: s.binder,
+          }));
+        })}
         settings={(settingsRes.data ?? []) as Array<{ key: string; value: unknown }>}
       />
     </div>
