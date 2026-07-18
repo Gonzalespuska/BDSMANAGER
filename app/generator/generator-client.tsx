@@ -12,6 +12,7 @@ import {
   FileText,
   Info,
   Mail,
+  Package,
   Percent,
   Search,
   Settings,
@@ -1326,12 +1327,11 @@ ${signatureLines.join("\n")}`;
               }}
               className="group rounded-xl border-2 border-amber-300 hover:border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 text-left transition-all overflow-hidden"
             >
-              <div className="relative aspect-[4/3] md:aspect-video lg:aspect-[24/7] w-full overflow-hidden bg-white dark:bg-slate-900 flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/floor-types/iba-material.jpg"
-                  alt="Iba materiál + doprava"
-                  className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+              <div className="relative aspect-[4/3] md:aspect-video lg:aspect-[24/7] w-full overflow-hidden bg-gradient-to-br from-amber-100 to-yellow-200 dark:from-amber-950 dark:to-yellow-900 flex items-center justify-center">
+                <Package
+                  className="w-14 h-14 md:w-16 md:h-16 lg:w-12 lg:h-12 text-amber-700 dark:text-amber-300 transition-transform duration-300 group-hover:scale-110"
+                  strokeWidth={1.5}
+                  aria-hidden
                 />
               </div>
               <div className="p-2.5 md:p-3">
