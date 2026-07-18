@@ -465,7 +465,7 @@ function AddExtraForm({
         </label>
         <label className="block">
           <span className="text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-400">
-            Nákup €/m²
+            Náklad €/m²
           </span>
           <input
             type="number"
@@ -556,7 +556,7 @@ function MaterialRow({
       const s = consumptionVal.trim();
       for (const [v, lbl] of [
         [p, "Predaj"],
-        [c, "Nákup"],
+        [c, "Náklad"],
         [s, "Spotreba"],
       ] as const) {
         if (v) {
@@ -614,7 +614,7 @@ function MaterialRow({
   }
 
   async function vymazatVsetko() {
-    if (!confirm("Vymazať všetky hodnoty (predaj, nákup, spotreba, meno)?"))
+    if (!confirm("Vymazať všetky hodnoty (predaj, náklad, spotreba, meno)?"))
       return;
     setPriceVal("");
     setCostVal("");
@@ -728,7 +728,7 @@ function MaterialRow({
 
         <label className="block">
           <div className="text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-400 mb-0.5">
-            Nákup €/m²
+            Náklad €/m²
           </div>
           <div className="flex items-center gap-1">
             <input
