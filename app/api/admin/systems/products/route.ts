@@ -56,6 +56,18 @@ export async function POST(request: NextRequest) {
           : body.price_per_unit == null
             ? null
             : Number(body.price_per_unit),
+      // Phase 2 spec 2026-07-18: pocet_vrstiev + volitelna + rezerva_percent
+      pocet_vrstiev:
+        typeof body.pocet_vrstiev === "number" && body.pocet_vrstiev >= 1
+          ? Math.min(Math.floor(body.pocet_vrstiev), 10)
+          : 1,
+      volitelna: body.volitelna === true,
+      rezerva_percent:
+        typeof body.rezerva_percent === "number" &&
+        body.rezerva_percent >= 0 &&
+        body.rezerva_percent <= 100
+          ? body.rezerva_percent
+          : 8,
     })
     .select("*")
     .single();
@@ -85,6 +97,9 @@ export async function PATCH(request: NextRequest) {
     "unit_label",
     "sort_order",
     "price_per_unit",
+    "pocet_vrstiev",
+    "volitelna",
+    "rezerva_percent",
   ]) {
     if (k in body) patch[k] = body[k];
   }

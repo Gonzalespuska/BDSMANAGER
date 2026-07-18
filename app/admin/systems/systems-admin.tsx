@@ -32,6 +32,12 @@ type Product = {
   sort_order: number;
   /** Cena za jedno balenie (napr. 1 sud = 25 kg → 150 €). Optional. */
   price_per_unit?: number | null;
+  /** Spec 2026-07-18 Faza 2: kolkokrat sa vrstva aplikuje. Default 1. */
+  pocet_vrstiev?: number;
+  /** Voliteľná vrstva — obchodák ju môže zaškrtnúť/odškrtnúť v CP. */
+  volitelna?: boolean;
+  /** Rezerva % pre výpočet potreby kg (default 8 %). */
+  rezerva_percent?: number;
 };
 
 /** Vypočítaná cena za m² pre daný produkt.
@@ -42,10 +48,12 @@ function computeProductPricePerM2(p: {
   consumption_per_m2: number;
   unit_size_kg: number;
   price_per_unit?: number | null;
+  pocet_vrstiev?: number;
 }): number | null {
   if (!p.price_per_unit || !p.unit_size_kg) return null;
   const pricePerKg = p.price_per_unit / p.unit_size_kg;
-  return p.consumption_per_m2 * pricePerKg;
+  const vrstvy = p.pocet_vrstiev && p.pocet_vrstiev > 0 ? p.pocet_vrstiev : 1;
+  return p.consumption_per_m2 * pricePerKg * vrstvy;
 }
 
 // PREDAJ za m² — default 37% marza (MARZA_MATERIAL_PER_ROLE z lib/data/pricing).
@@ -56,10 +64,25 @@ function computeSellPricePerM2(p: {
   consumption_per_m2: number;
   unit_size_kg: number;
   price_per_unit?: number | null;
+  pocet_vrstiev?: number;
 }): number | null {
   const cost = computeProductPricePerM2(p);
   if (cost == null) return null;
   return cost / (1 - DEFAULT_MARZA);
+}
+
+// Potreba kg/m² = spotreba × vrstvy × (1 + rezerva %). Spec 2026-07-18 Faza 2.
+function computeProductPotrebaKgPerM2(p: {
+  consumption_per_m2: number;
+  pocet_vrstiev?: number;
+  rezerva_percent?: number;
+}): number {
+  const vrstvy = p.pocet_vrstiev && p.pocet_vrstiev > 0 ? p.pocet_vrstiev : 1;
+  const rezerva =
+    p.rezerva_percent != null && p.rezerva_percent >= 0
+      ? p.rezerva_percent
+      : 8;
+  return p.consumption_per_m2 * vrstvy * (1 + rezerva / 100);
 }
 
 function fmtEur(n: number | null | undefined): string {
@@ -579,15 +602,22 @@ function ProductsEditor({
   onChanged: () => void;
 }) {
   const [adding, setAdding] = React.useState(false);
-  // Sum náklad/predaj cez všetky komponenty ktoré maju cenu.
-  const systemCostPerM2 = system.products.reduce((sum, p) => {
+  // Sum náklad/predaj cez všetky komponenty ktoré maju cenu. Voliteľné
+  // vrstvy počítajú do sumy len ak sú „volitelna=false" (default include);
+  // ak volitelna=true, obchodák si ich v CP zaklikne, nesčítavame default.
+  const nonOptional = system.products.filter((p) => !p.volitelna);
+  const systemCostPerM2 = nonOptional.reduce((sum, p) => {
     const c = computeProductPricePerM2(p);
     return c != null ? sum + c : sum;
   }, 0);
-  const systemSellPerM2 = system.products.reduce((sum, p) => {
+  const systemSellPerM2 = nonOptional.reduce((sum, p) => {
     const s = computeSellPricePerM2(p);
     return s != null ? sum + s : sum;
   }, 0);
+  const systemPotrebaKgPerM2 = system.products.reduce(
+    (sum, p) => (p.volitelna ? sum : sum + computeProductPotrebaKgPerM2(p)),
+    0,
+  );
   const hasPricedProducts = system.products.some(
     (p) => computeProductPricePerM2(p) != null,
   );
@@ -616,6 +646,12 @@ function ProductsEditor({
             title="Sum nákladov všetkých komponentov s cenou"
           >
             Náklad: {fmtEur(systemCostPerM2)}/m²
+          </span>
+          <span
+            className="font-black text-violet-800 bg-violet-50 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900 px-2 py-0.5 rounded text-xs"
+            title="Potreba kg/m² so zohľadnením vrstiev + rezervy. Použité na výpočet počtu balení pri objednávke."
+          >
+            📦 Potreba: {systemPotrebaKgPerM2.toFixed(3)} kg/m²
           </span>
           <span
             className="font-black text-emerald-800 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 px-2 py-0.5 rounded text-xs"
@@ -671,6 +707,15 @@ function ProductRow({
   const [price, setPrice] = React.useState(
     product.price_per_unit != null ? String(product.price_per_unit) : "",
   );
+  const [pocetVrstiev, setPocetVrstiev] = React.useState(
+    String(product.pocet_vrstiev ?? 1),
+  );
+  const [volitelna, setVolitelna] = React.useState<boolean>(
+    product.volitelna === true,
+  );
+  const [rezervaPercent, setRezervaPercent] = React.useState(
+    String(product.rezerva_percent ?? 8),
+  );
   const [busy, setBusy] = React.useState(false);
 
   async function save() {
@@ -690,6 +735,9 @@ function ProductRow({
         unit_size_kg: parseFloat(unitSize),
         unit_label: unitLabel,
         price_per_unit: price.trim() ? parseFloat(price) : null,
+        pocet_vrstiev: parseInt(pocetVrstiev, 10) || 1,
+        volitelna,
+        rezerva_percent: parseFloat(rezervaPercent) || 8,
       }),
     });
     const j = await r.json();
@@ -731,6 +779,22 @@ function ProductRow({
             <span>
               {product.unit_size_kg} kg/{product.unit_label}
             </span>
+            {(product.pocet_vrstiev ?? 1) > 1 && (
+              <>
+                <span>·</span>
+                <span className="font-black text-sky-700 dark:text-sky-400">
+                  ×{product.pocet_vrstiev} vrstvy
+                </span>
+              </>
+            )}
+            {product.volitelna && (
+              <span
+                className="uppercase font-black text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 px-1.5 py-0.5 rounded"
+                title="Voliteľná vrstva — obchodák ju môže zaškrtnúť/odškrtnúť v cenovej ponuke"
+              >
+                voliteľné
+              </span>
+            )}
             {product.price_per_unit != null && (
               <>
                 <span>·</span>
@@ -851,6 +915,43 @@ function ProductRow({
             placeholder="napr. 125"
             className="w-full h-9 px-2 rounded border-2 border-emerald-300 bg-emerald-50/60 text-sm font-bold tabular-nums"
           />
+        </Field>
+        <Field label="Počet vrstiev">
+          <input
+            type="number"
+            step="1"
+            min="1"
+            max="10"
+            value={pocetVrstiev}
+            onChange={(e) => setPocetVrstiev(e.target.value)}
+            className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold tabular-nums"
+            title="Koľkokrát sa táto vrstva aplikuje. Napr. 2 = 2 nátery"
+          />
+        </Field>
+        <Field label="Rezerva % (odpad)">
+          <input
+            type="number"
+            step="1"
+            min="0"
+            max="100"
+            value={rezervaPercent}
+            onChange={(e) => setRezervaPercent(e.target.value)}
+            className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold tabular-nums"
+            title="Odpad + zaokrúhlenie na celé sudy pri objednávke (default 8 %)"
+          />
+        </Field>
+        <Field label="Voliteľná">
+          <label className="inline-flex items-center gap-2 h-9">
+            <input
+              type="checkbox"
+              checked={volitelna}
+              onChange={(e) => setVolitelna(e.target.checked)}
+              className="w-5 h-5"
+            />
+            <span className="text-xs text-slate-600 dark:text-slate-300">
+              {volitelna ? "Áno — obchodák zvolí" : "Nie — vždy zahrnutá"}
+            </span>
+          </label>
         </Field>
       </div>
       {price.trim() && parseFloat(unitSize) > 0 && parseFloat(cons) > 0 && (
@@ -1037,6 +1138,9 @@ function NewProductRow({
   const [unitSize, setUnitSize] = React.useState("");
   const [unitLabel, setUnitLabel] = React.useState("sud");
   const [price, setPrice] = React.useState("");
+  const [pocetVrstiev, setPocetVrstiev] = React.useState("1");
+  const [volitelna, setVolitelna] = React.useState<boolean>(false);
+  const [rezervaPercent, setRezervaPercent] = React.useState("8");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -1071,6 +1175,9 @@ function NewProductRow({
         unit_size_kg: parseFloat(unitSize),
         unit_label: unitLabel,
         price_per_unit: price.trim() ? parseFloat(price) : null,
+        pocet_vrstiev: parseInt(pocetVrstiev, 10) || 1,
+        volitelna,
+        rezerva_percent: parseFloat(rezervaPercent) || 8,
       }),
     });
     const j = await r.json();
@@ -1151,6 +1258,43 @@ function NewProductRow({
             placeholder="voliteľné"
             className="w-full h-9 px-2 rounded border-2 border-emerald-300 bg-emerald-50/60 text-sm font-bold tabular-nums"
           />
+        </Field>
+        <Field label="Počet vrstiev">
+          <input
+            type="number"
+            step="1"
+            min="1"
+            max="10"
+            value={pocetVrstiev}
+            onChange={(e) => setPocetVrstiev(e.target.value)}
+            className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold tabular-nums"
+            title="Koľkokrát sa táto vrstva aplikuje (napr. 2 = dvojitý náter)"
+          />
+        </Field>
+        <Field label="Rezerva % (odpad)">
+          <input
+            type="number"
+            step="1"
+            min="0"
+            max="100"
+            value={rezervaPercent}
+            onChange={(e) => setRezervaPercent(e.target.value)}
+            className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold tabular-nums"
+            title="Odpad + zaokrúhlenie na celé sudy pri objednávke (default 8 %)"
+          />
+        </Field>
+        <Field label="Voliteľná">
+          <label className="inline-flex items-center gap-2 h-9">
+            <input
+              type="checkbox"
+              checked={volitelna}
+              onChange={(e) => setVolitelna(e.target.checked)}
+              className="w-5 h-5"
+            />
+            <span className="text-xs text-slate-600 dark:text-slate-300">
+              {volitelna ? "Áno" : "Nie"}
+            </span>
+          </label>
         </Field>
       </div>
       {price.trim() &&
