@@ -54,11 +54,14 @@ function stepFromId(id: string): StepKey {
   return "ine";
 }
 
+type PriceMode = "amount" | "margin";
 type MaterialMaps = {
   price: Record<string, number>;
   cost: Record<string, number>;
   consumption: Record<string, number>;
   customName: Record<string, string>;
+  priceMode: Record<string, PriceMode>;
+  marginPct: Record<string, number>;
 };
 
 function buildMaps(settings: Setting[]): MaterialMaps {
@@ -66,6 +69,8 @@ function buildMaps(settings: Setting[]): MaterialMaps {
   const cost: Record<string, number> = {};
   const consumption: Record<string, number> = {};
   const customName: Record<string, string> = {};
+  const priceMode: Record<string, PriceMode> = {};
+  const marginPct: Record<string, number> = {};
   for (const s of settings) {
     const key = s.key;
     if (!key.startsWith("material.")) continue;
@@ -77,6 +82,12 @@ function buildMaps(settings: Setting[]): MaterialMaps {
       if (strVal.trim()) customName[id] = strVal;
       continue;
     }
+    if (suffix.endsWith(".price_mode")) {
+      const id = suffix.slice(0, -".price_mode".length);
+      const strVal = typeof raw === "string" ? raw : String(raw ?? "");
+      if (strVal === "amount" || strVal === "margin") priceMode[id] = strVal;
+      continue;
+    }
     const num = typeof raw === "number" ? raw : parseFloat(String(raw));
     if (!isFinite(num) || num < 0) continue;
     if (suffix.endsWith(".price_per_sqm")) {
@@ -85,9 +96,11 @@ function buildMaps(settings: Setting[]): MaterialMaps {
       cost[suffix.slice(0, -".cost_per_sqm".length)] = num;
     } else if (suffix.endsWith(".consumption_kg_per_sqm")) {
       consumption[suffix.slice(0, -".consumption_kg_per_sqm".length)] = num;
+    } else if (suffix.endsWith(".margin_pct")) {
+      marginPct[suffix.slice(0, -".margin_pct".length)] = num;
     }
   }
-  return { price, cost, consumption, customName };
+  return { price, cost, consumption, customName, priceMode, marginPct };
 }
 
 type CombinedItem = {
@@ -100,6 +113,8 @@ type CombinedItem = {
   step: StepKey;
   defaultPrice?: number;
   priceOverride?: number;
+  priceMode?: PriceMode;
+  marginPct?: number;
   cost?: number;
   consumption?: number;
   extraId?: string;
@@ -135,6 +150,8 @@ export function CennikMaterialovClient({
         step: stepFromId(m.id),
         defaultPrice: m.price_per_sqm,
         priceOverride: maps.price[m.id],
+        priceMode: maps.priceMode[m.id],
+        marginPct: maps.marginPct[m.id],
         cost: maps.cost[m.id],
         consumption: maps.consumption[m.id],
       });
@@ -567,8 +584,14 @@ function MaterialRow({
 }) {
   const isExtra = row.origin === "extra";
   const [nameVal, setNameVal] = React.useState(row.name);
+  const [priceMode, setPriceMode] = React.useState<PriceMode>(
+    row.priceMode ?? "amount",
+  );
   const [priceVal, setPriceVal] = React.useState<string>(
     row.priceOverride != null ? String(row.priceOverride) : "",
+  );
+  const [marginVal, setMarginVal] = React.useState<string>(
+    row.marginPct != null ? String(row.marginPct) : "",
   );
   const [costVal, setCostVal] = React.useState<string>(
     row.cost != null ? String(row.cost) : "",
@@ -584,15 +607,59 @@ function MaterialRow({
   const consumptionHasVal = row.consumption != null;
   const nameIsCustom = row.originalName !== row.name;
 
+  // Effective predaj €/m² pri režime marža = náklad / (1 − marža%)
+  const computedFromMargin = React.useMemo(() => {
+    const c = costVal.trim() ? parseFloat(costVal) : NaN;
+    const m = marginVal.trim() ? parseFloat(marginVal) : NaN;
+    if (
+      priceMode !== "margin" ||
+      !isFinite(c) ||
+      !isFinite(m) ||
+      m >= 100 ||
+      m < 0
+    )
+      return null;
+    return c / (1 - m / 100);
+  }, [priceMode, costVal, marginVal]);
+
   async function saveHardcoded() {
     setSaving(true);
     setSaved(false);
     try {
-      const p = priceVal.trim();
       const c = costVal.trim();
       const s = consumptionVal.trim();
+      const m = marginVal.trim();
+      // V režime marža ukladáme spočítanú cenu (computedFromMargin) ako
+      // price_per_sqm — generator CP číta iba jeden kľúč a nemusí sa
+      // starať o mode. Zároveň si pamätáme mode+margin_pct pre UI reload.
+      let priceToStore = "";
+      if (priceMode === "amount") {
+        priceToStore = priceVal.trim();
+        if (priceToStore) {
+          const n = parseFloat(priceToStore);
+          if (!isFinite(n) || n < 0) {
+            alert("Predaj musí byť kladné číslo alebo prázdne.");
+            return;
+          }
+        }
+      } else if (priceMode === "margin") {
+        if (!c) {
+          alert("V režime marža vyplň najprv Náklad €/m².");
+          return;
+        }
+        if (!m) {
+          alert("V režime marža vyplň Marža %.");
+          return;
+        }
+        const cN = parseFloat(c);
+        const mN = parseFloat(m);
+        if (!isFinite(cN) || cN < 0 || !isFinite(mN) || mN < 0 || mN >= 100) {
+          alert("Marža musí byť 0–99 % a náklad kladné číslo.");
+          return;
+        }
+        priceToStore = (cN / (1 - mN / 100)).toFixed(2);
+      }
       for (const [v, lbl] of [
-        [p, "Predaj"],
         [c, "Náklad"],
         [s, "Spotreba"],
       ] as const) {
@@ -607,10 +674,15 @@ function MaterialRow({
       const customNameToSave =
         nameVal.trim() && nameVal.trim() !== row.originalName ? nameVal.trim() : "";
       await Promise.all([
-        saveSettingV2(`material.${row.key}.price_per_sqm`, p),
+        saveSettingV2(`material.${row.key}.price_per_sqm`, priceToStore),
         saveSettingV2(`material.${row.key}.cost_per_sqm`, c),
         saveSettingV2(`material.${row.key}.consumption_kg_per_sqm`, s),
         saveSettingV2(`material.${row.key}.custom_name`, customNameToSave),
+        saveSettingV2(`material.${row.key}.price_mode`, priceMode),
+        saveSettingV2(
+          `material.${row.key}.margin_pct`,
+          priceMode === "margin" ? m : "",
+        ),
       ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
@@ -655,8 +727,10 @@ function MaterialRow({
       return;
     setPriceVal("");
     setCostVal("");
+    setMarginVal("");
     setConsumptionVal("");
     setNameVal(row.originalName);
+    setPriceMode("amount");
     setSaving(true);
     try {
       if (isExtra && row.extraId) {
@@ -676,6 +750,8 @@ function MaterialRow({
           saveSettingV2(`material.${row.key}.cost_per_sqm`, ""),
           saveSettingV2(`material.${row.key}.consumption_kg_per_sqm`, ""),
           saveSettingV2(`material.${row.key}.custom_name`, ""),
+          saveSettingV2(`material.${row.key}.price_mode`, ""),
+          saveSettingV2(`material.${row.key}.margin_pct`, ""),
         ]);
       }
       setSaved(true);
@@ -685,7 +761,12 @@ function MaterialRow({
     }
   }
 
-  const anyValue = priceHasOverride || costHasVal || consumptionHasVal || nameIsCustom;
+  const anyValue =
+    priceHasOverride ||
+    costHasVal ||
+    consumptionHasVal ||
+    nameIsCustom ||
+    row.marginPct != null;
 
   return (
     <li className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 px-3 py-3 space-y-2">
@@ -731,28 +812,86 @@ function MaterialRow({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <label className="block">
-          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-0.5">
-            Predaj €/m²
+        <div>
+          <div className="flex items-center gap-1 mb-0.5">
+            <div className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex-1">
+              Predaj
+            </div>
+            {!isExtra && (
+              <div className="inline-flex text-[10px] font-black uppercase tracking-wider rounded border border-slate-300 dark:border-slate-700 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setPriceMode("amount")}
+                  className={
+                    "px-1.5 py-0.5 " +
+                    (priceMode === "amount"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-100")
+                  }
+                >
+                  €/m²
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPriceMode("margin")}
+                  className={
+                    "px-1.5 py-0.5 border-l border-slate-300 dark:border-slate-700 " +
+                    (priceMode === "margin"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-100")
+                  }
+                >
+                  marža%
+                </button>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-1">
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={priceVal}
-              onChange={(e) => setPriceVal(e.target.value)}
-              placeholder={row.defaultPrice != null ? String(row.defaultPrice) : "—"}
-              className={
-                "h-9 flex-1 min-w-0 px-2 rounded-md border text-sm font-bold tabular-nums text-right " +
-                (priceHasOverride
-                  ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30"
-                  : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900")
-              }
-            />
-            <span className="text-xs text-muted-foreground shrink-0">€</span>
-          </div>
-        </label>
+          {priceMode === "amount" || isExtra ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={priceVal}
+                onChange={(e) => setPriceVal(e.target.value)}
+                placeholder={row.defaultPrice != null ? String(row.defaultPrice) : "—"}
+                className={
+                  "h-9 flex-1 min-w-0 px-2 rounded-md border text-sm font-bold tabular-nums text-right " +
+                  (priceHasOverride
+                    ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30"
+                    : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900")
+                }
+              />
+              <span className="text-xs text-muted-foreground shrink-0">€</span>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="99"
+                  value={marginVal}
+                  onChange={(e) => setMarginVal(e.target.value)}
+                  placeholder="napr. 50"
+                  className="h-9 flex-1 min-w-0 px-2 rounded-md border-2 border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 text-sm font-bold tabular-nums text-right"
+                />
+                <span className="text-xs text-muted-foreground shrink-0">%</span>
+              </div>
+              {computedFromMargin != null && (
+                <div className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 text-right tabular-nums">
+                  = {computedFromMargin.toFixed(2)} €/m²
+                </div>
+              )}
+              {computedFromMargin == null && (
+                <div className="text-[10px] text-muted-foreground text-right italic">
+                  vyplň Náklad + marža
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <label className="block">
           <div className="text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-400 mb-0.5">
