@@ -434,6 +434,36 @@ export function getMaterialsByFloorType(type: FloorType): Material[] {
   return MATERIALS.filter((m) => m.floor_type === type);
 }
 
+/**
+ * PRICE OVERRIDES — admin cez /admin/nastavenia (sekcia „Cenník materiálov
+ * generátora") môže prepísať `price_per_sqm` pre ľubovoľný material.id.
+ *
+ * Ukladá sa v `settings` tabuľke s kľúčmi `material.<id>.price_per_sqm`.
+ * Ak override chýba, použije sa hardcoded default z MATERIALS.
+ *
+ * Vráti klon MATERIALS s aplikovanými prepismi. NEmutuje MATERIALS.
+ */
+export function applyMaterialPriceOverrides(
+  overrides: Record<string, number> | null | undefined,
+): Material[] {
+  if (!overrides || Object.keys(overrides).length === 0) return MATERIALS;
+  return MATERIALS.map((m) => {
+    const ov = overrides[m.id];
+    if (typeof ov === "number" && Number.isFinite(ov) && ov >= 0) {
+      return { ...m, price_per_sqm: ov };
+    }
+    return m;
+  });
+}
+
+/**
+ * IDs všetkých materiálov ktoré majú `unit === "area"` a teda editovateľnú
+ * `price_per_sqm`. Používa admin UI na vygenerovanie zoznamu inputov.
+ */
+export const PRICEABLE_MATERIAL_IDS: string[] = MATERIALS.filter(
+  (m) => m.unit === "area",
+).map((m) => m.id);
+
 export interface QuoteLineCalc {
   material_id: string;
   material_name: string;

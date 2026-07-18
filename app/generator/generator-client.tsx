@@ -27,6 +27,7 @@ import {
   calcLine,
   FLOOR_TYPE_ACCUSATIVE,
   FLOOR_TYPE_LABELS,
+  applyMaterialPriceOverrides,
   FLOOR_TYPE_META,
   formatEur,
   getMaterialsByFloorType,
@@ -103,6 +104,7 @@ export function GeneratorClient({
   agentInfo,
   savedQuote,
   materialMarkups,
+  priceOverrides,
 }: {
   leadContext?: LeadContext | null;
   agentInfo?: { name: string; email: string; phone?: string | null };
@@ -111,6 +113,9 @@ export function GeneratorClient({
   /** Per-role marže z /admin/settings (`markup.primer/main/topcoat/additive/transport`).
    *  Ak niektorá chýba, fallback = MARZA_MATERIAL_PER_ROLE (default 0.37). */
   materialMarkups?: Record<string, number>;
+  /** Ceny/m² prepísané v /admin/nastavenia → Cenník materiálov generátora.
+   *  Kľúč = material.id, hodnota = € /m². Aplikujú sa poverch hardcoded MATERIALS. */
+  priceOverrides?: Record<string, number>;
 }) {
   const router = useRouter();
   const isResend = !!savedQuote;
@@ -306,17 +311,32 @@ export function GeneratorClient({
   // variant (epoxid alebo polyuretán), ostatné variants sa nepočítajú.
   // useMemo aby sa referencia nezmenila na každom rendere → effect nižšie
   // nebude infinite loop.
+  //
+  // Aplikujem `priceOverrides` z /admin/nastavenia (kľúč material.<id>.price_per_sqm)
+  // — každý material s override dostane novú `price_per_sqm`.
+  const pricedMaterials = React.useMemo(
+    () => applyMaterialPriceOverrides(priceOverrides),
+    [priceOverrides],
+  );
   const materials = React.useMemo(() => {
     if (!floorType) return [];
-    const base = getMaterialsByFloorType(floorType).filter((m) => {
-      if (!m.variant) return true;
-      return m.variant === jednofarebnaVariant;
-    });
+    const base = pricedMaterials
+      .filter((m) => m.floor_type === floorType)
+      .filter((m) => {
+        if (!m.variant) return true;
+        return m.variant === jednofarebnaVariant;
+      });
     const extras = extraSurchargeIds.map((id) =>
       makeExtraSurcharge(id, floorType),
     );
     return [...base, ...extras];
-  }, [floorType, jednofarebnaVariant, extraSurchargeIds, makeExtraSurcharge]);
+  }, [
+    floorType,
+    jednofarebnaVariant,
+    extraSurchargeIds,
+    makeExtraSurcharge,
+    pricedMaterials,
+  ]);
 
   // Ensure lines má entry pre každý extra ID
   React.useEffect(() => {

@@ -117,17 +117,26 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
   // ich použije na výpočet predaja materiálu podľa role produktu. Fallback:
   // MARZA_MATERIAL_PER_ROLE z pricing.ts (0.37 pre všetko).
   let materialMarkups: Record<string, number> = {};
+  // Ceny materiálov ktoré admin prepísal cez /admin/nastavenia → Cenník
+  // materiálov generátora. Kľúč: material.<id>.price_per_sqm.
+  const priceOverrides: Record<string, number> = {};
   try {
     const sb = createAdminClient();
     const { data: settings } = await sb
       .from("app_settings")
       .select("key, value")
-      .or("key.like.markup.%,key.eq.margin.material");
+      .or(
+        "key.like.markup.%,key.eq.margin.material,key.like.material.%.price_per_sqm",
+      );
     for (const s of settings ?? []) {
       const key = s.key as string;
       const raw = s.value;
       const num = typeof raw === "number" ? raw : parseFloat(String(raw));
-      if (isFinite(num) && num >= 0 && num < 1) {
+      if (!isFinite(num) || num < 0) continue;
+      if (key.startsWith("material.") && key.endsWith(".price_per_sqm")) {
+        const id = key.slice("material.".length, -".price_per_sqm".length);
+        if (id) priceOverrides[id] = num;
+      } else if (num < 1) {
         materialMarkups[key] = num;
       }
     }
@@ -143,6 +152,7 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
         leadContext={leadContext}
         agentInfo={agentInfo}
         materialMarkups={materialMarkups}
+        priceOverrides={priceOverrides}
       />
     );
   }
@@ -213,6 +223,7 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
       agentInfo={agentInfo}
       savedQuote={savedQuote}
       materialMarkups={materialMarkups}
+      priceOverrides={priceOverrides}
     />
   );
 }
