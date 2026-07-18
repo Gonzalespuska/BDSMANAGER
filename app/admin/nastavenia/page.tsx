@@ -100,6 +100,13 @@ export default async function NastaveniaAdminPage() {
             tint="violet"
           />
           <SubmoduleTile
+            href="/admin/generator-nastavenia"
+            title="Nastavenia Generátora CP"
+            desc="Defaultné systémy per typ podlahy (Sikafloor 264 / TopStopne…), množstevné zľavy tiers, materiálové markupy per rola."
+            Icon={Settings2}
+            tint="sky"
+          />
+          <SubmoduleTile
             href="/admin/objednavky"
             title="Objednávky materiálu"
             desc="Generuj objednávkové tabuľky pre Siku / Topstone."

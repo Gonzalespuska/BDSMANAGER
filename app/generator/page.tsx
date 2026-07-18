@@ -117,6 +117,8 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
   // ich použije na výpočet predaja materiálu podľa role produktu. Fallback:
   // MARZA_MATERIAL_PER_ROLE z pricing.ts (0.37 pre všetko).
   let materialMarkups: Record<string, number> = {};
+  // Volume discount tiers z /admin/generator-nastavenia (JSON) — override defaultu
+  let volumeTiers: Array<{ min_m2: number; discount_pct: number; label?: string }> | null = null;
   // Ceny materiálov ktoré admin prepísal cez /admin/nastavenia → Cenník.
   // 2 kľúčové formáty:
   //   1. material.<id>.price_per_sqm          — default override (všetky systémy)
@@ -129,10 +131,33 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
     const { data: settings } = await sb
       .from("app_settings")
       .select("key, value")
-      .or("key.like.markup.%,key.eq.margin.material,key.like.material.%");
+      .or("key.like.markup.%,key.eq.margin.material,key.like.material.%,key.eq.generator.volume_tiers");
     for (const s of settings ?? []) {
       const key = s.key as string;
       const raw = s.value;
+      // JSON tier volume config — nie je number, parse zvlášť.
+      if (key === "generator.volume_tiers") {
+        try {
+          const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+          if (Array.isArray(parsed)) {
+            const valid = parsed.filter(
+              (t) =>
+                typeof t?.min_m2 === "number" &&
+                typeof t?.discount_pct === "number",
+            );
+            if (valid.length > 0) {
+              volumeTiers = valid.map((t) => ({
+                min_m2: t.min_m2,
+                discount_pct: t.discount_pct,
+                label: `Množstevná zľava ${t.discount_pct}% (od ${t.min_m2} m²)`,
+              }));
+            }
+          }
+        } catch {
+          /* invalid JSON — ignore */
+        }
+        continue;
+      }
       const num = typeof raw === "number" ? raw : parseFloat(String(raw));
       if (!isFinite(num) || num < 0) continue;
       if (key.startsWith("material.")) {
@@ -166,15 +191,32 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
     binder: string | null;
   };
   let systems: SystemRow[] = [];
+  const defaultSystems: Record<string, string> = {
+    jednofarebna: "264",
+    chipsova: "264-chip",
+    mramorova: "topstopne",
+    metalicka: "topstopne-m",
+  };
   try {
     const sb = createAdminClient();
-    const { data } = await sb
-      .from("realization_systems")
-      .select("code, label, floor_type, binder")
-      .eq("active", true)
-      .order("floor_type")
-      .order("code");
-    systems = (data ?? []) as SystemRow[];
+    const [{ data: sysData }, { data: dsData }] = await Promise.all([
+      sb
+        .from("realization_systems")
+        .select("code, label, floor_type, binder")
+        .eq("active", true)
+        .order("floor_type")
+        .order("code"),
+      sb
+        .from("app_settings")
+        .select("key, value")
+        .like("key", "generator.default_system.%"),
+    ]);
+    systems = (sysData ?? []) as SystemRow[];
+    for (const s of dsData ?? []) {
+      const ft = (s.key as string).slice("generator.default_system.".length);
+      const val = String(s.value ?? "").trim();
+      if (val) defaultSystems[ft] = val;
+    }
   } catch (e) {
     console.warn("[generator] systems fetch failed:", e);
   }
@@ -190,6 +232,8 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
         priceOverrides={priceOverrides}
         systemPriceOverrides={systemPriceOverrides}
         systems={systems}
+        defaultSystems={defaultSystems}
+        volumeTiers={volumeTiers ?? undefined}
       />
     );
   }
@@ -263,6 +307,8 @@ export default async function GeneratorPage({ searchParams }: PageProps) {
       priceOverrides={priceOverrides}
       systemPriceOverrides={systemPriceOverrides}
       systems={systems}
+      defaultSystems={defaultSystems}
+      volumeTiers={volumeTiers ?? undefined}
     />
   );
 }

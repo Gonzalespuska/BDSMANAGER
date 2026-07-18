@@ -108,17 +108,20 @@ type SystemInfo = {
   binder: string | null;
 };
 
-/** Default systém pre daný typ podlahy (Sikafloor 264 vs Topstone) — user
- *  2026-07-18: „ta standardna cena je so systemom 264 takze ten default je
- *  264 pri jednofarebnych a chipsovych, metalicke a mramorove su systemy
- *  topstopne oba". */
-function defaultSystemFor(ft: FloorType | null): string | null {
+/** Hardcoded fallback default systém — user prep isuje cez
+ *  /admin/generator-nastavenia (settings key generator.default_system.<ft>). */
+const HARDCODED_DEFAULT_SYSTEM: Record<string, string> = {
+  jednofarebna: "264",
+  chipsova: "264-chip",
+  mramorova: "topstopne",
+  metalicka: "topstopne-m",
+};
+function defaultSystemFor(
+  ft: FloorType | null,
+  overrides?: Record<string, string>,
+): string | null {
   if (!ft) return null;
-  if (ft === "jednofarebna") return "264";
-  if (ft === "chipsova") return "264-chip";
-  if (ft === "mramorova") return "topstopne";
-  if (ft === "metalicka") return "topstopne-m";
-  return null;
+  return overrides?.[ft] ?? HARDCODED_DEFAULT_SYSTEM[ft] ?? null;
 }
 
 export function GeneratorClient({
@@ -145,6 +148,12 @@ export function GeneratorClient({
   systemPriceOverrides?: Record<string, Record<string, number>>;
   /** Zoznam aktívnych systémov z realization_systems tabuľky. */
   systems?: SystemInfo[];
+  /** Default systémy nastavené admin cez /admin/generator-nastavenia.
+   *  Kľúč = floor_type, hodnota = system code (napr. jednofarebna → "264"). */
+  defaultSystems?: Record<string, string>;
+  /** Vlastné množstevné zľavy z /admin/generator-nastavenia. Ak sú
+   *  poskytnuté, prevalcujú hardcoded VOLUME_DISCOUNT_TIERS. */
+  volumeTiers?: Array<{ min_m2: number; discount_pct: number; label?: string }>;
 }) {
   const router = useRouter();
   const isResend = !!savedQuote;
@@ -268,6 +277,7 @@ export function GeneratorClient({
     savedQuote?.state.systemCode ??
     defaultSystemFor(
       savedQuote?.state.floorType ?? leadContext?.floor_type ?? null,
+      defaultSystems,
     ) ??
     "";
   const [systemCode, setSystemCode] = React.useState<string>(initialSystem);
@@ -284,7 +294,7 @@ export function GeneratorClient({
     }
     // Ak aktuálny systém nie je z tohto floor, prepni na default
     if (!forFloor.some((s) => s.code === systemCode)) {
-      setSystemCode(defaultSystemFor(floorType) ?? forFloor[0].code);
+      setSystemCode(defaultSystemFor(floorType, defaultSystems) ?? forFloor[0].code);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floorType]);
@@ -594,10 +604,23 @@ export function GeneratorClient({
           if (!firstReq) return 0;
           return parseFloat(lines[firstReq.id]?.m2 ?? "") || 0;
         })();
+  const customTiersMemo = React.useMemo(
+    () =>
+      volumeTiers && volumeTiers.length > 0
+        ? volumeTiers.map((t) => ({
+            min_m2: t.min_m2,
+            discount_pct: t.discount_pct,
+            label:
+              t.label ??
+              `Množstevná zľava ${t.discount_pct}% (od ${t.min_m2} m²)`,
+          }))
+        : undefined,
+    [volumeTiers],
+  );
   const volumeTier =
     saleMode === "material"
       ? { min_m2: 0, discount_pct: 0, label: "" }
-      : getVolumeDiscountTier(effectiveM2);
+      : getVolumeDiscountTier(effectiveM2, customTiersMemo);
   // Základ pre množstevnú zľavu — LEN podlaha, bez zložiek.
   const discountBase = calcs.reduce((s, c) => {
     if (!c.calc) return s;
@@ -1423,7 +1446,9 @@ ${signatureLines.join("\n")}`;
                   <option key={s.code} value={s.code}>
                     {s.label}
                     {s.binder ? ` · ${s.binder}` : ""}
-                    {s.code === defaultSystemFor(floorType) ? " (default)" : ""}
+                    {s.code === defaultSystemFor(floorType, defaultSystems)
+                      ? " (default)"
+                      : ""}
                   </option>
                 ))}
             </select>

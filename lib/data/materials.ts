@@ -103,10 +103,19 @@ export const VOLUME_DISCOUNT_TIERS: VolumeDiscountTier[] = [
 /**
  * Vráti aktuálny tier pre danú plochu. Berie najvyšší tier ktorý m²
  * presahuje. Pri 250 m² → 100 m² tier (3%). Pri 500 m² → 500 m² tier (10%).
+ *
+ * Ak sú poskytnuté `customTiers` (admin cez /admin/generator-nastavenia
+ * settings key `generator.volume_tiers`), použijú sa namiesto defaultných.
  */
-export function getVolumeDiscountTier(m2: number): VolumeDiscountTier {
-  let active = VOLUME_DISCOUNT_TIERS[0];
-  for (const tier of VOLUME_DISCOUNT_TIERS) {
+export function getVolumeDiscountTier(
+  m2: number,
+  customTiers?: VolumeDiscountTier[],
+): VolumeDiscountTier {
+  const tiers = customTiers && customTiers.length > 0
+    ? [{ min_m2: 0, discount_pct: 0, label: "Štandardná cena" }, ...customTiers]
+    : VOLUME_DISCOUNT_TIERS;
+  let active = tiers[0];
+  for (const tier of tiers) {
     if (m2 >= tier.min_m2) active = tier;
   }
   return active;
