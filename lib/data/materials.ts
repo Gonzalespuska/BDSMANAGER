@@ -211,6 +211,19 @@ function commonOptional(floor_type: FloorType): Material[] {
       optional: true,
     },
     {
+      // ODSTRAŇOVANIE POVRCHU — brúsenie/frézovanie starej podlahy, odstránenie
+      // starých náterov. User 2026-07-18: „pridaj moznost odstranovanie povrchu
+      // a daj to ako volitelnu zlozku ze si to dopise tu cenu obchodak".
+      // Bez fixnej sadzby — obchodák si sumu doplní podľa stavu podkladu.
+      id: `${floor_type}-odstranovanie`,
+      floor_type,
+      name: "Odstraňovanie povrchu",
+      unit: "surcharge",
+      price_per_sqm: 0,
+      unit_label: "€",
+      optional: true,
+    },
+    {
       // ZLOŽKA — obchodník KLIKNE na názov, premenuje ju (napr. "Doprava 200 km",
       // "Demontáž starej podlahy") + zadá sumu. Zobrazí sa na PDF/FA ako
       // samostatný riadok s tým názvom. Bez premenovania sa NEZAPOČÍTA — UI ju
