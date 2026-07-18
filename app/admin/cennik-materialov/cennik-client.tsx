@@ -665,8 +665,20 @@ function MaterialRow({
             }
             title="Klik pre premenovanie"
           />
-          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1.5">
-            <span>{isExtra ? "extra." : ""}{row.key}</span>
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 inline-flex items-center gap-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/floor-types/${row.floorType}.jpg`}
+                alt=""
+                className="w-3.5 h-3.5 rounded object-cover"
+                loading="lazy"
+              />
+              {FLOOR_TYPE_LABELS[row.floorType]}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+              {STEP_LABELS[row.step]}
+            </span>
             {row.variant && (
               <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
                 {row.variant}
@@ -677,6 +689,10 @@ function MaterialRow({
                 extra
               </span>
             )}
+            <span className="text-[10px] text-muted-foreground font-mono ml-1">
+              {isExtra ? "extra." : ""}
+              {row.key}
+            </span>
           </div>
         </div>
       </div>
