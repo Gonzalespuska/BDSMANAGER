@@ -173,14 +173,24 @@ export async function AppShell({
     ? viewAsCookie
     : null) as "obchod" | "obhliadky" | "realizacie" | "office" | null;
 
-  // Per-user impersonation banner — admin videl "ako Leo Hrisenko"
-  // s tlacidlom "Späť na Admin".
-  const impersonatedName =
-    isRealAdmin && viewAsUserId
-      ? // user objekt sa uz prepisal na Leo v getCurrentAppUser →
-        // pouzijeme jeho meno pre banner
+  // Impersonation banner — zobrazujeme aj pri per-USER view-as (Leo)
+  // aj pri per-ROLE view-as (ako obchod). User 2026-07-18: „tento bar
+  // pozeras ako tam je iba ked kukas ako dany obchodak alebo agent ja
+  // ho tam chcem aj ked das iba ze ako obchod".
+  const roleLabelMap: Record<string, string> = {
+    obchod: "Obchod",
+    obhliadky: "Obhliadky",
+    realizacie: "Realizácie",
+    office: "Office",
+  };
+  const impersonatedName = !isRealAdmin
+    ? null
+    : viewAsUserId
+      ? // user objekt sa uz prepisal na Leo v getCurrentAppUser
         user.name || user.email
-      : null;
+      : currentViewAs
+        ? `role: ${roleLabelMap[currentViewAs] ?? currentViewAs}`
+        : null;
 
   const isAdmin = user.role === "admin";
   const isDev = process.env.NODE_ENV !== "production";

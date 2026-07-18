@@ -763,34 +763,39 @@ export default async function PrehladPage({
           ═══════════════════════════════════════════════════════════════
           Poradie: Neobvolané > 24h (najväčšie, red keď prah prekročený),
           Otvorené leady (aktívne, nie lifetime total), Nové za 24h. */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        {/* Neobvolané > 24h — biggest, spans 2 cols */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        {/* Neobvolané > 24h — biggest, spans 2 cols; dark-theme aware (muted
+            rose/emerald v dark mode, nie bright pastel). */}
         <Link
           href="/admin/leads?filter=stale"
           className={cn(
-            "md:col-span-2 rounded-2xl border-2 p-5 flex items-center gap-4 hover:shadow-md transition-all",
+            "md:col-span-2 rounded-2xl border p-5 flex items-center gap-4 hover:shadow-md transition-all",
             uncalledAlarm
-              ? "border-rose-400 bg-gradient-to-br from-rose-50 to-rose-100/50 shadow-[0_0_20px_rgba(244,63,94,0.15)]"
-              : "border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100/40",
+              ? "border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30"
+              : "border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30",
           )}
         >
           <div
             className={cn(
               "p-3 rounded-xl shrink-0",
-              uncalledAlarm ? "bg-rose-200/60" : "bg-emerald-200/60",
+              uncalledAlarm
+                ? "bg-rose-200/60 dark:bg-rose-950/60"
+                : "bg-emerald-200/60 dark:bg-emerald-950/60",
             )}
           >
             {uncalledAlarm ? (
-              <Flame className="w-8 h-8 text-rose-700" aria-hidden />
+              <Flame className="w-8 h-8 text-rose-700 dark:text-rose-400" aria-hidden />
             ) : (
-              <Activity className="w-8 h-8 text-emerald-700" aria-hidden />
+              <Activity className="w-8 h-8 text-emerald-700 dark:text-emerald-400" aria-hidden />
             )}
           </div>
           <div className="min-w-0 flex-1">
             <div
               className={cn(
                 "text-[10px] uppercase tracking-wider font-black",
-                uncalledAlarm ? "text-rose-800" : "text-emerald-800",
+                uncalledAlarm
+                  ? "text-rose-800 dark:text-rose-300"
+                  : "text-emerald-800 dark:text-emerald-300",
               )}
             >
               🚨 Neobvolané &gt; 24h
@@ -798,10 +803,32 @@ export default async function PrehladPage({
             <div
               className={cn(
                 "text-5xl md:text-6xl font-black tabular-nums leading-none mt-1",
-                uncalledAlarm ? "text-rose-900" : "text-emerald-900",
+                uncalledAlarm
+                  ? "text-rose-900 dark:text-rose-200"
+                  : "text-emerald-900 dark:text-emerald-200",
               )}
             >
               {leadsStaleUncalled}
+            </div>
+          </div>
+        </Link>
+
+        {/* Trackovanie obchodákov — user 2026-07-18: „pridaj vedla neobvolane
+            co je ze trackovanie obchodakov button tym mozes trackovat
+            obchodakov budu tam statistiky atd". Linkuje na /admin/agents. */}
+        <Link
+          href="/admin/agents"
+          className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-900 hover:border-sky-400 dark:hover:border-sky-700 p-5 flex items-center gap-3 hover:shadow-md transition-all"
+        >
+          <div className="p-3 rounded-xl bg-sky-100 dark:bg-sky-950/60 shrink-0">
+            <Activity className="w-8 h-8 text-sky-700 dark:text-sky-400" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] uppercase tracking-wider font-black text-slate-700 dark:text-slate-300">
+              📊 Trackovanie obchodákov
+            </div>
+            <div className="text-sm font-semibold text-slate-600 dark:text-slate-400 mt-1 leading-tight">
+              Aktivita · konverzia · workload per user
             </div>
           </div>
         </Link>
@@ -1556,10 +1583,10 @@ function StatCard({
   deltaLabel?: string;
 }) {
   const tintBg = {
-    sky: "bg-sky-50 border-sky-200",
-    violet: "bg-violet-50 border-violet-200",
-    emerald: "bg-emerald-50 border-emerald-200",
-    rose: "bg-rose-50 border-rose-200",
+    sky: "bg-sky-50 dark:bg-slate-900/60 border-sky-200 dark:border-slate-800",
+    violet: "bg-violet-50 dark:bg-slate-900/60 border-violet-200 dark:border-slate-800",
+    emerald: "bg-emerald-50 dark:bg-slate-900/60 border-emerald-200 dark:border-slate-800",
+    rose: "bg-rose-50 dark:bg-slate-900/60 border-rose-200 dark:border-slate-800",
   }[tint];
   // Delta chip color: > 0 = green, < 0 = red, = 0 = zinc
   const deltaCls =
@@ -1642,17 +1669,17 @@ function PipelineColumn({
   children: React.ReactNode;
 }) {
   const headerBg = {
-    sky: "bg-sky-50 border-sky-200",
-    violet: "bg-violet-50 border-violet-200",
-    emerald: "bg-emerald-50 border-emerald-200",
+    sky: "bg-sky-50 dark:bg-slate-900/60 border-sky-200 dark:border-slate-800",
+    violet: "bg-violet-50 dark:bg-slate-900/60 border-violet-200 dark:border-slate-800",
+    emerald: "bg-emerald-50 dark:bg-slate-900/60 border-emerald-200 dark:border-slate-800",
   }[tint];
   const countCls = {
-    sky: "text-sky-800",
-    violet: "text-violet-800",
-    emerald: "text-emerald-800",
+    sky: "text-sky-800 dark:text-sky-400",
+    violet: "text-violet-800 dark:text-violet-400",
+    emerald: "text-emerald-800 dark:text-emerald-400",
   }[tint];
   return (
-    <section className="rounded-2xl border bg-background overflow-hidden flex flex-col">
+    <section className="rounded-2xl border bg-card overflow-hidden flex flex-col">
       <header
         className={cn(
           "px-3 py-2.5 border-b flex items-center justify-between gap-2",
