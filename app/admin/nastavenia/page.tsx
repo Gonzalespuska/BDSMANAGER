@@ -5,6 +5,7 @@ import {
   Hammer,
   GraduationCap,
   Package,
+  Palette,
   Settings2,
   Share2,
   Warehouse,
@@ -89,6 +90,13 @@ export default async function NastaveniaAdminPage() {
             title="Podklady"
             desc="Všetky materiály pre tím — Call scripty (interaktívne scenáre), Kontent shotlist (foto/video), Sales tips, protokoly, cenníky. Rozdeľujú sa podľa role."
             Icon={GraduationCap}
+            tint="violet"
+          />
+          <SubmoduleTile
+            href="/admin/cennik-materialov"
+            title="Cenník materiálov"
+            desc="Prepis €/m² pre 18 materiálov ktoré generátor CP používa (jednofarebná / chipsová / mramorová / metalická). Prázdne = default z kódu."
+            Icon={Palette}
             tint="violet"
           />
           <SubmoduleTile

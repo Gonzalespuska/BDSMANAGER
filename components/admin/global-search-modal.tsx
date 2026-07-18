@@ -40,7 +40,7 @@ const ADMIN_SECTIONS: Section[] = [
   { title: "Leady", href: "/admin/leads", keywords: "leady leads pool obchod", Icon: ClipboardList },
   { title: "Tím & Realizačné tímy", href: "/admin/agents", keywords: "team tim agenti agents obchodaci realizacne timy obhliadkari realizatori users", Icon: Users },
   { title: "Nastavenia CRM", href: "/admin/nastavenia", keywords: "nastavenia settings config firma pdf email dph sika mesta zlava sub-modul", Icon: Settings },
-  { title: "Cenník materiálov (Generátor CP)", href: "/admin/nastavenia#cennik-materialov", keywords: "cennik ceny materialov material material pricing generator cp cenova ponuka nacenit uprava penetracia farebny nater lak jednofarebna chipsova mramorova metalicka eur m2 override", Icon: Palette },
+  { title: "Cenník materiálov (Generátor CP)", href: "/admin/cennik-materialov", keywords: "cennik ceny materialov material material pricing generator cp cenova ponuka nacenit uprava penetracia farebny nater lak jednofarebna chipsova mramorova metalicka eur m2 override", Icon: Palette },
   { title: "Podklady", href: "/admin/podklady", keywords: "podklady knowledge call scripty scenar sales tips protokoly", Icon: BookOpen },
   { title: "Call scripty", href: "/admin/callscripts", keywords: "call scripty callscript telefonat placeholder", Icon: Phone },
   { title: "Realizačné systémy", href: "/admin/systems", keywords: "realizacne systemy 264 3000 topstone postup kroky spotreba kg", Icon: Hammer },
