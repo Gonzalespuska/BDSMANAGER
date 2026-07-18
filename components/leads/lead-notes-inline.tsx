@@ -360,7 +360,7 @@ export function LeadNotesInline({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 hover:bg-amber-50 px-2.5 py-1.5 rounded-md transition-colors border border-dashed border-amber-300"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-slate-400 hover:text-amber-900 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 px-2.5 py-1.5 rounded-md transition-colors border border-dashed border-amber-300 dark:border-slate-700 dark:hover:border-amber-700"
       >
         <StickyNote className="w-3.5 h-3.5" aria-hidden />
         + Pridať poznámku

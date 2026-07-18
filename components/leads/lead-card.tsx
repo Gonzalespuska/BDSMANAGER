@@ -577,7 +577,7 @@ export function LeadCard({
           {/* Callback reminder zobrazený vpravo v phone+email riadku (vyššie). */}
 
           {/* Action bar */}
-          <div className="px-5 pt-4 pb-4 mt-4 border-t bg-zinc-50/60">
+          <div className="px-5 pt-4 pb-4 mt-4 border-t bg-zinc-50/60 dark:bg-slate-950/30">
           {/* Outcome row:
               - V Nové (status=new) + odhalené → Kontakt + Nedvíha
                 ("kam zaradiť?")
@@ -586,25 +586,27 @@ export function LeadCard({
               - V no_answer/archived → žiadne outcome buttons tu (Nedvíha
                 pokus 2./3. ide tlačidlom Nedvíha v bottom alebo
                 Archivovať banner) */}
-          {isRevealed && lead.status === "new" && (
-            <>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <Button
-                  type="button"
-                  onClick={handleContact}
-                  disabled={busy}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
-                  title="Zdvihla → presunie do Kontakt tabu"
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
-                  Kontakt
-                </Button>
-                <MissedCallDropdown
-                  busy={busy}
-                  onPick={(hrs) => handleMissedCall(hrs)}
-                />
-              </div>
-            </>
+          {/* Kontakt + Nedvíha buttony zobrazujeme UZ pri Nove stave — aj bez
+              odhalenia cisla. User 2026-07-18: „nech tie tlacidla kontakt a
+              nezdviha tam su aj ked to neni odhalene". Obchodak vola z ineho
+              zariadenia alebo uz zavolal a chce hned oznacit vysledok. */}
+          {lead.status === "new" && (
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <Button
+                type="button"
+                onClick={handleContact}
+                disabled={busy}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
+                title="Zdvihla → presunie do Kontakt tabu"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-1.5" aria-hidden />
+                Kontakt
+              </Button>
+              <MissedCallDropdown
+                busy={busy}
+                onPick={(hrs) => handleMissedCall(hrs)}
+              />
+            </div>
           )}
 
           {/* Kontakt tab — veľký Ponuka button + Nedvíha (druhý pokus).
@@ -857,11 +859,10 @@ export function LeadCard({
           )}
         </div>
         {/* Callscript riadok pod akciami — INSIDE flex-1 min-w-0 (nie side-column).
-            User 2026-07-16: „pozri ako to je skaredo cele preco sa to cele
-            nefituje do toho okna". Predtým bol callscript flex sibling
-            k content divu → renderoval sa vpravo od karty a robil ju
-            asymetrickou. Teraz je normálny riadok dole. */}
-        <div className="px-5 pb-4 -mt-1 flex items-center justify-end">
+            User 2026-07-18: „ten script zavolat vychadza z toho pola" —
+            predtym -mt-1 tahalo button hore do akcii + shadow presakoval
+            von. Teraz normalne pt-3 pb-4 s fittovanym paddingom. */}
+        <div className="px-5 pb-4 pt-1 flex items-center justify-end">
           <CallscriptButton
             leadId={lead.id}
             leadName={lead.name}
