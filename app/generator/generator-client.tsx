@@ -1280,33 +1280,6 @@ ${signatureLines.join("\n")}`;
           )}
         </div>
 
-        {/* Right: mode toggle */}
-        <div className="inline-flex rounded-lg border bg-muted/30 p-0.5 self-start">
-          <button
-            type="button"
-            onClick={() => setSaleMode("realizacia")}
-            className={cn(
-              "px-3 py-1.5 rounded-md text-xs md:text-sm font-bold transition-colors",
-              saleMode === "realizacia"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Realizácia podlahy
-          </button>
-          <button
-            type="button"
-            onClick={() => setSaleMode("material")}
-            className={cn(
-              "px-3 py-1.5 rounded-md text-xs md:text-sm font-bold transition-colors",
-              saleMode === "material"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Iba materiál + doprava
-          </button>
-        </div>
       </div>
 
       {/* Floor type picker — pred výberom veľké fotky; po výbere kompaktné pills */}
@@ -1314,12 +1287,15 @@ ${signatureLines.join("\n")}`;
       {(
       !floorType ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3">
             {(Object.keys(FLOOR_TYPE_LABELS) as FloorType[]).map((type) => (
               <button
                 key={type}
                 type="button"
-                onClick={() => selectFloorType(type)}
+                onClick={() => {
+                  setSaleMode("realizacia");
+                  selectFloorType(type);
+                }}
                 className="group rounded-xl border border-border bg-background hover:border-foreground/30 text-left transition-all overflow-hidden"
               >
                 {/* Aspect ratio scales aggressively:
@@ -1339,6 +1315,31 @@ ${signatureLines.join("\n")}`;
                 </div>
               </button>
             ))}
+            {/* 5. tile — „Iba materiál + doprava". Klik → saleMode=material,
+                default floorType=jednofarebna (aby sa MaterialCatalog vedel
+                filtrovať; obchodák môže prepnúť pill). */}
+            <button
+              type="button"
+              onClick={() => {
+                setSaleMode("material");
+                selectFloorType("jednofarebna");
+              }}
+              className="group rounded-xl border-2 border-amber-300 hover:border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 text-left transition-all overflow-hidden"
+            >
+              <div className="relative aspect-[4/3] md:aspect-video lg:aspect-[24/7] w-full overflow-hidden bg-white dark:bg-slate-900 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/floor-types/iba-material.jpg"
+                  alt="Iba materiál + doprava"
+                  className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                />
+              </div>
+              <div className="p-2.5 md:p-3">
+                <div className="text-sm md:text-base lg:text-lg font-extrabold tracking-tight text-amber-900 dark:text-amber-200">
+                  Iba materiál + doprava
+                </div>
+              </div>
+            </button>
           </div>
         </>
       ) : (
