@@ -504,10 +504,16 @@ function EmailPreviewSection({
 
   return (
     <CollapsibleSection
-      title="📧 Preview e-mailu + PDF prílohy"
+      title={`📧 Preview e-mailu + PDF prílohy`}
       desc="Tak vyzerá e-mail ktorý obchodák pošle zákazníkovi cez generátor CP. Zmeny vo Firma sekcii sa premietnu do brandu."
     >
-      <div className="flex gap-2 flex-wrap">
+      {/* IN BUILD badge — user 2026-07-18: „daj in build". Feature ešte
+          nie je hotový (preview je iba static, nie skutočný render).
+          Blok necháme viditeľný ale pointer-events-none + opacity. */}
+      <div className="inline-flex items-center gap-1 rounded-md bg-amber-100 dark:bg-amber-900/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 mb-2">
+        🚧 in build
+      </div>
+      <div className="flex gap-2 flex-wrap opacity-60 pointer-events-none select-none">
         <button
           type="button"
           onClick={() => setShowPreview((v) => !v)}

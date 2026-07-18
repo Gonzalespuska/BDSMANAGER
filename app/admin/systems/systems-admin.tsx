@@ -120,6 +120,57 @@ export function SystemsAdmin({
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [library, setLibrary] = React.useState<LibraryStep[]>([]);
+  // Reorder mode — user 2026-07-18: „takisto aj pri realizacnych systemoch
+  // chcem mat moznost ich presuvat ako ja chcem". Ked reorderMode=true,
+  // kazdy SystemCard ukaze ChevronUp/Down; save prepocita sort_order a
+  // batch-PATCH-ne cez API.
+  const [reorderMode, setReorderMode] = React.useState(false);
+  const [savingOrder, setSavingOrder] = React.useState(false);
+  const [orderSaved, setOrderSaved] = React.useState(false);
+
+  function moveSystemUp(idx: number) {
+    if (idx === 0) return;
+    setSystems((prev) => {
+      const next = prev.slice();
+      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+      return next;
+    });
+  }
+  function moveSystemDown(idx: number) {
+    setSystems((prev) => {
+      if (idx === prev.length - 1) return prev;
+      const next = prev.slice();
+      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+      return next;
+    });
+  }
+  async function saveSystemOrder() {
+    setSavingOrder(true);
+    setOrderSaved(false);
+    try {
+      // Prepocitaj sort_order: 10, 20, 30, ... (necham medzery aby manualny
+      // insert medzi bol jednoduchy).
+      const updates = systems.map((s, i) => ({
+        id: s.id,
+        sort_order: (i + 1) * 10,
+      }));
+      await Promise.all(
+        updates.map((u) =>
+          fetch("/api/admin/systems", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(u),
+          }),
+        ),
+      );
+      setOrderSaved(true);
+      setReorderMode(false);
+      setTimeout(() => setOrderSaved(false), 1500);
+      void refresh();
+    } finally {
+      setSavingOrder(false);
+    }
+  }
 
   async function refresh() {
     try {
@@ -157,18 +208,63 @@ export function SystemsAdmin({
         <div className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
           Systémy ({systems.length})
         </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Nový systém
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!reorderMode ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setReorderMode(true)}
+                className="inline-flex items-center gap-1 rounded-md border-2 border-sky-300 dark:border-sky-800 bg-white dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 text-xs font-black px-3 py-1.5 hover:border-sky-500"
+                title="Presúvať systémy hore/dole a uložiť poradie"
+              >
+                ✎ Upraviť poradie
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-black shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Nový systém
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setReorderMode(false);
+                  void refresh();
+                }}
+                className="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-black px-3 py-1.5"
+              >
+                Zrušiť
+              </button>
+              <button
+                type="button"
+                onClick={saveSystemOrder}
+                disabled={savingOrder}
+                className={
+                  "inline-flex items-center gap-1 rounded-md text-white text-xs font-black px-3 py-1.5 disabled:opacity-40 " +
+                  (orderSaved
+                    ? "bg-emerald-500"
+                    : "bg-emerald-600 hover:bg-emerald-700")
+                }
+              >
+                {savingOrder ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                {orderSaved ? "Uložené" : "Uložiť poradie"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <ul className="space-y-2">
-        {systems.map((s) => (
+        {systems.map((s, i) => (
           <SystemCard
             key={s.id}
             system={s}
@@ -179,6 +275,11 @@ export function SystemsAdmin({
             }
             onChanged={refresh}
             onLibraryChanged={refreshLibrary}
+            reorderMode={reorderMode}
+            isFirst={i === 0}
+            isLast={i === systems.length - 1}
+            onMoveUp={() => moveSystemUp(i)}
+            onMoveDown={() => moveSystemDown(i)}
           />
         ))}
       </ul>
@@ -204,6 +305,11 @@ function SystemCard({
   onToggle,
   onChanged,
   onLibraryChanged,
+  reorderMode = false,
+  isFirst = false,
+  isLast = false,
+  onMoveUp,
+  onMoveDown,
 }: {
   system: System;
   library: LibraryStep[];
@@ -211,6 +317,11 @@ function SystemCard({
   onToggle: () => void;
   onChanged: () => void;
   onLibraryChanged: () => void;
+  reorderMode?: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const steps: ProcedureStep[] = Array.isArray(system.procedure_steps)
     ? (system.procedure_steps as ProcedureStep[])
@@ -218,14 +329,44 @@ function SystemCard({
   return (
     <li
       className={cn(
-        "rounded-xl border-2 bg-white transition-colors",
-        system.active ? "border-slate-200" : "border-rose-200 bg-rose-50/40",
+        "rounded-xl border-2 bg-white dark:bg-slate-900 transition-colors relative",
+        system.active ? "border-slate-200 dark:border-slate-800" : "border-rose-200 bg-rose-50/40",
+        reorderMode && "ring-2 ring-sky-400/40 dark:ring-sky-700",
       )}
     >
+      {reorderMode && (
+        <div className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-0.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-md">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp?.();
+            }}
+            disabled={isFirst}
+            className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-30"
+            title="Nahor"
+          >
+            <ChevronUp className="w-4 h-4" aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown?.();
+            }}
+            disabled={isLast}
+            className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-30"
+            title="Nadol"
+          >
+            <ChevronDown className="w-4 h-4" aria-hidden />
+          </button>
+        </div>
+      )}
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center gap-3 p-3 text-left"
+        disabled={reorderMode}
+        className="w-full flex items-center gap-3 p-3 text-left disabled:cursor-default"
       >
         <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-sm shrink-0">
           {system.code.substring(0, 4).toUpperCase()}
