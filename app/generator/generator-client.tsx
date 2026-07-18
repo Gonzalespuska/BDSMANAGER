@@ -1452,14 +1452,14 @@ ${signatureLines.join("\n")}`;
       {saleMode === "realizacia" &&
         floorType &&
         (systems ?? []).some((s) => s.floor_type === floorType) && (
-          <div className="flex items-center gap-2 self-start rounded-lg border bg-muted/30 px-2 py-1.5">
-            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          <div className="flex items-center gap-2.5 self-start rounded-xl border-2 border-sky-400 dark:border-sky-600 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 shadow-sm">
+            <span className="text-xs font-black uppercase tracking-widest text-sky-700 dark:text-sky-300">
               Systém
             </span>
             <select
               value={systemCode}
               onChange={(e) => setSystemCode(e.target.value)}
-              className="h-8 px-2 rounded-md border border-input bg-background text-sm font-bold"
+              className="h-10 px-3 rounded-lg border-2 border-sky-500 bg-white dark:bg-slate-900 text-base font-black text-sky-900 dark:text-sky-100 cursor-pointer hover:border-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-400"
             >
               {(systems ?? [])
                 .filter((s) => s.floor_type === floorType)
