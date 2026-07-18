@@ -12,6 +12,7 @@ import {
   Headphones,
   MessageCircle,
   Phone,
+  Settings,
   ShieldCheck,
   Users as UsersIcon,
 } from "lucide-react";
@@ -270,6 +271,19 @@ export async function AppShell({
             {/* Dark / light theme switch — user 2026-07-16 „a kde je ten
                 switch co sme sa bavili na dark theme a white theme". */}
             <ThemeToggle />
+            {/* Nastavenia CRM — user 2026-07-18: „tieto nastavenia crm by
+                mali byt hore niekde v pravo ako je ucet tak napravo uplne
+                nech to je tam sticky vzdy ked si admin". Iba pre real admin. */}
+            {isRealAdmin && (
+              <Link
+                href="/admin/nastavenia"
+                className="inline-flex items-center justify-center h-9 w-9 rounded-lg bg-muted/60 hover:bg-muted border border-input hover:border-sky-400 transition-colors text-muted-foreground hover:text-sky-600"
+                title="Nastavenia CRM"
+                aria-label="Nastavenia CRM"
+              >
+                <Settings className="w-4 h-4" aria-hidden />
+              </Link>
+            )}
             <ProfileMenu
               user={user}
               realRole={realRole ?? user.role}
