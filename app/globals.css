@@ -130,3 +130,12 @@ a.no-drag {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+
+/* Bugfix 2026-07-18: user reported that dragging on ANY link (nav tab,
+   sub-modul tile, atď.) ukazuje URL preview ktorý sa dá presúvať.
+   Zakážeme to globálne pre všetky <a> — v CRM appke nemáme textové
+   hyperlinky ktoré by mali byť draggable ako v článkoch/blogoch. */
+a {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
