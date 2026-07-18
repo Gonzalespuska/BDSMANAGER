@@ -793,11 +793,18 @@ function ProductRow({
             ))}
           </select>
         </Field>
-        <Field label="SKU">
-          <input
-            value={sku}
-            onChange={(e) => setSku(e.target.value)}
-            className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold"
+        <Field label="Materiál (search / SKU)">
+          <MaterialPicker
+            currentSku={sku}
+            categoryHint={role}
+            onPick={(it) => {
+              setSku(it.sap_number);
+              if (it.consumption_per_m2 != null) setCons(String(it.consumption_per_m2));
+              if (it.packaging_kg != null) setUnitSize(String(it.packaging_kg));
+              if (it.unit_label) setUnitLabel(it.unit_label);
+              if (it.default_cost_eur != null) setPrice(String(it.default_cost_eur));
+            }}
+            onManualChange={setSku}
           />
         </Field>
         {/* Label field odstranene — user 2026-07-18: „label vymaz". Label
@@ -887,6 +894,134 @@ function ProductRow({
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// MaterialPicker — search kombobox z sika_catalog. User 2026-07-18:
+// „napisem 151 a vyberem ju". Pri picku auto-fillneme sku/spotreba/
+// balenie/cena/jednotku do parent form-y cez onPick(item).
+// ────────────────────────────────────────────────────────────────────────
+type CatalogItem = {
+  sap_number: string;
+  name: string;
+  packaging: string;
+  packaging_kg: number | null;
+  default_cost_eur: number | null;
+  category: string | null;
+  unit_label: string;
+  consumption_per_m2: number | null;
+};
+
+function MaterialPicker({
+  currentSku,
+  categoryHint,
+  onPick,
+  onManualChange,
+}: {
+  currentSku: string;
+  categoryHint?: string;
+  onPick: (item: CatalogItem) => void;
+  onManualChange: (sku: string) => void;
+}) {
+  const [q, setQ] = React.useState(currentSku);
+  const [open, setOpen] = React.useState(false);
+  const [items, setItems] = React.useState<CatalogItem[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+
+  // Sync q pri external change (napr. po picku sa currentSku prepise)
+  React.useEffect(() => {
+    setQ(currentSku);
+  }, [currentSku]);
+
+  // Debounced search
+  React.useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (q.trim().length > 0) params.set("q", q.trim());
+        if (categoryHint) params.set("category", categoryHint);
+        const r = await fetch(`/api/admin/materials-catalog?${params.toString()}`);
+        const j = (await r.json()) as { ok?: boolean; items?: CatalogItem[] };
+        if (j.ok && j.items) setItems(j.items);
+      } finally {
+        setLoading(false);
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [q, open, categoryHint]);
+
+  // Click outside → close
+  React.useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        value={q}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          onManualChange(e.target.value);
+          setOpen(true);
+        }}
+        placeholder="Napíš 151 → vyber Sikafloor-151"
+        className="w-full h-9 px-2 rounded border border-slate-300 dark:border-slate-700 dark:bg-slate-900 text-sm font-bold"
+      />
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl z-50">
+          {loading && (
+            <div className="px-3 py-2 text-xs text-slate-500">Hľadám…</div>
+          )}
+          {!loading && items.length === 0 && (
+            <div className="px-3 py-3 text-xs text-slate-500 italic">
+              Nič — voľne napíš SKU alebo pridaj materiál v Cenníku.
+            </div>
+          )}
+          {items.map((it) => (
+            <button
+              key={it.sap_number}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onPick(it);
+                setQ(it.sap_number);
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 hover:bg-sky-50 dark:hover:bg-sky-950/40 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+            >
+              <div className="text-sm font-black">{it.name}</div>
+              <div className="text-[10px] text-slate-500 flex gap-2 flex-wrap tabular-nums">
+                <span className="font-mono">{it.sap_number}</span>
+                {it.packaging && <span>· {it.packaging}</span>}
+                {it.consumption_per_m2 != null && (
+                  <span>· spotreba {it.consumption_per_m2} kg/m²</span>
+                )}
+                {it.default_cost_eur != null && (
+                  <span className="font-black text-emerald-700 dark:text-emerald-400">
+                    · {it.default_cost_eur} €/{it.unit_label}
+                  </span>
+                )}
+                {it.category && (
+                  <span className="uppercase font-bold">· {it.category}</span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NewProductRow({
   systemId,
   onCreated,
@@ -904,6 +1039,20 @@ function NewProductRow({
   const [price, setPrice] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+
+  // Auto-fill fields po picku z catalog — user 2026-07-18: „ostatne veci
+  // spotreba, jednotka sud, cena za sud vsetko je v cennik materialov
+  // nemusi to tam byt nech si to bere data odtial".
+  function pickCatalogItem(it: CatalogItem) {
+    setSku(it.sap_number);
+    if (it.consumption_per_m2 != null) setCons(String(it.consumption_per_m2));
+    if (it.packaging_kg != null) setUnitSize(String(it.packaging_kg));
+    if (it.unit_label) setUnitLabel(it.unit_label);
+    if (it.default_cost_eur != null) setPrice(String(it.default_cost_eur));
+    if (it.category && ["primer", "binder", "topcoat", "chip", "other"].includes(it.category)) {
+      setRole(it.category);
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -952,12 +1101,12 @@ function NewProductRow({
             ))}
           </select>
         </Field>
-        <Field label="SKU">
-          <input
-            value={sku}
-            onChange={(e) => setSku(e.target.value)}
-            placeholder="napr. SIKAFLOOR-151"
-            className="w-full h-9 px-2 rounded border border-slate-300 text-sm font-bold"
+        <Field label="Materiál (search)">
+          <MaterialPicker
+            currentSku={sku}
+            categoryHint={role}
+            onPick={pickCatalogItem}
+            onManualChange={setSku}
           />
         </Field>
         <Field label="Spotreba (kg/m²)">
