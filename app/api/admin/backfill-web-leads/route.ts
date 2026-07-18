@@ -123,7 +123,9 @@ export async function POST(request: NextRequest) {
     }
   }
   const dry = request.nextUrl.searchParams.get("dry") === "1";
-  const apiKey = process.env.RESEND_API_KEY;
+  // Allow key override via header (one-shot use, no deploy needed for key rotation).
+  const apiKey =
+    request.headers.get("x-resend-key") ?? process.env.RESEND_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { ok: false, error: "RESEND_API_KEY not configured" },
