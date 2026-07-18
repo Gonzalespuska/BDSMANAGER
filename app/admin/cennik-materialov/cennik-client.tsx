@@ -62,6 +62,10 @@ type MaterialMaps = {
   customName: Record<string, string>;
   priceMode: Record<string, PriceMode>;
   marginPct: Record<string, number>;
+  /** User 2026-07-18 spec: „pocet_vrstiev" — kolkokrat sa vrstva aplikuje. */
+  pocetVrstiev: Record<string, number>;
+  /** „rezerva_percent" — odpad/rezerva default 8 % (zaokruhlenie na cele sudy). */
+  rezervaPercent: Record<string, number>;
   /** User 2026-07-18: „tu v cenniku musi byt este ake pozname velkosti sudov
    *  kazdy je iny cize musim mat moznost napisat 1 alebo viac moznosti ake
    *  su na trhu a ake su na nich ceny". */
@@ -82,6 +86,8 @@ function buildMaps(settings: Setting[]): MaterialMaps {
   const priceMode: Record<string, PriceMode> = {};
   const marginPct: Record<string, number> = {};
   const packagingOptions: Record<string, PackagingOption[]> = {};
+  const pocetVrstiev: Record<string, number> = {};
+  const rezervaPercent: Record<string, number> = {};
   for (const s of settings) {
     const key = s.key;
     if (!key.startsWith("material.")) continue;
@@ -130,6 +136,10 @@ function buildMaps(settings: Setting[]): MaterialMaps {
       consumption[suffix.slice(0, -".consumption_kg_per_sqm".length)] = num;
     } else if (suffix.endsWith(".margin_pct")) {
       marginPct[suffix.slice(0, -".margin_pct".length)] = num;
+    } else if (suffix.endsWith(".pocet_vrstiev")) {
+      pocetVrstiev[suffix.slice(0, -".pocet_vrstiev".length)] = num;
+    } else if (suffix.endsWith(".rezerva_percent")) {
+      rezervaPercent[suffix.slice(0, -".rezerva_percent".length)] = num;
     }
   }
   return {
@@ -140,6 +150,8 @@ function buildMaps(settings: Setting[]): MaterialMaps {
     priceMode,
     marginPct,
     packagingOptions,
+    pocetVrstiev,
+    rezervaPercent,
   };
 }
 
@@ -158,6 +170,8 @@ type CombinedItem = {
   cost?: number;
   consumption?: number;
   packagingOptions?: PackagingOption[];
+  pocetVrstiev?: number;
+  rezervaPercent?: number;
   extraId?: string;
 };
 
@@ -196,6 +210,8 @@ export function CennikMaterialovClient({
         cost: maps.cost[m.id],
         consumption: maps.consumption[m.id],
         packagingOptions: maps.packagingOptions[m.id],
+        pocetVrstiev: maps.pocetVrstiev[m.id],
+        rezervaPercent: maps.rezervaPercent[m.id],
       });
     }
     for (const e of extras) {
@@ -616,6 +632,112 @@ function AddExtraForm({
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// ComputedBreakdown — auto-vypocet naklad €/m² + potreba kg/m² podla spec
+// 2026-07-18:
+//   naklad_eur_kg = MIN(cena_balenia / balenie_kg)   // najlacnejsi balenie/kg
+//   naklad_eur_m2 = naklad_eur_kg × spotreba × pocet_vrstiev
+//   potreba_kg_m2 = spotreba × pocet_vrstiev × (1 + rezerva/100)
+// ────────────────────────────────────────────────────────────────────────
+function ComputedBreakdown({
+  packagingList,
+  consumption,
+  pocetVrstiev,
+  setPocetVrstiev,
+  rezerva,
+  setRezerva,
+}: {
+  packagingList: PackagingOption[];
+  consumption: number;
+  pocetVrstiev: string;
+  setPocetVrstiev: (v: string) => void;
+  rezerva: string;
+  setRezerva: (v: string) => void;
+}) {
+  const vrstvyN = parseFloat(pocetVrstiev) || 1;
+  const rezervaN = parseFloat(rezerva || "8") || 8;
+  const validPack = packagingList.filter(
+    (p) => p.size_kg > 0 && p.price_eur > 0,
+  );
+  const cheapestPerKg = validPack.length
+    ? Math.min(...validPack.map((p) => p.price_eur / p.size_kg))
+    : 0;
+  const nakladPerM2 = cheapestPerKg * consumption * vrstvyN;
+  const potrebaKgPerM2 = consumption * vrstvyN * (1 + rezervaN / 100);
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2 grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+      <label className="block">
+        <div className="text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-0.5">
+          Počet vrstiev
+        </div>
+        <input
+          type="number"
+          step="1"
+          min="1"
+          value={pocetVrstiev}
+          onChange={(e) => setPocetVrstiev(e.target.value)}
+          placeholder="1"
+          className="w-full h-9 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold tabular-nums text-right"
+        />
+      </label>
+      <label className="block">
+        <div
+          className="text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-0.5"
+          title="Odpad / rezerva materiálu — zvyšky, rozliatie, zaokrúhlenie na celé sudy (default 8 %)."
+        >
+          Rezerva %
+        </div>
+        <input
+          type="number"
+          step="1"
+          min="0"
+          max="100"
+          value={rezerva}
+          onChange={(e) => setRezerva(e.target.value)}
+          placeholder="8"
+          className="w-full h-9 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold tabular-nums text-right"
+        />
+      </label>
+      <div
+        className={
+          "rounded-md px-2 py-1.5 text-xs " +
+          (nakladPerM2 > 0
+            ? "bg-sky-50 dark:bg-sky-950/40 border-2 border-sky-300 dark:border-sky-800"
+            : "bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800")
+        }
+        title={
+          nakladPerM2 > 0
+            ? `${cheapestPerKg.toFixed(2)} €/kg × ${consumption} kg/m² × ${vrstvyN} vrstiev`
+            : "Vyplň Balenia + Spotrebu na výpočet"
+        }
+      >
+        <div className="text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-400">
+          🧮 Náklad €/m²
+        </div>
+        <div className="text-lg font-black tabular-nums text-sky-900 dark:text-sky-200">
+          {nakladPerM2 > 0 ? nakladPerM2.toFixed(2) + " €" : "—"}
+        </div>
+      </div>
+      <div
+        className={
+          "rounded-md px-2 py-1.5 text-xs " +
+          (potrebaKgPerM2 > 0
+            ? "bg-violet-50 dark:bg-violet-950/40 border-2 border-violet-300 dark:border-violet-800"
+            : "bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800")
+        }
+        title="Spotreba × vrstvy × (1 + rezerva %). Použije sa na výpočet počtu balení pri objednávke."
+      >
+        <div className="text-[10px] font-black uppercase tracking-wider text-violet-700 dark:text-violet-400">
+          📦 Potreba kg/m²
+        </div>
+        <div className="text-lg font-black tabular-nums text-violet-900 dark:text-violet-200">
+          {potrebaKgPerM2 > 0 ? potrebaKgPerM2.toFixed(3) + " kg" : "—"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // Row — inline edit prices + name (custom_name override pre hardcoded)
 function MaterialRow({
   row,
@@ -649,6 +771,14 @@ function MaterialRow({
   );
   const [showPackaging, setShowPackaging] = React.useState(
     (row.packagingOptions?.length ?? 0) > 0,
+  );
+  // Spec 2026-07-18: pocet_vrstiev (kolkokrat sa vrstva aplikuje, default 1)
+  // + rezerva_percent (odpad na cele sudy, default 8 %).
+  const [pocetVrstievVal, setPocetVrstievVal] = React.useState<string>(
+    row.pocetVrstiev != null ? String(row.pocetVrstiev) : "",
+  );
+  const [rezervaVal, setRezervaVal] = React.useState<string>(
+    row.rezervaPercent != null ? String(row.rezervaPercent) : "",
   );
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
@@ -744,6 +874,21 @@ function MaterialRow({
       );
       const packagingToStore =
         validPackaging.length > 0 ? JSON.stringify(validPackaging) : "";
+      // pocet_vrstiev + rezerva_percent — spec 2026-07-18.
+      const pv = pocetVrstievVal.trim();
+      const rz = rezervaVal.trim();
+      for (const [v, lbl] of [
+        [pv, "Počet vrstiev"],
+        [rz, "Rezerva %"],
+      ] as const) {
+        if (v) {
+          const n = parseFloat(v);
+          if (!isFinite(n) || n < 0) {
+            alert(`${lbl} musí byť kladné číslo alebo prázdne.`);
+            return;
+          }
+        }
+      }
       await Promise.all([
         saveSettingV2(`material.${row.key}.price_per_sqm`, priceToStore),
         saveSettingV2(`material.${row.key}.cost_per_sqm`, c),
@@ -755,6 +900,8 @@ function MaterialRow({
           priceMode === "margin" ? m : "",
         ),
         saveSettingV2(`material.${row.key}.packaging_options`, packagingToStore),
+        saveSettingV2(`material.${row.key}.pocet_vrstiev`, pv),
+        saveSettingV2(`material.${row.key}.rezerva_percent`, rz),
       ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
@@ -803,6 +950,9 @@ function MaterialRow({
     setConsumptionVal("");
     setNameVal(row.originalName);
     setPriceMode("amount");
+    setPocetVrstievVal("");
+    setRezervaVal("");
+    setPackagingList([]);
     setSaving(true);
     try {
       if (isExtra && row.extraId) {
@@ -824,6 +974,9 @@ function MaterialRow({
           saveSettingV2(`material.${row.key}.custom_name`, ""),
           saveSettingV2(`material.${row.key}.price_mode`, ""),
           saveSettingV2(`material.${row.key}.margin_pct`, ""),
+          saveSettingV2(`material.${row.key}.pocet_vrstiev`, ""),
+          saveSettingV2(`material.${row.key}.rezerva_percent`, ""),
+          saveSettingV2(`material.${row.key}.packaging_options`, ""),
         ]);
       }
       setSaved(true);
@@ -1020,6 +1173,16 @@ function MaterialRow({
           </div>
         </label>
       </div>
+
+      {/* Vrstvy + Rezerva + Auto naklad z packaging — spec 2026-07-18. */}
+      {!isExtra && <ComputedBreakdown
+        packagingList={packagingList}
+        consumption={parseFloat(consumptionVal) || row.consumption || 0}
+        pocetVrstiev={pocetVrstievVal}
+        setPocetVrstiev={setPocetVrstievVal}
+        rezerva={rezervaVal}
+        setRezerva={setRezervaVal}
+      />}
 
       {/* Balenia — user 2026-07-18: „tu v cenniku musi byt este ake pozname
           velkosti sudov kazdy je iny cize musim mat moznost napisat 1 alebo
