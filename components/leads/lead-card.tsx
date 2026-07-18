@@ -776,7 +776,7 @@ export function LeadCard({
                 >
                   <Link href={`/generator?lead=${lead.id}`}>
                     <Calculator className="w-4 h-4 mr-1.5" aria-hidden />
-                    Ponuka
+                    Cenová ponuka
                   </Link>
                 </Button>
               )}

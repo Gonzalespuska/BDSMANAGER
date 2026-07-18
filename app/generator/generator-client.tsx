@@ -1288,7 +1288,9 @@ ${signatureLines.join("\n")}`;
       {(
       !floorType ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3">
+          {/* User 2026-07-18: „tie fotky mozu byt kludne vacsie". Väčší grid
+              gap, aspect-[4/3] (nie ultra-thin 24/7), a väčší text. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
             {(Object.keys(FLOOR_TYPE_LABELS) as FloorType[]).map((type) => (
               <button
                 key={type}
@@ -1297,11 +1299,9 @@ ${signatureLines.join("\n")}`;
                   setSaleMode("realizacia");
                   selectFloorType(type);
                 }}
-                className="group rounded-xl border border-border bg-background hover:border-foreground/30 text-left transition-all overflow-hidden"
+                className="group rounded-2xl border-2 border-border bg-background hover:border-sky-400 hover:shadow-lg text-left transition-all overflow-hidden"
               >
-                {/* Aspect ratio scales aggressively:
-                    mobile 4:3 vyššie | tablet 16:9 | notebook 24:7 (lg) ultra-thin */}
-                <div className="relative aspect-[4/3] md:aspect-video lg:aspect-[24/7] w-full overflow-hidden bg-muted">
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/floor-types/${type}.jpg`}
@@ -1309,33 +1309,31 @@ ${signatureLines.join("\n")}`;
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 </div>
-                <div className="p-2.5 md:p-3">
-                  <div className="text-sm md:text-base lg:text-lg font-extrabold tracking-tight">
+                <div className="p-3 md:p-4">
+                  <div className="text-base md:text-lg lg:text-xl font-extrabold tracking-tight">
                     {FLOOR_TYPE_LABELS[type]}
                   </div>
                 </div>
               </button>
             ))}
-            {/* 5. tile — „Iba materiál + doprava". Klik → saleMode=material,
-                default floorType=jednofarebna (aby sa MaterialCatalog vedel
-                filtrovať; obchodák môže prepnúť pill). */}
+            {/* 5. tile — „Iba materiál + doprava". */}
             <button
               type="button"
               onClick={() => {
                 setSaleMode("material");
                 selectFloorType("jednofarebna");
               }}
-              className="group rounded-xl border-2 border-amber-300 hover:border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 text-left transition-all overflow-hidden"
+              className="group rounded-2xl border-2 border-amber-300 hover:border-amber-500 hover:shadow-lg bg-amber-50/40 dark:bg-amber-950/20 text-left transition-all overflow-hidden"
             >
-              <div className="relative aspect-[4/3] md:aspect-video lg:aspect-[24/7] w-full overflow-hidden bg-gradient-to-br from-amber-100 to-yellow-200 dark:from-amber-950 dark:to-yellow-900 flex items-center justify-center">
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-gradient-to-br from-amber-100 to-yellow-200 dark:from-amber-950 dark:to-yellow-900 flex items-center justify-center">
                 <Package
-                  className="w-14 h-14 md:w-16 md:h-16 lg:w-12 lg:h-12 text-amber-700 dark:text-amber-300 transition-transform duration-300 group-hover:scale-110"
+                  className="w-20 h-20 md:w-24 md:h-24 text-amber-700 dark:text-amber-300 transition-transform duration-300 group-hover:scale-110"
                   strokeWidth={1.5}
                   aria-hidden
                 />
               </div>
-              <div className="p-2.5 md:p-3">
-                <div className="text-sm md:text-base lg:text-lg font-extrabold tracking-tight text-amber-900 dark:text-amber-200">
+              <div className="p-3 md:p-4">
+                <div className="text-base md:text-lg lg:text-xl font-extrabold tracking-tight text-amber-900 dark:text-amber-200">
                   Iba materiál + doprava
                 </div>
               </div>
