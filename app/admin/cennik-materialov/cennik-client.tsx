@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Palette, Save, Trash2 } from "lucide-react";
+import { Loader2, Save, Trash2 } from "lucide-react";
 import { saveSettingV2 } from "@/app/admin/settings/actions";
 import {
   FLOOR_TYPE_LABELS,
@@ -72,12 +72,22 @@ export function CennikMaterialovClient({ settings }: { settings: Setting[] }) {
             key={floorType}
             className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-2"
           >
-            <div className="text-sm font-black tracking-tight flex items-center gap-1.5">
-              <Palette className="w-4 h-4 text-violet-500" aria-hidden />
-              {FLOOR_TYPE_LABELS[floorType]}
-              <span className="text-xs opacity-60 font-normal">
-                ({items.length})
-              </span>
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/floor-types/${floorType}.jpg`}
+                alt={FLOOR_TYPE_LABELS[floorType]}
+                className="w-14 h-14 rounded-lg object-cover border-2 border-slate-200 dark:border-slate-700 shrink-0"
+                loading="lazy"
+              />
+              <div>
+                <div className="text-base font-black tracking-tight leading-tight">
+                  {FLOOR_TYPE_LABELS[floorType]}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {items.length} operácií
+                </div>
+              </div>
             </div>
             <ul className="space-y-1.5">
               {items.map((m) => (
