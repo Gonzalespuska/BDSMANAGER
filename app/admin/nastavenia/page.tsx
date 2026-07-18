@@ -77,7 +77,7 @@ export default async function NastaveniaAdminPage() {
             Sub-moduly · klikni pre editáciu
           </div>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <SubmoduleTile
             href="/admin/generator-nastavenia"
             title="Nastavenia Generátora CP"
@@ -168,18 +168,18 @@ function SubmoduleTile({
   return (
     <Link
       href={href}
-      className="group relative rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 transition-all hover:border-sky-400 dark:hover:border-sky-600 hover:shadow-md dark:hover:bg-slate-900 flex items-start gap-3"
+      className="group relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5 md:p-6 min-h-[140px] transition-all hover:border-sky-400 dark:hover:border-sky-600 hover:shadow-md dark:hover:bg-slate-900 flex items-start gap-4"
     >
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconMap[tint]}`}>
-        <Icon className="w-4 h-4" aria-hidden />
+      <div className={`w-14 h-14 md:w-16 md:h-16 rounded-xl flex items-center justify-center shrink-0 ${iconMap[tint]}`}>
+        <Icon className="w-6 h-6 md:w-7 md:h-7" aria-hidden />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-black text-sm inline-flex items-center gap-2 flex-wrap text-slate-900 dark:text-slate-100">
+        <div className="font-black text-base md:text-lg inline-flex items-center gap-2 flex-wrap text-slate-900 dark:text-slate-100">
           {title}
           {badge && (
             <span
               className={
-                "rounded-full border px-1.5 py-0 text-[9px] font-black uppercase tracking-wider " +
+                "rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider " +
                 (isFix
                   ? "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800"
                   : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700")
@@ -189,11 +189,11 @@ function SubmoduleTile({
             </span>
           )}
         </div>
-        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-snug">
           {desc}
         </div>
       </div>
-      <div className="text-lg font-black text-slate-400 dark:text-slate-600 group-hover:text-sky-500 dark:group-hover:text-sky-400 transition-colors shrink-0">
+      <div className="text-2xl font-black text-slate-400 dark:text-slate-600 group-hover:text-sky-500 dark:group-hover:text-sky-400 group-hover:translate-x-0.5 transition-all shrink-0">
         →
       </div>
     </Link>
