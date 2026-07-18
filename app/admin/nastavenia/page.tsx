@@ -79,23 +79,9 @@ export default async function NastaveniaAdminPage() {
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <SubmoduleTile
-            href="/admin/systems"
-            title="Realizačné systémy"
-            desc="Definuj 264, 3000, TopStone… + spotreba kg/m² + postup krokov + knižnica krokov."
-            Icon={Hammer}
-            tint="emerald"
-          />
-          <SubmoduleTile
-            href="/admin/cennik-materialov"
-            title="Cenník materiálov"
-            desc="Prepis €/m² pre 18 materiálov ktoré generátor CP používa (jednofarebná / chipsová / mramorová / metalická). Prázdne = default z kódu."
-            Icon={Palette}
-            tint="violet"
-          />
-          <SubmoduleTile
             href="/admin/generator-nastavenia"
             title="Nastavenia Generátora CP"
-            desc="Defaultné systémy per typ podlahy (Sikafloor 264 / TopStopne…), množstevné zľavy tiers, materiálové markupy per rola."
+            desc="Defaultné systémy per typ podlahy (Sikafloor 264 / TopStopne…), Cenník materiálov, Realizačné systémy, množstevné zľavy, Firma + Doprava."
             Icon={Settings2}
             tint="sky"
           />
