@@ -63,6 +63,10 @@ export async function POST(request: NextRequest) {
       consumption_kg_per_sqm:
         body.consumption_kg_per_sqm != null ? Number(body.consumption_kg_per_sqm) : null,
       notes: (body.notes as string) ?? null,
+      variant:
+        body.variant === "epoxid" || body.variant === "polyuretan"
+          ? body.variant
+          : null,
       active: body.active === false ? false : true,
     })
     .select("*")
@@ -88,9 +92,18 @@ export async function PATCH(request: NextRequest) {
     "cost_per_sqm",
     "consumption_kg_per_sqm",
     "notes",
+    "variant",
     "active",
   ]) {
     if (k in body) patch[k] = body[k];
+  }
+  if (
+    "variant" in patch &&
+    patch.variant !== null &&
+    patch.variant !== "epoxid" &&
+    patch.variant !== "polyuretan"
+  ) {
+    return NextResponse.json({ ok: false, error: "invalid_variant" }, { status: 400 });
   }
   const admin = createAdminClient();
   const { error } = await admin.from("material_extras").update(patch).eq("id", id);

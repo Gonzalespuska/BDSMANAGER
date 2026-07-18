@@ -21,6 +21,7 @@ export type MaterialExtra = {
   cost_per_sqm: number | null;
   consumption_kg_per_sqm: number | null;
   notes: string | null;
+  variant: "epoxid" | "polyuretan" | null;
   active: boolean;
   created_at: string;
 };
@@ -145,6 +146,7 @@ export function CennikMaterialovClient({
           origin: "extra",
           name: e.name,
           originalName: e.name,
+          variant: e.variant ?? undefined,
           floorType: ft as FloorType,
           step: e.step,
           priceOverride: e.price_per_sqm ?? undefined,
@@ -177,6 +179,7 @@ export function CennikMaterialovClient({
     name: string;
     step: StepKey;
     floor_types: FloorType[];
+    variant: "epoxid" | "polyuretan" | null;
     price_per_sqm: number | null;
     cost_per_sqm: number | null;
     consumption_kg_per_sqm: number | null;
@@ -339,6 +342,7 @@ function AddExtraForm({
     name: string;
     step: StepKey;
     floor_types: FloorType[];
+    variant: "epoxid" | "polyuretan" | null;
     price_per_sqm: number | null;
     cost_per_sqm: number | null;
     consumption_kg_per_sqm: number | null;
@@ -347,10 +351,13 @@ function AddExtraForm({
   const [name, setName] = React.useState("");
   const [step, setStep] = React.useState<StepKey>(defaultStep);
   const [floors, setFloors] = React.useState<FloorType[]>([defaultFloor]);
+  const [variant, setVariant] = React.useState<"" | "epoxid" | "polyuretan">("");
   const [price, setPrice] = React.useState("");
   const [cost, setCost] = React.useState("");
   const [consumption, setConsumption] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+
+  const hasJednofarebna = floors.includes("jednofarebna");
 
   function toggleFloor(ft: FloorType) {
     setFloors((prev) =>
@@ -367,6 +374,7 @@ function AddExtraForm({
         name: name.trim(),
         step,
         floor_types: floors,
+        variant: hasJednofarebna && variant ? variant : null,
         price_per_sqm: price ? parseFloat(price) : null,
         cost_per_sqm: cost ? parseFloat(cost) : null,
         consumption_kg_per_sqm: consumption ? parseFloat(consumption) : null,
@@ -447,6 +455,35 @@ function AddExtraForm({
           </div>
         </div>
       </div>
+
+      {hasJednofarebna && (
+        <div className="rounded-lg border-2 border-sky-300 dark:border-sky-800 bg-sky-50/60 dark:bg-sky-950/20 p-3 space-y-1.5">
+          <div className="text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300">
+            Jednofarebná — variant (voliteľné, ale ceny sa líšia)
+          </div>
+          <div className="flex items-center gap-1.5">
+            {[
+              { v: "" as const, label: "Univerzálny (oba)" },
+              { v: "epoxid" as const, label: "Epoxid" },
+              { v: "polyuretan" as const, label: "Polyuretán" },
+            ].map((o) => (
+              <button
+                key={o.v || "none"}
+                type="button"
+                onClick={() => setVariant(o.v)}
+                className={
+                  "text-[11px] font-black uppercase tracking-wider px-2 py-1 rounded-md border-2 " +
+                  (variant === o.v
+                    ? "border-sky-500 bg-sky-100 dark:bg-sky-900/50 text-sky-900 dark:text-sky-100"
+                    : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 hover:border-sky-300")
+                }
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <label className="block">
@@ -719,11 +756,6 @@ function MaterialRow({
             />
             <span className="text-xs text-muted-foreground shrink-0">€</span>
           </div>
-          {row.defaultPrice != null && (
-            <div className="text-[10px] text-muted-foreground mt-0.5">
-              default: {row.defaultPrice}
-            </div>
-          )}
         </label>
 
         <label className="block">
