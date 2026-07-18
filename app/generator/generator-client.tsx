@@ -132,6 +132,10 @@ export function GeneratorClient({
   priceOverrides,
   systemPriceOverrides,
   systems,
+  defaultSystems,
+  volumeTiers,
+  minOrderEur,
+  minOrderNoiseMax,
 }: {
   leadContext?: LeadContext | null;
   agentInfo?: { name: string; email: string; phone?: string | null };
