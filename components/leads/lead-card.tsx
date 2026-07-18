@@ -312,7 +312,7 @@ export function LeadCard({
     <>
       <article
         className={cn(
-          "relative rounded-2xl border bg-background shadow-sm hover:shadow-md overflow-hidden flex",
+          "relative rounded-2xl border bg-card shadow-sm hover:shadow-md overflow-hidden flex",
           // Plynulá zmena: keď je 'leaving', karta pomaly zmizne
           // (fade + shrink) — namiesto placeholder blikance.
           "transition-all duration-300",
@@ -729,7 +729,12 @@ export function LeadCard({
             )}
           >
             {emailHref ? (
-              <Button asChild variant="outline" size="sm" className="h-10">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="h-10 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+              >
                 <a
                   href={emailHref}
                   target="_blank"
@@ -741,7 +746,12 @@ export function LeadCard({
                 </a>
               </Button>
             ) : (
-              <Button variant="outline" size="sm" className="h-10" disabled>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-200"
+                disabled
+              >
                 <Mail className="w-4 h-4 mr-1.5" aria-hidden />
                 Email
               </Button>
