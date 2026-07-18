@@ -270,7 +270,10 @@ function SystemCard({
           <SystemEditor system={system} onChanged={onChanged} />
           <ProductsEditor system={system} onChanged={onChanged} />
           <StepsEditor system={system} library={library} onChanged={onChanged} />
-          <ResponsibilityStepsEditor system={system} onChanged={onChanged} />
+          {/* Zodpovednost — user 2026-07-18: „v realizacii daj prec
+              zodpovednost toto". Editor komponenty ostáva v kóde
+              (mozne skoro pouzit) ale nezobrazujeme ho. */}
+          {false && <ResponsibilityStepsEditor system={system} onChanged={onChanged} />}
         </div>
       )}
     </li>
@@ -378,19 +381,9 @@ function SystemEditor({
             </select>
           </Field>
         )}
-        <Field label="Aktívny">
-          <label className="inline-flex items-center gap-2 h-9">
-            <input
-              type="checkbox"
-              checked={active}
-              onChange={(e) => setActive(e.target.checked)}
-              className="w-5 h-5"
-            />
-            <span className="text-sm font-bold">
-              {active ? "Áno — dostupný pre obchodákov" : "Nie — skrytý"}
-            </span>
-          </label>
-        </Field>
+        {/* Aktívny checkbox odstranene — user 2026-07-18: „toto prec".
+            System je aktivny defaultne po vytvoreni. Skrytie sa da urobit
+            cez zmazanie systemu ak treba. */}
       </div>
       <div className="flex items-center gap-3">
         <button
@@ -1066,17 +1059,29 @@ function NewSystemModal({
   const [err, setErr] = React.useState<string | null>(null);
 
   async function save() {
-    if (!code.trim() || !label.trim()) {
-      setErr("Kód a label sú povinné");
+    if (!label.trim()) {
+      setErr("Label je povinný");
       return;
     }
+    // Auto-generate slug/code from label — user 2026-07-18: „v novy system
+    // daj prec to kod". Interny identifikator vytvorime zo slug labelu
+    // + timestamp suffix aby nekolidoval s existujucim.
+    const autoCode =
+      label
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 40) || `sys-${Date.now().toString(36)}`;
     setBusy(true);
     setErr(null);
     const r = await fetch("/api/admin/systems", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        code: code.trim(),
+        code: autoCode,
         label: label.trim(),
         description: description || null,
         floor_type: floorType,
@@ -1107,20 +1112,12 @@ function NewSystemModal({
           <div className="font-black text-lg">Nový systém</div>
         </div>
         <div className="p-5 space-y-3">
-          <Field label="Kód (uniq)">
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="napr. 264"
-              autoFocus
-              className="w-full h-10 px-2 rounded-lg border-2 border-slate-200 text-sm font-black"
-            />
-          </Field>
           <Field label="Label (zobrazí sa)">
             <input
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="napr. Sikafloor 264"
+              autoFocus
               className="w-full h-10 px-2 rounded-lg border-2 border-slate-200 text-sm font-bold"
             />
           </Field>
