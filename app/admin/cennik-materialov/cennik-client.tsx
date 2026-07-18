@@ -888,12 +888,12 @@ function MaterialRow({
           <div className="flex items-center gap-1 mb-0.5">
             <div
               className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex-1 inline-flex items-center gap-1"
-              title="Predaj €/m² sa použije v generátori CP na nacenovanie práce (klient si objedná realizáciu). V móde „Iba materiál + doprava" v generátori sa použije cena za balenie z Balení nižšie — keď si niekto chce iba kúpiť materiál."
+              title={`Predaj €/m² sa použije v generátori CP na nacenovanie práce (klient si objedná realizáciu). V móde „Iba materiál + doprava" v generátori sa použije cena za balenie z Balení nižšie — keď si niekto chce iba kúpiť materiál.`}
             >
               Predaj
               <span
                 className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-[9px] cursor-help"
-                title="Predaj €/m² sa použije v generátori CP na nacenovanie práce (klient si objedná realizáciu). V móde „Iba materiál + doprava" v generátori sa použije cena za balenie z Balení nižšie — keď si niekto chce iba kúpiť materiál."
+                title={`Predaj €/m² sa použije v generátori CP na nacenovanie práce (klient si objedná realizáciu). V móde „Iba materiál + doprava" v generátori sa použije cena za balenie z Balení nižšie — keď si niekto chce iba kúpiť materiál.`}
               >
                 ?
               </span>
