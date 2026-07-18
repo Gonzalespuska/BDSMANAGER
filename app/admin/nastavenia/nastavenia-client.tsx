@@ -92,7 +92,7 @@ export function NastaveniaClient({
 
       <SectionBlock
         title="🧪 Extra materiály (custom_materials)"
-        desc="Custom materiály/položky s cenou za m² alebo za kus — legacy tabuľka, momentálne sa v generátore nepoužíva. (Cenník materiálov pre Generátor CP je samostatný sub-modul „Cenník materiálov" hore.)"
+        desc="Custom materiály/položky s cenou za m² alebo za kus — legacy tabuľka, momentálne sa v generátore nepoužíva. (Cenník materiálov pre Generátor CP je samostatný sub-modul „Cenník materiálov“ hore.)"
       >
         <MaterialsTab initial={materials} />
       </SectionBlock>
