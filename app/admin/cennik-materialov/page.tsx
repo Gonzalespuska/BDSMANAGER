@@ -3,7 +3,7 @@ import { ArrowLeft, Palette } from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { CennikMaterialovClient } from "./cennik-client";
+import { CennikMaterialovClient, type MaterialExtra } from "./cennik-client";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -12,10 +12,10 @@ export default async function CennikMaterialovPage() {
   const { unstable_noStore: noStore } = await import("next/cache");
   noStore();
   const sb = createAdminClient();
-  const { data } = await sb
-    .from("app_settings")
-    .select("key, value")
-    .like("key", "material.%");
+  const [settingsRes, extrasRes] = await Promise.all([
+    sb.from("app_settings").select("key, value").like("key", "material.%"),
+    sb.from("material_extras").select("*").order("created_at", { ascending: false }),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -33,7 +33,10 @@ export default async function CennikMaterialovPage() {
         </h1>
       </header>
 
-      <CennikMaterialovClient settings={(data ?? []) as Array<{ key: string; value: unknown }>} />
+      <CennikMaterialovClient
+        settings={(settingsRes.data ?? []) as Array<{ key: string; value: unknown }>}
+        initialExtras={(extrasRes.data ?? []) as MaterialExtra[]}
+      />
     </div>
   );
 }
