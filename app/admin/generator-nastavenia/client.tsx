@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Loader2, Percent, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Percent, Plus, Save, Trash2 } from "lucide-react";
 import { saveSettingV2 } from "@/app/admin/settings/actions";
 import { FLOOR_TYPE_LABELS, type FloorType } from "@/lib/data/materials";
 
@@ -44,6 +44,62 @@ const MARKUP_KEYS: Array<{ key: string; label: string; desc: string }> = [
   { key: "markup.transport", label: "Markup — doprava", desc: "0.0–0.99" },
 ];
 
+// Reorderable sections — user 2026-07-18: „daj tam nejaky flow ze to
+// stlacim a mozem menit v admine poradie tych chlievikov a potom to
+// ulozit ako chcem ja". Kazda sekcia ma id ktore sa uklada do
+// app_settings ako `generator.nastavenia.section_order` JSON array.
+type SectionId =
+  | "min_order"
+  | "volume"
+  | "firma"
+  | "doprava"
+  | "email"
+  | "defaults";
+
+const DEFAULT_SECTION_ORDER: SectionId[] = [
+  "min_order",
+  "volume",
+  "firma",
+  "doprava",
+  "email",
+  "defaults",
+];
+
+const SECTION_LABELS: Record<SectionId, string> = {
+  min_order: "🧮 Minimálna objednávka",
+  volume: "📉 Množstevné zľavy",
+  firma: "🏢 Firma (PDF + e-mail brand)",
+  doprava: "🚗 Doprava",
+  email: "📧 Preview e-mailu + PDF",
+  defaults: "🎯 Defaultné systémy per typ podlahy",
+};
+
+function parseSectionOrder(raw: unknown): SectionId[] {
+  const valid: SectionId[] = [];
+  const known = new Set<SectionId>(DEFAULT_SECTION_ORDER);
+  const arr = typeof raw === "string" ? safeJsonParse(raw) : raw;
+  if (Array.isArray(arr)) {
+    for (const x of arr) {
+      if (typeof x === "string" && known.has(x as SectionId)) {
+        valid.push(x as SectionId);
+      }
+    }
+  }
+  // Doplnime chybajuce sekcie na koniec (novy build mohol pridat sekciu)
+  for (const id of DEFAULT_SECTION_ORDER) {
+    if (!valid.includes(id)) valid.push(id);
+  }
+  return valid;
+}
+
+function safeJsonParse(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
 export function GeneratorNastaveniaClient({
   systems,
   settings,
@@ -57,16 +113,157 @@ export function GeneratorNastaveniaClient({
     return m;
   }, [settings]);
 
+  const initialOrder = React.useMemo(
+    () => parseSectionOrder(settingsMap["generator.nastavenia.section_order"]),
+    [settingsMap],
+  );
+  const [order, setOrder] = React.useState<SectionId[]>(initialOrder);
+  const [editing, setEditing] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  function moveUp(i: number) {
+    if (i === 0) return;
+    setOrder((prev) => {
+      const next = prev.slice();
+      [next[i - 1], next[i]] = [next[i], next[i - 1]];
+      return next;
+    });
+  }
+  function moveDown(i: number) {
+    setOrder((prev) => {
+      if (i === prev.length - 1) return prev;
+      const next = prev.slice();
+      [next[i], next[i + 1]] = [next[i + 1], next[i]];
+      return next;
+    });
+  }
+  function resetOrder() {
+    setOrder(DEFAULT_SECTION_ORDER);
+  }
+  async function saveOrder() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await saveSettingV2(
+        "generator.nastavenia.section_order",
+        JSON.stringify(order),
+      );
+      setSaved(true);
+      setEditing(false);
+      setTimeout(() => setSaved(false), 1500);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function renderSection(id: SectionId) {
+    switch (id) {
+      case "min_order":
+        return <MinOrderSection settingsMap={settingsMap} />;
+      case "volume":
+        return <VolumeDiscountsSection settingsMap={settingsMap} />;
+      case "firma":
+        return <FirmaSection settingsMap={settingsMap} />;
+      case "doprava":
+        return <DopravaSection settingsMap={settingsMap} />;
+      case "email":
+        return <EmailPreviewSection settingsMap={settingsMap} />;
+      case "defaults":
+        return (
+          <DefaultSystemsSection systems={systems} settingsMap={settingsMap} />
+        );
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <MinOrderSection settingsMap={settingsMap} />
-      <VolumeDiscountsSection settingsMap={settingsMap} />
-      <FirmaSection settingsMap={settingsMap} />
-      <DopravaSection settingsMap={settingsMap} />
-      <EmailPreviewSection settingsMap={settingsMap} />
-      {/* Defaultne systemy per typ podlahy — user 2026-07-18: „dajme to
-          uplne na spodok a ako dropdown ze sa da otvarat a zatvarat". */}
-      <DefaultSystemsSection systems={systems} settingsMap={settingsMap} />
+      {/* Reorder toolbar */}
+      <div className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+          📋 Poradie sekcií
+        </span>
+        {!editing ? (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="ml-auto inline-flex items-center gap-1 rounded-md border-2 border-sky-300 dark:border-sky-800 bg-white dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 text-xs font-black px-3 py-1.5 hover:border-sky-500"
+          >
+            ✎ Upraviť poradie
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={resetOrder}
+              className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 ml-auto px-2 py-1"
+            >
+              Reset default
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOrder(initialOrder);
+                setEditing(false);
+              }}
+              className="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-black px-3 py-1.5"
+            >
+              Zrušiť
+            </button>
+            <button
+              type="button"
+              onClick={saveOrder}
+              disabled={saving}
+              className={
+                "inline-flex items-center gap-1 rounded-md text-white text-xs font-black px-3 py-1.5 disabled:opacity-40 " +
+                (saved ? "bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-700")
+              }
+            >
+              {saving ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              {saved ? "Uložené" : "Uložiť poradie"}
+            </button>
+          </>
+        )}
+      </div>
+
+      {order.map((id, i) => (
+        <div key={id} className="relative">
+          {editing && (
+            <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-md">
+              <button
+                type="button"
+                onClick={() => moveUp(i)}
+                disabled={i === 0}
+                className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-30"
+                title="Nahor"
+              >
+                <ChevronUp className="w-4 h-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => moveDown(i)}
+                disabled={i === order.length - 1}
+                className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-30"
+                title="Nadol"
+              >
+                <ChevronDown className="w-4 h-4" aria-hidden />
+              </button>
+            </div>
+          )}
+          <div className={editing ? "ring-2 ring-sky-400/40 dark:ring-sky-700 rounded-2xl" : ""}>
+            {renderSection(id)}
+          </div>
+          {editing && (
+            <div className="mt-1 text-[10px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-400 pl-4">
+              {i + 1}. {SECTION_LABELS[id]}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
